@@ -40,6 +40,10 @@ Google only allows registered redirect URIs, so the callback runs on the apex ho
 
 Sidebar items for screens built in later phases route to a shared "Not built yet" page that names the phase, so navigation and the command palette are complete without building out-of-phase features.
 
+## ADR-011: Brevo instead of SendGrid for email
+
+The brief named SendGrid; the owner chose Brevo for now. Invite emails go through Brevo's transactional API (POST https://api.brevo.com/v3/smtp/email, api-key header) behind a small `EmailSender` interface, sent from a BullMQ job that carries org_id. Env var names: BREVO_API_KEY, EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME. With no key set, the sender logs the invite link instead of sending, so local development works. Switching provider later means swapping one implementation.
+
 ## Open (not blocking)
 
-SendGrid sender domain, product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.
+Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.
