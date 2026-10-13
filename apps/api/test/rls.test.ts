@@ -64,7 +64,9 @@ describe('row-level security (direct database)', () => {
     await withTenant(app.db, ids.globex, async (tx) => {
       const [org] = await tx.select().from(organizations);
       expect(org!.name).toBe('Globex Corp');
-      expect(await tx.select().from(memberships)).toHaveLength(1);
+      const rows = await tx.select().from(memberships);
+      expect(rows.some((m) => m.orgRole === 'owner')).toBe(true);
+      expect(rows.every((m) => m.orgId === ids.globex)).toBe(true);
     });
   });
 

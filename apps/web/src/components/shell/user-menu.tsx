@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { LogOut, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,11 @@ export function UserMenu() {
           <RoleBadge role={orgRole} />
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserRound /> Your profile
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={signOut}>
           <LogOut /> Sign out
         </DropdownMenuItem>

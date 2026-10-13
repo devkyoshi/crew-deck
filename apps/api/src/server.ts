@@ -1,15 +1,29 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
+import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js';
+import { createBrevoSender, createLogSender } from './email/sender.js';
 import { createRedis } from './lib/redis.js';
 
 const config = loadConfig();
 const { db, close } = createDb(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
-const app = buildApp({ db, redis, config });
+const queue = createInviteEmailQueue(redis);
+const app = buildApp({ db, redis, config, enqueueInviteEmail: queue });
+
+const sender = config.BREVO_API_KEY
+  ? createBrevoSender({
+      apiKey: config.BREVO_API_KEY,
+      fromAddress: config.EMAIL_FROM_ADDRESS,
+      fromName: config.EMAIL_FROM_NAME,
+    })
+  : createLogSender((m) => app.log.info(m));
+const worker = startInviteEmailWorker(redis, sender, (m) => app.log.error(m));
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
+    await worker.close();
+    await queue.close();
     await app.close();
     redis.disconnect();
     await close();

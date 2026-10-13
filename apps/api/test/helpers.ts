@@ -44,15 +44,34 @@ export function fakeGoogle() {
   return { client, state };
 }
 
-export function makeApp(opts: { google?: GoogleClient | null; rateLimit?: number } = {}) {
+export type CapturedInvite = { to: string; link: string; orgId: string; orgName: string };
+
+export function makeApp(
+  opts: {
+    google?: GoogleClient | null;
+    rateLimit?: number;
+    enqueue?: (job: CapturedInvite) => Promise<void> | void;
+    env?: Record<string, string>;
+  } = {},
+) {
   const config = loadConfig({
     ...process.env,
     LOG_LEVEL: 'silent',
     AUTH_RATE_LIMIT_MAX: String(opts.rateLimit ?? 1000),
+    BREVO_API_KEY: '',
+    ...opts.env,
   });
   const conn = appDb();
   const redis = createRedis(config.REDIS_URL);
-  const app = buildApp({ db: conn.db, redis, config, google: opts.google ?? null });
+  const app = buildApp({
+    db: conn.db,
+    redis,
+    config,
+    google: opts.google ?? null,
+    enqueueInviteEmail: async (job) => {
+      await opts.enqueue?.(job);
+    },
+  });
   return {
     app,
     config,
@@ -140,4 +159,60 @@ export async function createInvitation(opts: {
 
 export function sessionCookie(res: { cookies: { name: string; value: string }[] }) {
   return res.cookies.find((c) => c.name === 'cd_session')?.value;
+}
+
+type Json = Record<string, unknown> | undefined;
+
+/** Thin wrapper over app.inject for tenant-host requests with an optional session cookie. */
+export function caller(app: ReturnType<typeof makeApp>['app']) {
+  return (opts: {
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+    url: string;
+    slug: string;
+    cookie?: string;
+    payload?: Json;
+  }) =>
+    app.inject({
+      method: opts.method,
+      url: `/api/v1${opts.url}`,
+      headers: { host: hostFor(opts.slug) },
+      cookies: opts.cookie ? { cd_session: opts.cookie } : {},
+      payload: opts.payload,
+    });
+}
+
+/** Creates a user (admin connection), signs them in by password, and returns the session cookie. */
+export async function signInAs(
+  app: ReturnType<typeof makeApp>['app'],
+  slug: string,
+  user: { id: string; email: string },
+) {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    headers: { host: hostFor(slug) },
+    payload: { email: user.email, password: PASSWORD },
+  });
+  const cookie = sessionCookie(res);
+  if (!cookie) throw new Error(`sign-in failed for ${user.email}: ${res.statusCode} ${res.body}`);
+  return cookie;
+}
+
+export const uniqueEmail = (prefix: string, domain = 'acme.test') =>
+  `${prefix}-${randomUUID().slice(0, 8)}@${domain}`;
+
+/** Creates an isolated workspace with exactly one owner, for tests that need a pristine tenant. */
+export async function createOrg(slugPrefix: string) {
+  const slug = `${slugPrefix}-${randomUUID().slice(0, 6)}`;
+  const admin = adminDb();
+  try {
+    const [org] = await admin.db
+      .insert(organizations)
+      .values({ name: slug, slug, domain: `${slug}.test` })
+      .returning();
+    const owner = await ensureUser({ orgId: org!.id, email: `owner@${slug}.test`, role: 'owner' });
+    return { org: org!, slug, owner };
+  } finally {
+    await admin.close();
+  }
 }

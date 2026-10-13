@@ -45,6 +45,9 @@ services:
       TENANT_ORIGIN_TEMPLATE: ${TENANT_ORIGIN_TEMPLATE:-http://{slug}.localhost:3000}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-no-reply@example.com}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Crew Deck}
     ports:
       - '4000:4000'
     depends_on:

@@ -16,6 +16,11 @@ const envSchema = z.object({
   /** Max sign-in attempts per client+email per minute. */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
   SESSION_TTL_SECONDS: z.coerce.number().default(60 * 60 * 24 * 7),
+  /** Brevo transactional email. Without a key, invite links are logged and shown to admins instead. */
+  BREVO_API_KEY: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().default('no-reply@example.com'),
+  EMAIL_FROM_NAME: z.string().default('Crew Deck'),
+  INVITE_TTL_DAYS: z.coerce.number().default(7),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   TRUST_PROXY: z
@@ -30,5 +35,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return envSchema.parse(env);
 }
 
+export const emailEnabled = (c: Config) => Boolean(c.BREVO_API_KEY);
 export const isProd = (c: Config) => c.NODE_ENV === 'production';
 export const devLoginEnabled = (c: Config) => c.NODE_ENV !== 'production';

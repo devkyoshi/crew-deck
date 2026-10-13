@@ -44,6 +44,22 @@ Sidebar items for screens built in later phases route to a shared "Not built yet
 
 The brief named SendGrid; the owner chose Brevo for now. Invite emails go through Brevo's transactional API (POST https://api.brevo.com/v3/smtp/email, api-key header) behind a small `EmailSender` interface, sent from a BullMQ job that carries org_id. Env var names: BREVO_API_KEY, EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME. With no key set, the sender logs the invite link instead of sending, so local development works. Switching provider later means swapping one implementation.
 
+## ADR-012: Deactivation is per workspace (memberships.status)
+
+The brief puts `status` on `users`, but a user is a global identity that can belong to several workspaces, so deactivating them in one workspace must not lock them out of another. Migration 0003 adds `memberships.status` ('active' | 'deactivated') and `deactivated_at`. The effective status (membership wins over `users.status`) is used for sign-in, the session check, member lists and the workspace switcher. Sessions need no explicit kill: every request re-checks status, so deactivation takes effect on the next request. Editing a person's name or job title changes the global user row, so it is visible in every workspace they belong to.
+
+## ADR-013: Audit log is append-only
+
+`audit_logs` entries are written in the same transaction as the change they describe. The application role has SELECT and INSERT only (UPDATE, DELETE and TRUNCATE are revoked explicitly, because default privileges would otherwise grant them). Phase 2 records: invitation.created / resent / revoked / accepted, member.role_changed / profile_updated / deactivated / reactivated.
+
+## ADR-014: Member directory visible to all members
+
+`GET /members` and `GET /members/:id` are open to every signed-in member (a People directory). Non-admins only see active people and never see last-login times. Invitations, role changes, deactivation and the audit log are admin-only. The brief's matrix does not list the directory, so this is a decision to confirm.
+
+## ADR-015: TanStack Table v8
+
+`@tanstack/react-table` 9.x changed the API; the project is pinned to 8.21.3, which matches the shadcn data-table pattern. Revisit when v9 stabilises.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.

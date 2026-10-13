@@ -8,6 +8,7 @@ const actor = (orgRole: OrgRole) => ({ userId: 'u1', orgId: 'o1', orgRole });
 const ORG_MATRIX: [Action, boolean, boolean, boolean][] = [
   ['member.invite', true, true, false],
   ['member.deactivate', true, true, false],
+  ['member.editProfile', true, true, false],
   ['group.manage', true, true, false],
   ['space.create', true, true, true],
   ['space.viewAll', true, true, false],

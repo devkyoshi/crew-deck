@@ -7,6 +7,7 @@ export type Action =
   | 'member.invite'
   | 'member.deactivate'
   | 'member.changeRole'
+  | 'member.editProfile'
   | 'group.manage'
   | 'space.create'
   | 'space.viewAll'
@@ -45,6 +46,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
   switch (action) {
     case 'member.invite':
     case 'member.deactivate':
+    case 'member.editProfile':
     case 'group.manage':
     case 'space.viewAll':
     case 'audit.viewOrg':
@@ -81,6 +83,7 @@ export const ADMIN_ACTIONS: Action[] = [
   'member.invite',
   'member.deactivate',
   'member.changeRole',
+  'member.editProfile',
   'group.manage',
   'space.viewAll',
   'audit.viewOrg',

@@ -1,0 +1,277 @@
+import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { and, asc, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
+import { orgRoleSchema, type OrgRole } from '@crew-deck/shared';
+import { writeAudit } from '../audit/service.js';
+import { actorOf } from '../auth/actor.js';
+import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
+import { timezoneSchema } from '../auth/routes.js';
+import { withTenant, type Tx } from '../db/client.js';
+import { memberships, users } from '../db/schema.js';
+import { AppError, forbidden, notFound } from '../lib/errors.js';
+import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
+import { can } from '../permissions/can.js';
+
+const effectiveStatus = sql<
+  'active' | 'invited' | 'deactivated'
+>`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`;
+
+const columns = {
+  id: users.id,
+  email: users.email,
+  name: users.name,
+  avatarUrl: users.avatarUrl,
+  jobTitle: users.jobTitle,
+  timezone: users.timezone,
+  orgRole: memberships.orgRole,
+  status: effectiveStatus,
+  lastLoginAt: users.lastLoginAt,
+  joinedAt: memberships.createdAt,
+};
+
+const SORTS = {
+  name: sql`lower(coalesce(${users.name}, ${users.email}))`,
+  email: sql`lower(${users.email})`,
+  role: memberships.orgRole,
+  status: effectiveStatus,
+  lastLoginAt: users.lastLoginAt,
+  joinedAt: memberships.createdAt,
+} as const;
+
+const listQuery = pageQuery.extend({
+  q: z.string().trim().max(100).optional(),
+  role: orgRoleSchema.optional(),
+  status: z.enum(['active', 'invited', 'deactivated']).optional(),
+  sort: z.enum(['name', 'email', 'role', 'status', 'lastLoginAt', 'joinedAt']).default('name'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+});
+
+const idParam = z.object({ id: z.string().uuid() });
+
+const patchBody = z
+  .object({
+    orgRole: orgRoleSchema,
+    name: z.string().trim().min(1).max(100),
+    jobTitle: z.string().trim().max(100).nullable(),
+    timezone: timezoneSchema,
+  })
+  .partial()
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+
+/** Active owners in the tenant, used to protect the last one. */
+async function activeOwnerCount(tx: Tx, orgId: string) {
+  const rows = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.orgId, orgId),
+        eq(memberships.orgRole, 'owner'),
+        eq(memberships.status, 'active'),
+      ),
+    );
+  return rows[0]?.n ?? 0;
+}
+
+async function loadTarget(tx: Tx, orgId: string, userId: string) {
+  const rows = await tx
+    .select({ ...columns, membershipId: memberships.id, membershipStatus: memberships.status })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(and(eq(memberships.orgId, orgId), eq(users.id, userId)));
+  const row = rows[0];
+  if (!row) throw notFound('Member');
+  return row;
+}
+
+export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
+  const requireAuth = makeRequireAuth(deps);
+  const r = app.withTypeProvider<ZodTypeProvider>();
+
+  // The directory is visible to every member; admin-only fields are stripped for others.
+  const present = <T extends { lastLoginAt: Date | null; status: string }>(
+    isAdmin: boolean,
+    row: T,
+  ) => (isAdmin ? row : { ...row, lastLoginAt: null });
+
+  r.get(
+    '/members',
+    { preHandler: requireAuth, schema: { querystring: listQuery } },
+    async (req) => {
+      const actor = actorOf(req);
+      const isAdmin = can(actor, 'member.deactivate');
+      const q = req.query;
+      const conds: (SQL | undefined)[] = [eq(memberships.orgId, actor.orgId)];
+      if (q.q) {
+        const p = likePattern(q.q);
+        conds.push(or(ilike(users.name, p), ilike(users.email, p), ilike(users.jobTitle, p)));
+      }
+      if (q.role) conds.push(eq(memberships.orgRole, q.role));
+      // Non-admins only ever see active people.
+      const status = isAdmin ? q.status : 'active';
+      if (status) conds.push(sql`${effectiveStatus} = ${status}`);
+      const where = and(...conds);
+      const order = (q.dir === 'desc' ? desc : asc)(SORTS[q.sort]);
+
+      const { items, total } = await withTenant(deps.db, actor.orgId, async (tx) => {
+        const items = await tx
+          .select(columns)
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(where)
+          .orderBy(order, asc(users.id))
+          .limit(q.pageSize)
+          .offset(offsetOf(q));
+        const [count] = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(where);
+        return { items, total: count?.n ?? 0 };
+      });
+      return {
+        items: items.map((i) => present(isAdmin, i)),
+        total,
+        page: q.page,
+        pageSize: q.pageSize,
+      };
+    },
+  );
+
+  r.get('/members/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
+    const actor = actorOf(req);
+    const isAdmin = can(actor, 'member.deactivate');
+    const row = await withTenant(deps.db, actor.orgId, (tx) =>
+      loadTarget(tx, actor.orgId, req.params.id),
+    );
+    if (!isAdmin && row.status !== 'active') throw notFound('Member');
+    const { membershipId: _m, membershipStatus: _s, ...member } = row;
+    return present(isAdmin, member);
+  });
+
+  r.patch(
+    '/members/:id',
+    { preHandler: requireAuth, schema: { params: idParam, body: patchBody } },
+    async (req) => {
+      const actor = actorOf(req);
+      const { orgRole, ...profile } = req.body;
+      const isSelf = req.params.id === actor.userId;
+
+      return withTenant(deps.db, actor.orgId, async (tx) => {
+        const target = await loadTarget(tx, actor.orgId, req.params.id);
+
+        if (orgRole !== undefined && orgRole !== target.orgRole) {
+          if (!can(actor, 'member.changeRole', { targetOrgRole: target.orgRole }))
+            throw forbidden();
+          if (orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
+          if (target.orgRole === 'owner' && (await activeOwnerCount(tx, actor.orgId)) <= 1) {
+            throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
+          }
+          await tx
+            .update(memberships)
+            .set({ orgRole: orgRole as OrgRole })
+            .where(
+              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
+            );
+          await writeAudit(tx, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'member.role_changed',
+            targetType: 'member',
+            targetId: target.id,
+            before: { orgRole: target.orgRole },
+            after: { orgRole },
+          });
+        }
+
+        if (Object.keys(profile).length > 0) {
+          const allowed =
+            isSelf ||
+            (can(actor, 'member.editProfile') &&
+              (target.orgRole !== 'owner' || actor.orgRole === 'owner'));
+          if (!allowed) throw forbidden();
+          await tx.update(users).set(profile).where(eq(users.id, target.id));
+          await writeAudit(tx, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'member.profile_updated',
+            targetType: 'member',
+            targetId: target.id,
+            before: Object.fromEntries(
+              Object.keys(profile).map((k) => [k, target[k as keyof typeof target]]),
+            ),
+            after: profile,
+          });
+        }
+
+        const {
+          membershipId: _m,
+          membershipStatus: _s,
+          ...member
+        } = await loadTarget(tx, actor.orgId, target.id);
+        return member;
+      });
+    },
+  );
+
+  async function setActive(
+    userId: string,
+    req: Parameters<typeof actorOf>[0],
+    deactivate: boolean,
+  ) {
+    const actor = actorOf(req);
+    if (!can(actor, 'member.deactivate')) throw forbidden();
+    if (deactivate && userId === actor.userId) {
+      throw new AppError(400, 'cannot_deactivate_self', 'You cannot deactivate yourself');
+    }
+    return withTenant(deps.db, actor.orgId, async (tx) => {
+      const target = await loadTarget(tx, actor.orgId, userId);
+      if (target.orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
+      const already = (target.membershipStatus === 'deactivated') === deactivate;
+      if (!already) {
+        if (
+          deactivate &&
+          target.orgRole === 'owner' &&
+          (await activeOwnerCount(tx, actor.orgId)) <= 1
+        ) {
+          throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
+        }
+        await tx
+          .update(memberships)
+          .set({
+            status: deactivate ? 'deactivated' : 'active',
+            deactivatedAt: deactivate ? new Date() : null,
+          })
+          .where(and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)));
+        await writeAudit(tx, {
+          orgId: actor.orgId,
+          actorId: actor.userId,
+          action: deactivate ? 'member.deactivated' : 'member.reactivated',
+          targetType: 'member',
+          targetId: target.id,
+          before: { status: target.membershipStatus },
+          after: { status: deactivate ? 'deactivated' : 'active' },
+        });
+      }
+      const {
+        membershipId: _m,
+        membershipStatus: _s,
+        ...member
+      } = await loadTarget(tx, actor.orgId, userId);
+      return member;
+    });
+  }
+
+  r.post(
+    '/members/:id/deactivate',
+    { preHandler: requireAuth, schema: { params: idParam } },
+    async (req) => setActive(req.params.id, req, true),
+  );
+  r.post(
+    '/members/:id/reactivate',
+    { preHandler: requireAuth, schema: { params: idParam } },
+    async (req) => setActive(req.params.id, req, false),
+  );
+}

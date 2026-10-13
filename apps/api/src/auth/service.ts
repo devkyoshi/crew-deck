@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import type { OrgRole } from '@crew-deck/shared';
+import { writeAudit } from '../audit/service.js';
 import { withTenant, type Db } from '../db/client.js';
 import { invitations, memberships, users } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
@@ -74,7 +75,10 @@ export async function loadAuthUser(
         avatarUrl: users.avatarUrl,
         jobTitle: users.jobTitle,
         timezone: users.timezone,
-        status: users.status,
+        // Effective status: a deactivated membership wins over the global user status.
+        status: sql<
+          AuthUser['status']
+        >`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`,
         orgRole: memberships.orgRole,
       })
       .from(users)
@@ -190,6 +194,14 @@ export async function acceptInvitation(
       });
       await tx.insert(memberships).values({ orgId: org.id, userId, orgRole: invitation.role });
     }
+    await writeAudit(tx, {
+      orgId: org.id,
+      actorId: userId,
+      action: 'invitation.accepted',
+      targetType: 'invitation',
+      targetId: invitation.id,
+      after: { email: invitation.email.toLowerCase(), orgRole: invitation.role },
+    });
     return userId;
   });
 }

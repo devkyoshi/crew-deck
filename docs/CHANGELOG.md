@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-13 - Phase 2: Members and invitations
+
+- Migration 0003: memberships.status / deactivated_at, append-only audit_logs (RLS), per-workspace status in the sign-in lookup functions.
+- API: members list/get/patch/deactivate/reactivate, invitations list/bulk create/resend/revoke, audit-logs list. Last-owner protection, admins cannot touch owners, every action audited.
+- Invite emails: BullMQ queue + worker, Brevo sender (logs the link when no API key), 7-day expiry, resend replaces the old link.
+- Web: members table (search, filters, sort, pagination, row actions, bulk select), 3-step invite dialog, pending invites tab, member profile page, People directory, edit own profile.
+- Tests: 100+ API tests (permissions allowed/denied, cross-tenant, audit, Brevo sender) and Playwright flow for invite, accept, list, deactivate, blocked login.
+
 ## 2026-10-13 - UI restyle from reference images
 
 - Cool grey page with an inset white rounded panel, bright blue accent, 16px card radius, soft rounded-square buttons and inputs, segmented-pill tabs, blue active sidebar pill.
