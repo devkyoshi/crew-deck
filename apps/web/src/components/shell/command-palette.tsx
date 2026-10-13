@@ -14,6 +14,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { useIsAdmin } from './me-context';
+import { useToday } from '@/components/checkin/use-today';
 import { visibleGroups } from './nav';
 import { useSignOut } from './user-menu';
 
@@ -22,6 +23,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const isAdmin = useIsAdmin();
+  const checkinOn = useToday().data?.enabled !== false;
   const { resolvedTheme, setTheme } = useTheme();
   const signOut = useSignOut();
 
@@ -63,7 +65,7 @@ export function CommandPalette() {
         <CommandInput placeholder="Jump to…" />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          {visibleGroups(isAdmin).map((g) => (
+          {visibleGroups(isAdmin, checkinOn).map((g) => (
             <CommandGroup key={g.id} heading={g.label}>
               {g.items.map((item) => (
                 <CommandItem

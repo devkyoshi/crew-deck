@@ -14,7 +14,8 @@ Browser ──https──▶ reverse proxy ──▶ web (Next.js :3000) ──/
 
 - **web** serves the UI and proxies `/api/*` to the API, passing the original `Host` header. That header
   is how the API knows which workspace a request belongs to.
-- **api** is stateless. Sessions and the invite-email queue live in Redis.
+- **api** is stateless. Sessions, the invite-email queue and the automatic check-out jobs live in Redis. The
+  workers run inside the API process; running several API instances is safe (jobs are de-duplicated).
 - **Postgres** holds all data. Row-level security enforces tenant isolation, so the API **must** connect
   as the restricted role (`crew_app`), never as the schema owner.
 - **Redis** holds sessions and queued jobs. Losing it signs everyone out and drops unsent emails, but loses no business data.

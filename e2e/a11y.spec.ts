@@ -32,6 +32,11 @@ const ADMIN_PAGES = [
   '/access-requests',
   '/request-access',
   '/profile',
+  '/my-day',
+  '/team',
+  '/admin/attendance',
+  '/admin/settings',
+  '/admin/settings/work',
   '/admin/members',
   '/admin/groups',
   '/admin/spaces',
@@ -62,6 +67,9 @@ test.describe('accessibility: signed-out screens', () => {
 });
 
 test.describe('accessibility: signed-in screens', () => {
+  // Many pages per test, and the dev server compiles each route the first time it is visited.
+  test.setTimeout(240_000);
+
   for (const theme of ['light', 'dark'] as const) {
     test(`all admin screens (${theme})`, async ({ page }) => {
       await signInAsOwner(page);
@@ -79,7 +87,15 @@ test.describe('accessibility: signed-in screens', () => {
 
   test('member screens, space pages and dialogs', async ({ page }) => {
     await signInAsMember(page);
-    for (const path of ['/', '/people', '/groups', '/spaces', '/access-requests']) {
+    for (const path of [
+      '/',
+      '/people',
+      '/groups',
+      '/spaces',
+      '/access-requests',
+      '/my-day',
+      '/team',
+    ]) {
       await page.goto(path);
       await expect(page.locator('#main')).toBeVisible();
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 10_000 });
@@ -101,6 +117,11 @@ test.describe('accessibility: signed-in screens', () => {
       .click();
     await expect(page.getByRole('menu')).toBeVisible();
     await scan(page, 'row actions menu', { modalOpen: true });
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: /Open check-in/ }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await scan(page, 'check-in popover');
     await page.keyboard.press('Escape');
 
     await page.keyboard.press('Control+k');

@@ -14,6 +14,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { CheckinControl } from '@/components/checkin/checkin-control';
 import { CommandPalette } from './command-palette';
 import { SpaceSwitcher } from './space-switcher';
 import { findNavItem } from './nav';
@@ -56,6 +57,7 @@ export function Topbar() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
+      <CheckinControl />
       <SpaceSwitcher />
       <CommandPalette />
       <ThemeToggle />

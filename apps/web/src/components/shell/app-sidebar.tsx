@@ -25,6 +25,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useIsAdmin, useMe } from './me-context';
+import { useToday } from '@/components/checkin/use-today';
 import { visibleGroups } from './nav';
 import { SpacesNav } from './spaces-nav';
 
@@ -157,13 +158,14 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
 
 export function AppSidebar() {
   const isAdmin = useIsAdmin();
+  const checkinOn = useToday().data?.enabled !== false;
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <TenantSwitcher />
       </SidebarHeader>
       <SidebarContent>
-        {visibleGroups(isAdmin).map((g) => (
+        {visibleGroups(isAdmin, checkinOn).map((g) => (
           <NavGroupSection key={g.id} group={g} />
         ))}
       </SidebarContent>

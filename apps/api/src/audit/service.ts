@@ -3,11 +3,23 @@ import type { Tx } from '../db/client.js';
 import { auditLogs, users } from '../db/schema.js';
 import { offsetOf } from '../lib/pagination.js';
 
+export const AUDIT_TARGET_TYPES = [
+  'member',
+  'invitation',
+  'group',
+  'space',
+  'work_day',
+  'settings',
+  'site',
+  'holiday',
+] as const;
+export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
+
 export interface AuditEntry {
   orgId: string;
   actorId: string | null;
   action: string;
-  targetType: 'member' | 'invitation' | 'group' | 'space';
+  targetType: AuditTargetType;
   targetId: string;
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;
@@ -30,7 +42,7 @@ export interface AuditFilters {
   orgId: string;
   actor?: string;
   action?: string;
-  targetType?: 'member' | 'invitation' | 'group' | 'space';
+  targetType?: AuditTargetType;
   target?: string;
   from?: Date;
   to?: Date;

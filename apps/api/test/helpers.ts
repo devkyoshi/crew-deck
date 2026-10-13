@@ -11,6 +11,13 @@ import { createRedis } from '../src/lib/redis.js';
 
 export const PASSWORD = 'correct-horse-battery';
 
+// Hashing is deliberately slow; tests create hundreds of users with the same password.
+const hashes = new Map<string, Promise<string>>();
+const hashOnce = (password: string) => {
+  if (!hashes.has(password)) hashes.set(password, hashPassword(password));
+  return hashes.get(password)!;
+};
+
 export function appDb() {
   return createDb(process.env.DATABASE_URL!);
 }
@@ -96,7 +103,7 @@ export async function ensureUser(opts: {
 }) {
   const admin = adminDb();
   try {
-    const passwordHash = await hashPassword(opts.password ?? PASSWORD);
+    const passwordHash = await hashOnce(opts.password ?? PASSWORD);
     const [user] = await admin.db
       .insert(users)
       .values({

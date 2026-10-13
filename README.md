@@ -4,11 +4,12 @@ A multi-tenant company workspace platform in the spirit of Jira and Slack. Compa
 workspace with members, groups and spaces, per-space access control, invitations, and a full audit
 trail. It is built to be used internally first and sold to other companies later.
 
-**Built so far (Phases 0 to 6 of the build brief in [docs/BRIEF.md](docs/BRIEF.md)):**
+**Built so far (Phases 0 to 7 of the build brief in [docs/BRIEF.md](docs/BRIEF.md)):**
 tenant isolation, sign-in (Google or password), members and invitations, groups, spaces with
-open and private visibility, space roles, access requests, audit log, accessibility and hardening.
-**Not built yet:** check-in/out (Phase 7), CRM (Phase 8), tenant onboarding and the platform admin
-console (Phase 9), work items, boards and chat (later modules).
+open and private visibility, space roles, access requests, audit log, daily check-in/out with a team
+status board, accessibility and hardening.
+**Not built yet:** CRM (Phase 8), tenant onboarding and the platform admin console (Phase 9),
+work items, boards and chat (later modules).
 
 ## Quick start
 
@@ -30,7 +31,8 @@ The sign-in page also has a **development-only** box that signs you in as any ex
 a password. It does not exist in production builds. `http://localhost:3000` shows a workspace picker.
 
 The Acme demo workspace has people, four teams, five spaces (open, private and archived), group-based
-access, stars, a pending access request and an audit trail, so every screen has something to show.
+access, stars, a pending access request, sites, holidays, managers, today's check-in statuses, two
+weeks of check-in history and an audit trail, so every screen has something to show.
 
 ## Everyday commands
 
@@ -65,6 +67,8 @@ docs/           BRIEF.md (the build brief), DECISIONS.md (architecture decisions
   Composite foreign keys make cross-tenant links impossible. The tenant comes from the subdomain.
 - **Permissions** live in one module, `apps/api/src/permissions/can.ts`. Routes call it; the UI only
   mirrors it. A test runs every row of the brief's permission matrix for all six roles through the real API.
+- **Check-in** treats a "day" as the person's own local date. Teammates see status only; exact times go to
+  the person, their manager and admins. Forgotten check-outs are closed by a background job (see ADR-030).
 - **Sessions** are random ids in Redis (httpOnly, SameSite=Lax cookies, Secure in production), scoped to
   the tenant host. Deactivating someone ends their access on their next request.
 - **The browser only talks to its own origin.** Next proxies `/api` to the API, so cookies stay per tenant.
@@ -77,7 +81,7 @@ The reasoning behind these choices is written down in [docs/DECISIONS.md](docs/D
 
 | Layer   | What                                                                                                                                                                                       | How big                                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| API     | Permissions (allowed and denied), cross-tenant isolation for every module, rules (last owner, last space admin, unique keys), audit, email, performance with 5,000 people and 1,500 spaces | 188 tests, on a fresh database each run |
+| API     | Permissions (allowed and denied), cross-tenant isolation for every module, rules (last owner, last space admin, unique keys), audit, email, performance with 5,000 people and 1,500 spaces | 234 tests, on a fresh database each run |
 | Browser | Real user flows, keyboard-only operation, axe accessibility scans (WCAG 2.1 A and AA, light and dark), and a walk through every screen that fails on any console error or failed request   | 41 tests                                |
 
 CI (`.github/workflows/ci.yml`) runs lint, type-check, the API tests and a production build, and

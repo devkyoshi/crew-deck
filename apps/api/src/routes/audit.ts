@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant } from '../db/client.js';
-import { listAudit } from '../audit/service.js';
+import { AUDIT_TARGET_TYPES, listAudit } from '../audit/service.js';
 import { forbidden } from '../lib/errors.js';
 import { pageQuery } from '../lib/pagination.js';
 import { can } from '../permissions/can.js';
@@ -20,7 +20,7 @@ export async function auditRoutes(app: FastifyInstance, deps: AuthDeps) {
         querystring: pageQuery.extend({
           actor: z.string().uuid().optional(),
           action: z.string().max(100).optional(),
-          targetType: z.enum(['member', 'invitation', 'group', 'space']).optional(),
+          targetType: z.enum(AUDIT_TARGET_TYPES).optional(),
           target: z.string().max(100).optional(),
           from: z.coerce.date().optional(),
           to: z.coerce.date().optional(),

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-13 - Phase 7: Daily check-in and check-out
+
+- Migration 0007: tenant_settings, sites, holidays, work_days, work_day_edits (append-only), memberships.reports_to, workspace-listing function for the job.
+- API: check in and out, today, week, weekly plan, team board (group and space filters), history with role-scoped access, corrections (and adding a missing day), CSV export, work settings, sites and holidays CRUD, reports-to with loop protection; the check-in module can be switched off per workspace.
+- Auto-close of forgotten check-outs as per-workspace background jobs, in each person's own timezone.
+- Web: top-bar check-in control, My day (today, weekly plan, history, corrections), Team board (also a Home widget, refreshes every 15 seconds), Attendance (admin, CSV), Settings > Work (hours, sites, holidays).
+- Demo workspace now includes sites, holidays, managers, today's statuses and two weeks of history.
+- Tests: timezone and DST unit tests, 32 check-in API tests (visibility, permissions, corrections, auto-close, export, settings, database constraints), five browser flows including "teammates see a check-in within seconds"; accessibility fixes (contrast, ARIA).
+
 ## 2026-10-13 - Phase 6: Hardening and polish
 
 - Accessibility: axe scans of every screen (light and dark) and open overlays, keyboard tests, contrast and ARIA fixes, toggle-button pickers.

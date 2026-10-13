@@ -7,10 +7,13 @@ import { apiCall, rand, signInAs, signInAsMember, signInAsOwner } from './helper
  */
 function watch(page: Page) {
   const problems: string[] = [];
+  const where = () => new URL(page.url()).pathname;
   page.on('console', (m) => {
-    if (m.type() === 'error') problems.push(`console: ${m.text().slice(0, 200)}`);
+    if (m.type() === 'error') problems.push(`console on ${where()}: ${m.text().slice(0, 200)}`);
   });
-  page.on('pageerror', (e) => problems.push(`exception: ${e.message.slice(0, 200)}`));
+  page.on('pageerror', (e) =>
+    problems.push(`exception on ${where()}: ${e.message.slice(0, 2500)}`),
+  );
   page.on('requestfailed', (r) => {
     // Navigations aborted by a following navigation are normal.
     if (!/ERR_ABORTED/.test(r.failure()?.errorText ?? '')) problems.push(`failed: ${r.url()}`);
@@ -27,6 +30,8 @@ const settle = async (page: Page) => {
 };
 
 test('an admin walks through the whole product without a single error', async ({ page }) => {
+  // About twenty screens, and the dev server compiles each route on first visit.
+  test.setTimeout(240_000);
   const problems = watch(page);
   await signInAsOwner(page);
 
@@ -47,6 +52,11 @@ test('an admin walks through the whole product without a single error', async ({
     '/access-requests',
     '/request-access',
     '/profile',
+    '/my-day',
+    '/team',
+    '/admin/attendance',
+    '/admin/settings',
+    '/admin/settings/work',
     '/admin/members',
     '/admin/groups',
     '/admin/spaces',
@@ -89,7 +99,15 @@ test('an ordinary member walks through their screens without a single error', as
     await settle(page);
   }
   // Admin-only pages explain themselves instead of failing.
-  for (const path of ['/admin/members', '/admin/groups', '/admin/spaces', '/admin/audit']) {
+  for (const path of [
+    '/admin/members',
+    '/admin/groups',
+    '/admin/spaces',
+    '/admin/audit',
+    '/admin/attendance',
+    '/admin/settings',
+    '/admin/settings/work',
+  ]) {
     await page.goto(path);
     await expect(page.getByText('Admins only')).toBeVisible();
   }

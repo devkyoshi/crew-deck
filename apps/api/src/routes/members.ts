@@ -28,6 +28,10 @@ const columns = {
   status: effectiveStatus,
   lastLoginAt: users.lastLoginAt,
   joinedAt: memberships.createdAt,
+  reportsTo: memberships.reportsTo,
+  reportsToName: sql<
+    string | null
+  >`(select coalesce(mu.name, mu.email) from users mu where mu.id = ${memberships.reportsTo})`,
 };
 
 const SORTS = {
@@ -52,6 +56,7 @@ const idParam = z.object({ id: z.string().uuid() });
 const patchBody = z
   .object({
     orgRole: orgRoleSchema,
+    reportsTo: z.string().uuid().nullable(),
     name: z.string().trim().min(1).max(100),
     jobTitle: z.string().trim().max(100).nullable(),
     timezone: timezoneSchema,
@@ -163,7 +168,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam, body: patchBody } },
     async (req) => {
       const actor = actorOf(req);
-      const { orgRole, ...profile } = req.body;
+      const { orgRole, reportsTo, ...profile } = req.body;
       const isSelf = req.params.id === actor.userId;
 
       return withTenant(deps.db, actor.orgId, async (tx) => {
@@ -190,6 +195,56 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
             targetId: target.id,
             before: { orgRole: target.orgRole },
             after: { orgRole },
+          });
+        }
+
+        if (reportsTo !== undefined && reportsTo !== target.reportsTo) {
+          // Who someone reports to decides who can see their exact times, so only admins set it.
+          if (!can(actor, 'member.editProfile')) throw forbidden();
+          if (reportsTo !== null) {
+            if (reportsTo === target.id) {
+              throw new AppError(400, 'validation_error', 'Nobody can report to themselves', {
+                reportsTo: 'Choose someone else',
+              });
+            }
+            const [boss] = await tx
+              .select({ id: memberships.userId, status: memberships.status })
+              .from(memberships)
+              .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, reportsTo)));
+            if (!boss || boss.status !== 'active') {
+              throw new AppError(400, 'validation_error', 'That person is not an active member', {
+                reportsTo: 'Choose an active member',
+              });
+            }
+            // No loops: walk up from the new manager; reaching this person would close a circle.
+            let cursor: string | null = reportsTo;
+            for (let depth = 0; cursor && depth < 50; depth++) {
+              if (cursor === target.id) {
+                throw new AppError(400, 'validation_error', 'That would create a reporting loop', {
+                  reportsTo: 'This person already reports to them',
+                });
+              }
+              const [up] = await tx
+                .select({ next: memberships.reportsTo })
+                .from(memberships)
+                .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, cursor)));
+              cursor = up?.next ?? null;
+            }
+          }
+          await tx
+            .update(memberships)
+            .set({ reportsTo })
+            .where(
+              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
+            );
+          await writeAudit(tx, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'member.manager_changed',
+            targetType: 'member',
+            targetId: target.id,
+            before: { reportsTo: target.reportsTo },
+            after: { reportsTo },
           });
         }
 

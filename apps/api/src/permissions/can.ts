@@ -17,7 +17,12 @@ export type Action =
   | 'accessRequest.approve'
   | 'space.view'
   | 'audit.viewOrg'
-  | 'audit.viewSpace';
+  | 'audit.viewSpace'
+  | 'settings.manage'
+  | 'attendance.viewAll'
+  | 'attendance.export'
+  | 'workday.editOthers'
+  | 'workday.viewTimes';
 
 export interface Actor {
   userId: string;
@@ -32,6 +37,10 @@ export interface Resource {
   spaceRole?: SpaceRole | null;
   /** Visibility of the space the action targets. */
   spaceVisibility?: 'open' | 'private';
+  /** For work-day actions: the day belongs to the caller. */
+  isSelf?: boolean;
+  /** For work-day actions: the day belongs to someone who reports to the caller. */
+  isManager?: boolean;
 }
 
 const isAdminLike = (role: OrgRole) => role === 'owner' || role === 'admin';
@@ -52,7 +61,15 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'space.viewAll':
     case 'space.delete':
     case 'audit.viewOrg':
+    case 'settings.manage':
+    case 'attendance.viewAll':
+    case 'attendance.export':
       return adminLike;
+
+    // Exact check-in times and corrections: the person, their manager, and admins. Teammates see status only.
+    case 'workday.editOthers':
+    case 'workday.viewTimes':
+      return adminLike || resource.isSelf === true || resource.isManager === true;
 
     case 'member.changeRole':
       if (!adminLike) return false;
@@ -90,4 +107,7 @@ export const ADMIN_ACTIONS: Action[] = [
   'space.viewAll',
   'space.delete',
   'audit.viewOrg',
+  'settings.manage',
+  'attendance.viewAll',
+  'attendance.export',
 ];

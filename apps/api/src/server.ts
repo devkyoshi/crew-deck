@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
+import { startAutoCloseJobs } from './checkin/jobs.js';
 import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js';
 import { createBrevoSender, createLogSender } from './email/sender.js';
 import { createRedis } from './lib/redis.js';
@@ -19,10 +20,15 @@ const sender = config.BREVO_API_KEY
     })
   : createLogSender((m) => app.log.info(m));
 const worker = startInviteEmailWorker(redis, sender, (m) => app.log.error(m));
+const autoClose = await startAutoCloseJobs(redis, db, {
+  info: (m) => app.log.info(m),
+  error: (m) => app.log.error(m),
+});
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     await worker.close();
+    await autoClose.close();
     await queue.close();
     await app.close();
     redis.disconnect();

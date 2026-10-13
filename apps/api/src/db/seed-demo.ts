@@ -3,6 +3,10 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '../auth/password.js';
 import { createDb } from './client.js';
 import {
+  holidays,
+  sites,
+  tenantSettings,
+  workDays,
   auditLogs,
   groupMembers,
   groups,
@@ -308,6 +312,154 @@ export async function seedDemo(adminUrl: string) {
         after: { requestId: req!.id },
         createdAt: daysAgo(1),
       });
+    }
+    // Check-in: settings, sites, holidays, managers, today's statuses and two weeks of history.
+    await db
+      .insert(tenantSettings)
+      .values({ orgId: org.id, timezone: 'UTC' })
+      .onConflictDoNothing();
+    const siteIds = new Map<string, string>();
+    for (const [name, address] of [
+      ['London HQ', '12 Fleet Street, London'],
+      ['Colombo Office', '45 Galle Road, Colombo'],
+    ] as const) {
+      const [site] = await db
+        .insert(sites)
+        .values({ orgId: org.id, name, address })
+        .onConflictDoNothing()
+        .returning();
+      const found =
+        site ??
+        (
+          await db
+            .select()
+            .from(sites)
+            .where(and(eq(sites.orgId, org.id), eq(sites.name, name)))
+        )[0];
+      siteIds.set(name, found!.id);
+    }
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    const inDays = (n: number) => {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() + n);
+      return iso(d);
+    };
+    await db
+      .insert(holidays)
+      .values([
+        { orgId: org.id, date: inDays(9), name: 'Company Day' },
+        { orgId: org.id, date: inDays(30), name: 'Founders Day' },
+      ])
+      .onConflictDoNothing();
+
+    const managers: [string, string][] = [
+      ['ben', 'priya'],
+      ['dmitri', 'priya'],
+      ['carla', 'elena'],
+      ['grace', 'farid'],
+      ['ines', 'hiro'],
+    ];
+    for (const [report, boss] of managers) {
+      await db
+        .update(memberships)
+        .set({ reportsTo: userId(boss) })
+        .where(and(eq(memberships.orgId, org.id), eq(memberships.userId, userId(report))));
+    }
+
+    const midnight = new Date(`${iso(today)}T00:05:00Z`);
+    const at = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00Z`);
+    const live = today >= midnight;
+    const todayStr = iso(today);
+    const hq = siteIds.get('London HQ')!;
+    const colombo = siteIds.get('Colombo Office')!;
+    const clamp = (d: Date) => (d > today ? midnight : d);
+    if (live) {
+      const rows: (typeof workDays.$inferInsert)[] = [
+        {
+          orgId: org.id,
+          userId: userId('priya'),
+          date: todayStr,
+          locationType: 'onsite',
+          siteId: hq,
+          checkinAt: clamp(at(todayStr, '08:50')),
+        },
+        {
+          orgId: org.id,
+          userId: userId('elena'),
+          date: todayStr,
+          locationType: 'onsite',
+          siteId: colombo,
+          checkinAt: clamp(at(todayStr, '09:05')),
+        },
+        {
+          orgId: org.id,
+          userId: userId('ben'),
+          date: todayStr,
+          locationType: 'remote',
+          checkinAt: clamp(at(todayStr, '09:20')),
+        },
+        {
+          orgId: org.id,
+          userId: userId('hiro'),
+          date: todayStr,
+          locationType: 'remote',
+          checkinAt: clamp(at(todayStr, '08:40')),
+        },
+        {
+          orgId: org.id,
+          userId: userId('dmitri'),
+          date: todayStr,
+          locationType: 'offsite',
+          note: 'Client workshop',
+          checkinAt: clamp(at(todayStr, '09:30')),
+        },
+        {
+          orgId: org.id,
+          userId: userId('carla'),
+          date: todayStr,
+          plannedLocation: 'leave',
+          source: 'plan',
+        },
+        {
+          orgId: org.id,
+          userId: userId('farid'),
+          date: todayStr,
+          plannedLocation: 'remote',
+          source: 'plan',
+        },
+      ];
+      await db.insert(workDays).values(rows).onConflictDoNothing();
+    }
+    // Two weeks of history for a few people (weekdays only).
+    const people: [string, 'onsite' | 'remote'][] = [
+      ['priya', 'onsite'],
+      ['ben', 'remote'],
+      ['grace', 'remote'],
+      ['owner', 'onsite'],
+    ];
+    // The forgotten check-out example goes on the first weekday at least three days back.
+    let autoClosedBack = 3;
+    while ([0, 6].includes(new Date(`${inDays(-autoClosedBack)}T00:00:00Z`).getUTCDay()))
+      autoClosedBack++;
+    for (let back = 1; back <= 14; back++) {
+      const date = inDays(-back);
+      const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+      if (dow === 0 || dow === 6) continue;
+      const rows = people.map(([who, loc], i) => ({
+        orgId: org.id,
+        userId: userId(who),
+        date,
+        locationType: loc,
+        siteId: loc === 'onsite' ? hq : null,
+        checkinAt: at(date, `08:${String(40 + ((back + i) % 5) * 3).padStart(2, '0')}`),
+        checkoutAt: at(date, `17:${String(10 + ((back * 7 + i) % 6) * 5).padStart(2, '0')}`),
+        // One forgotten check-out so the auto-closed flag has an example.
+        ...(back === autoClosedBack && who === 'ben'
+          ? { checkoutAt: at(date, '20:00'), autoClosed: true, source: 'auto' as const }
+          : {}),
+      }));
+      await db.insert(workDays).values(rows).onConflictDoNothing();
     }
     console.log('seeded demo workspace (acme)');
   } finally {

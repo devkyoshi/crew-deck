@@ -185,7 +185,8 @@ export default function SpaceSettingsPage() {
                       onClick={() => setValue('icon', name, { shouldDirty: true })}
                       className={cn(
                         'hover:bg-accent flex size-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-50',
-                        on && 'border-primary bg-accent text-primary ring-primary/30 ring-2',
+                        on &&
+                          'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                       )}
                     >
                       <Icon className="size-5" aria-hidden />

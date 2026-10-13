@@ -1,4 +1,15 @@
-import { jsonb, pgTable, primaryKey, uuid, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  date,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  uuid,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core';
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -40,6 +51,7 @@ export const memberships = pgTable(
       .notNull()
       .default('active'),
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    reportsTo: uuid('reports_to'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique().on(t.orgId, t.userId)],
@@ -162,4 +174,74 @@ export const spaceAccessRequests = pgTable('space_access_requests', {
   decidedAt: timestamp('decided_at', { withTimezone: true }),
   grantedRole: text('granted_role', { enum: ['admin', 'member', 'viewer'] }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tenantSettings = pgTable('tenant_settings', {
+  orgId: uuid('org_id')
+    .primaryKey()
+    .references(() => organizations.id),
+  timezone: text('timezone').notNull().default('UTC'),
+  workDays: integer('work_days').array().notNull().default([1, 2, 3, 4, 5]),
+  workStart: text('work_start').notNull().default('09:00'),
+  workEnd: text('work_end').notNull().default('17:30'),
+  autoCloseTime: text('auto_close_time').notNull().default('20:00'),
+  requireNote: boolean('require_note').notNull().default(false),
+  enabledModules: text('enabled_modules')
+    .array()
+    .notNull()
+    .default(['members', 'spaces', 'checkin']),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sites = pgTable('sites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id),
+  name: text('name').notNull(),
+  address: text('address'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const holidays = pgTable('holidays', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id),
+  date: date('date').notNull(),
+  name: text('name').notNull(),
+});
+
+export const workDays = pgTable('work_days', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  date: date('date').notNull(),
+  plannedLocation: text('planned_location', { enum: ['onsite', 'remote', 'offsite', 'leave'] }),
+  locationType: text('location_type', {
+    enum: ['onsite', 'remote', 'offsite', 'leave', 'holiday'],
+  }),
+  siteId: uuid('site_id'),
+  checkinAt: timestamp('checkin_at', { withTimezone: true }),
+  checkoutAt: timestamp('checkout_at', { withTimezone: true }),
+  note: text('note'),
+  autoClosed: boolean('auto_closed').notNull().default(false),
+  source: text('source', { enum: ['web', 'auto', 'edit', 'plan'] })
+    .notNull()
+    .default('web'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const workDayEdits = pgTable('work_day_edits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  workDayId: uuid('work_day_id').notNull(),
+  editedBy: uuid('edited_by')
+    .notNull()
+    .references(() => users.id),
+  oldValues: jsonb('old_values').notNull(),
+  newValues: jsonb('new_values').notNull(),
+  reason: text('reason').notNull(),
+  editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
 });

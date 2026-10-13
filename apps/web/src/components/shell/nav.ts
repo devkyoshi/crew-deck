@@ -1,4 +1,6 @@
 import {
+  CalendarCheck,
+  ClipboardList,
   FileClock,
   Inbox,
   FolderKanban,
@@ -7,6 +9,7 @@ import {
   Settings,
   Users,
   UsersRound,
+  UsersRound as TeamIcon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -16,6 +19,10 @@ export interface NavItem {
   icon: LucideIcon;
   /** Phase of the build plan that delivers this screen (shown on the placeholder page). */
   phase?: number;
+  /** Only shown to workspace admins. */
+  adminOnly?: boolean;
+  /** Hidden when check-in is switched off for the workspace. */
+  needsCheckin?: boolean;
 }
 
 export interface NavGroup {
@@ -31,8 +38,17 @@ export const NAV: NavGroup[] = [
     label: 'Workspace',
     items: [
       { title: 'Home', href: '/', icon: Home },
+      { title: 'My day', href: '/my-day', icon: CalendarCheck, needsCheckin: true },
+      { title: 'Team', href: '/team', icon: TeamIcon, needsCheckin: true },
       { title: 'People', href: '/people', icon: Users },
       { title: 'Groups', href: '/groups', icon: UsersRound },
+      {
+        title: 'Attendance',
+        href: '/admin/attendance',
+        icon: ClipboardList,
+        adminOnly: true,
+        needsCheckin: true,
+      },
     ],
   },
   {
@@ -52,7 +68,7 @@ export const NAV: NavGroup[] = [
       { title: 'Groups', href: '/admin/groups', icon: UsersRound },
       { title: 'Spaces', href: '/admin/spaces', icon: FolderKanban },
       { title: 'Audit log', href: '/admin/audit', icon: FileClock },
-      { title: 'Settings', href: '/admin/settings', icon: Settings, phase: 9 },
+      { title: 'Settings', href: '/admin/settings', icon: Settings },
     ],
   },
 ];
@@ -63,6 +79,13 @@ export function findNavItem(pathname: string) {
   return ALL_ITEMS.find((i) => i.href === pathname);
 }
 
-export function visibleGroups(isAdmin: boolean) {
-  return NAV.filter((g) => !g.adminOnly || isAdmin);
+export function visibleGroups(isAdmin: boolean, checkinEnabled = true) {
+  return NAV.filter((g) => !g.adminOnly || isAdmin)
+    .map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (i) => (!i.adminOnly || isAdmin) && (!i.needsCheckin || checkinEnabled),
+      ),
+    }))
+    .filter((g) => g.items.length > 0);
 }

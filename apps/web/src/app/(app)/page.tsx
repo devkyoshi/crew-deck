@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, LayoutGrid, Sparkles, Users, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { HeroBanner } from '@/components/shared/hero-banner';
 import { IconTile, type Tone } from '@/components/shared/pastel';
+import { TeamWidget } from '@/components/checkin/team-board';
+import { useToday } from '@/components/checkin/use-today';
 import { useMe } from '@/components/shell/me-context';
 
 const SHORTCUTS: { title: string; sub: string; href: string; icon: typeof Users; tone: Tone }[] = [
@@ -30,11 +33,17 @@ const SHORTCUTS: { title: string; sub: string; href: string; icon: typeof Users;
 export default function HomePage() {
   const { user, org } = useMe();
   const first = user.name?.split(' ')[0] ?? 'there';
-  const today = new Intl.DateTimeFormat('en', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
+  const checkinOn = useToday().data?.enabled === true;
+  // The date depends on the viewer's timezone, which the server does not know. Rendering it on the
+  // server would disagree with the browser near midnight (a hydration error), so it appears after mount.
+  const [today, setToday] = useState(' ');
+  useEffect(() => {
+    setToday(
+      new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long' }).format(
+        new Date(),
+      ),
+    );
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -48,6 +57,8 @@ export default function HomePage() {
           </span>
         }
       />
+
+      {checkinOn && <TeamWidget />}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

@@ -17,6 +17,9 @@ const ORG_MATRIX: [Action, boolean, boolean, boolean][] = [
   ['space.manageMembers', true, true, false],
   ['accessRequest.approve', true, true, false],
   ['audit.viewOrg', true, true, false],
+  ['settings.manage', true, true, false],
+  ['attendance.viewAll', true, true, false],
+  ['attendance.export', true, true, false],
   ['audit.viewSpace', true, true, false],
 ];
 
@@ -107,5 +110,24 @@ describe('can(): space roles (for an org member)', () => {
 describe('can(): unknown actions', () => {
   it('denies anything it does not know', () => {
     expect(can(actor('owner'), 'something.else' as Action)).toBe(false);
+  });
+});
+
+describe('can(): work days', () => {
+  const asRole = (role: 'owner' | 'admin' | 'member') => ({
+    userId: 'u1',
+    orgId: 'o1',
+    orgRole: role,
+  });
+
+  it('lets the person, their manager and admins see times and make corrections; nobody else', () => {
+    for (const action of ['workday.viewTimes', 'workday.editOthers'] as const) {
+      expect(can(asRole('member'), action, { isSelf: true })).toBe(true);
+      expect(can(asRole('member'), action, { isManager: true })).toBe(true);
+      expect(can(asRole('admin'), action)).toBe(true);
+      expect(can(asRole('owner'), action)).toBe(true);
+      expect(can(asRole('member'), action)).toBe(false);
+      expect(can(asRole('member'), action, { isSelf: false, isManager: false })).toBe(false);
+    }
   });
 });

@@ -68,10 +68,25 @@ export async function apiCall(
         headers: body ? { 'content-type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
-      return { status: res.status, json: await res.json().catch(() => null) };
+      const text = await res.text();
+      let json: ReturnType<typeof JSON.parse> = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* not JSON (for example a CSV) */
+      }
+      return { status: res.status, json, text, contentType: res.headers.get('content-type') ?? '' };
     },
     { method, path, body },
   );
 }
 
 export const signInAs = (page: Page, email: string) => signInWithPassword(page, email);
+
+/** Signs in with the development-only box (works for accounts that have no password). */
+export async function signInDev(page: Page, email: string) {
+  await page.goto('/sign-in');
+  await page.getByLabel('Dev login email').fill(email);
+  await page.getByRole('button', { name: 'Dev sign in' }).click();
+  await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
+}

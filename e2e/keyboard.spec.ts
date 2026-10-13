@@ -77,8 +77,13 @@ test('table row menus work from the keyboard', async ({ page }) => {
   await actions.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menu')).toBeVisible();
+  // Opening from the keyboard focuses the first item ("View profile"). Arrow keys move between items.
+  await expect(page.getByRole('menuitem', { name: 'View profile' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter'); // "View profile"
+  await expect(page.getByRole('menuitem', { name: 'View profile' })).not.toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('menuitem', { name: 'View profile' })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/people\/[0-9a-f-]{36}$/);
 });
 

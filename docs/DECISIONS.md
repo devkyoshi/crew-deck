@@ -109,6 +109,30 @@ Every main screen is scanned with axe (WCAG 2.1 A and AA) in light and dark them
 
 The suite uses the dev-only sign-in box and starts the servers through Playwright's webServer option, so CI runs the same commands as a developer. Production mode (no dev login) is covered separately by the containerised smoke test in the deployment notes.
 
+## ADR-026: Check-in is a team status board, not an attendance record
+
+Decided with the owner (the brief left it open): check-in gives teams visibility of who is working where. It is not a payroll or formal attendance system, so the export is called a "status log". Corrections are still audited and kept (a reason is mandatory), so the trail is honest, but nothing here promises legal evidentiary value. If HR later relies on it, that needs stricter edit rules and retention.
+
+## ADR-027: One check-in per person per day, in the person's own timezone
+
+`work_days` has one row per person per local date (unique on org, user, date). A "day" is the person's own calendar date, computed with Intl, never UTC. Re-checking in after checking out the same day is refused; people correct the day instead. An open check-in from an earlier day can still be checked out (overnight work). Daylight-saving changes are handled by the timezone maths and covered by unit tests.
+
+## ADR-028: Who sees what
+
+Teammates see status only (location, in/out, leave). Exact times and the auto-closed flag go to the person, their manager (`memberships.reports_to`) and workspace admins. Managers are set by admins only, with loop protection. Days of people you may not manage look like they do not exist (404), not forbidden.
+
+## ADR-029: Corrections instead of approval flows
+
+People edit their own days directly with a mandatory reason; managers and admins can correct their reports' (admins anyone's). Every correction writes a `work_day_edits` row (old and new values, append-only for the application role) and an audit entry, and the day is flagged "Edited". `POST /work-days` was added (beyond the brief's endpoint list) so a day with no record at all, such as a forgotten check-in, can be added with the same rules. Leave is set by the person through the plan with no approval flow, as in the brief.
+
+## ADR-030: Auto-close runs as per-workspace jobs
+
+A repeatable job ticks every minute. The tick belongs to no tenant, so it only lists workspace ids through a narrow SECURITY DEFINER function (`auth_list_org_ids`) and queues one job per workspace; each of those jobs carries `org_id` and runs inside that tenant's context. Job ids include the minute so two API instances cannot double-queue. An open check-in is closed at the auto-close time (default 20:00) in the person's own timezone, stamped at that time, or at the check-in itself for someone who checked in after it, and flagged auto-closed.
+
+## ADR-031: CSV export is spreadsheet-safe
+
+Cells starting with = + - @ tab or CR are prefixed with an apostrophe so a note like `=HYPERLINK(...)` cannot run as a formula. The file carries a UTF-8 byte-order mark so Excel reads it correctly.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.

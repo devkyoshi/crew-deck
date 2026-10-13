@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FolderKanban, Pencil, UserX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RoleBadge, StatusChip } from '@/components/shared/badges';
+import { PeoplePicker } from '@/components/shared/pickers';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { ProfileForm, type ProfileValues } from '@/components/members/profile-form';
@@ -57,6 +58,17 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
   const { setRole, setActive } = useMemberActions();
+  const setManager = useMutation({
+    mutationFn: (reportsTo: string | null) =>
+      api(`/members/${id}`, { method: 'PATCH', body: { reportsTo } }),
+    onSuccess: () => {
+      toast.success('Manager updated');
+      qc.invalidateQueries({ queryKey: ['member'] });
+      qc.invalidateQueries({ queryKey: ['members'] });
+      qc.invalidateQueries({ queryKey: ['team'] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update the manager'),
+  });
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
@@ -166,6 +178,7 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
               <dl className="divide-y">
                 <Row label="Job title">{m.jobTitle ?? '—'}</Row>
                 <Row label="Timezone">{m.timezone}</Row>
+                <Row label="Reports to">{m.reportsToName ?? '—'}</Row>
                 <Row label="Joined">{formatDate(m.joinedAt)}</Row>
                 {isAdmin && <Row label="Last active">{timeAgo(m.lastLoginAt)}</Row>}
               </dl>
@@ -195,6 +208,41 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
                     {a.canOwn && <SelectItem value="owner">Owner</SelectItem>}
                   </SelectContent>
                 </Select>
+              </CardContent>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reports to</CardTitle>
+                <CardDescription>
+                  Managers can see their reports&apos; exact check-in times. Teammates only see
+                  status.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PeoplePicker
+                  label="Manager"
+                  value={
+                    m.reportsTo
+                      ? [
+                          {
+                            id: m.reportsTo,
+                            name: m.reportsToName ?? null,
+                            email: '',
+                            avatarUrl: null,
+                          },
+                        ]
+                      : []
+                  }
+                  lockedIds={[m.id]}
+                  onChange={(next) => {
+                    const chosen = next.filter((p) => p.id !== m.reportsTo).at(-1) ?? null;
+                    if (chosen) setManager.mutate(chosen.id);
+                    else if (m.reportsTo && next.length === 0) setManager.mutate(null);
+                  }}
+                />
               </CardContent>
             </Card>
           )}

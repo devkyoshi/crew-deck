@@ -194,7 +194,8 @@ export function CreateSpaceWizard() {
                       onClick={() => setValue('icon', name)}
                       className={cn(
                         'hover:bg-accent flex size-10 items-center justify-center rounded-xl border transition-colors',
-                        on && 'border-primary bg-accent text-primary ring-primary/30 ring-2',
+                        on &&
+                          'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                       )}
                     >
                       <Icon className="size-5" aria-hidden />
