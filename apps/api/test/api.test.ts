@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { buildApp } from '../src/app.js';
 import { withTenant } from '../src/db/client.js';
 import { memberships } from '../src/db/schema.js';
 import { forbidden } from '../src/lib/errors.js';
-import { appDb, tenantIds } from './helpers.js';
+import { appDb, makeApp, tenantIds } from './helpers.js';
 
 const appConn = appDb();
-const app = buildApp({ db: appConn.db, logLevel: 'silent' });
+const made = makeApp();
+const app = made.app;
 let ids: Awaited<ReturnType<typeof tenantIds>>;
 
 // Test-only tenant-scoped routes. They stand in for real modules until Phase 1+,
@@ -34,7 +34,7 @@ beforeAll(async () => {
   await app.ready();
 });
 afterAll(async () => {
-  await app.close();
+  await made.close();
   await appConn.close();
 });
 

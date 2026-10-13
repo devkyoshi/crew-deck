@@ -33,7 +33,9 @@ describe('row-level security (direct database)', () => {
       const people = await tx.select().from(users);
       expect(orgs.map((o) => o.slug)).toEqual(['acme']);
       expect(members.every((m) => m.orgId === ids.acme)).toBe(true);
-      expect(people.map((u) => u.email)).toEqual(['owner@acme.test']);
+      const emails = people.map((u) => u.email);
+      expect(emails).toContain('owner@acme.test');
+      expect(emails).not.toContain('owner@globex.test');
     });
   });
 

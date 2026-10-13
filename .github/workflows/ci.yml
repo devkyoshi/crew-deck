@@ -18,6 +18,11 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U crew_admin -d crewdeck" --health-interval 3s
           --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 3s --health-timeout 3s --health-retries 20
     env:
       DATABASE_URL: postgres://crew_app:crew_app_dev@localhost:5432/crewdeck
       DATABASE_ADMIN_URL: postgres://crew_admin:crew_admin_dev@localhost:5432/crewdeck

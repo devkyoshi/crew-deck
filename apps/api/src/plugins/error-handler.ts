@@ -25,6 +25,11 @@ export function registerErrorHandler(app: FastifyInstance) {
         .send({ code: 'validation_error', message: 'Invalid request', fields });
     }
     const status = (err as { statusCode?: number }).statusCode;
+    if (status === 429) {
+      return reply
+        .status(429)
+        .send({ code: 'rate_limited', message: 'Too many attempts, try again shortly' });
+    }
     if (status && status < 500) {
       return reply.status(status).send({ code: 'bad_request', message: (err as Error).message });
     }

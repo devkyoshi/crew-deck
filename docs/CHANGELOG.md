@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-13 - Phase 1: Authentication and app shell
+
+- Migration 0002: users.password_hash, invitations table (RLS), pre-tenant lookup functions.
+- Auth API: password login, dev-only login, logout, invite preview/accept, Google SSO (ticket handoff), GET/PATCH /me, rate limiting, Origin check.
+- Redis sessions bound to tenant; tenant resolved from host (subdomain).
+- can() permission module with matrix tests; API tests for sessions, cross-tenant, invites, SSO, rate limits (60 tests).
+- Web: sign-in, accept-invite, workspace picker, route protection (proxy.ts + server check), app shell (sidebar, top bar, breadcrumbs, user menu, command palette, tenant switcher), /design page, softer warm theme.
+- Playwright smoke tests (sign-in, invite, member vs admin nav, palette, desktop/tablet/mobile).
+
 ## 2026-10-13 - Phase 0: Foundation
 
 - pnpm monorepo: `apps/web` (Next.js, Tailwind, shadcn/ui, light/dark), `apps/api` (Fastify), `packages/shared`.

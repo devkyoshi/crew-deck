@@ -3,8 +3,9 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /repo
 
 FROM base AS build
-ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Rewrites are baked in at build time.
+ARG API_INTERNAL_URL=http://api:4000
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/

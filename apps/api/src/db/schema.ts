@@ -18,6 +18,7 @@ export const users = pgTable('users', {
   status: text('status', { enum: ['invited', 'active', 'deactivated'] })
     .notNull()
     .default('invited'),
+  passwordHash: text('password_hash'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -39,3 +40,20 @@ export const memberships = pgTable(
   },
   (t) => [unique().on(t.orgId, t.userId)],
 );
+
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id),
+  email: text('email').notNull(),
+  orgRole: text('org_role', { enum: ['owner', 'admin', 'member'] })
+    .notNull()
+    .default('member'),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  invitedBy: uuid('invited_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
