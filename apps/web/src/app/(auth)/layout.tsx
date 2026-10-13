@@ -3,7 +3,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-background flex min-h-svh flex-col">
+    <div className="bg-page flex min-h-svh flex-col">
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2 font-semibold">
           <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-lg">

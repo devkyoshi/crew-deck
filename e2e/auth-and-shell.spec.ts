@@ -35,7 +35,7 @@ async function createInvite() {
 
 test('password sign-in lands on the shell, and sign-out returns to sign-in', async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole('heading', { name: /Welcome, Alice/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Alice/ })).toBeVisible();
   await expect(page.getByText('Administration')).toBeVisible();
 
   await page.getByRole('button', { name: 'Account menu' }).click();
@@ -57,7 +57,7 @@ test('members do not see the Administration section', async ({ page }) => {
   await page.goto('/sign-in');
   await page.getByLabel('Dev login email').fill('member@acme.test');
   await page.getByRole('button', { name: 'Dev sign in' }).click();
-  await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
   await expect(page.getByText('Administration')).toHaveCount(0);
 });
 
@@ -69,7 +69,7 @@ test('an invited person can accept the invite and land signed in', async ({ page
   await page.getByLabel('Password', { exact: true }).fill('a-long-enough-password');
   await page.getByLabel('Confirm password').fill('a-long-enough-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: /Welcome, Eve/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Eve/ })).toBeVisible();
 
   // The link is single use.
   await page.getByRole('button', { name: 'Account menu' }).click();
@@ -80,7 +80,7 @@ test('an invited person can accept the invite and land signed in', async ({ page
 
 test('command palette navigates with the keyboard', async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
   await page.keyboard.press('Control+k');
   await page.getByPlaceholder('Jump to…').fill('groups');
   await page.keyboard.press('Enter');
@@ -96,7 +96,7 @@ for (const [name, size] of [
   test(`shell renders at ${name} width`, async ({ page }) => {
     await page.setViewportSize(size);
     await signIn(page);
-    await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
     // No horizontal page scroll at any width.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -104,11 +104,17 @@ for (const [name, size] of [
     expect(overflow).toBeLessThanOrEqual(0);
     if (name === 'mobile') {
       // Sidebar is a sheet on mobile: hidden until opened.
-      await expect(page.getByRole('link', { name: 'People' })).toBeHidden();
+      await expect(
+        page.locator('[data-sidebar="menu-button"]', { hasText: 'People' }),
+      ).toBeHidden();
       await page.getByRole('button', { name: 'Toggle sidebar' }).click();
-      await expect(page.getByRole('link', { name: 'People' })).toBeVisible();
+      await expect(
+        page.locator('[data-sidebar="menu-button"]', { hasText: 'People' }),
+      ).toBeVisible();
     } else {
-      await expect(page.getByRole('link', { name: 'People' })).toBeVisible();
+      await expect(
+        page.locator('[data-sidebar="menu-button"]', { hasText: 'People' }),
+      ).toBeVisible();
     }
     if (shots) await page.screenshot({ path: `${shots}/shell-${name}.png` });
   });

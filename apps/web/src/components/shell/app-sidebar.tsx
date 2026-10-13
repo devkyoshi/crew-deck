@@ -128,7 +128,12 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                   item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.title}
+                      className="relative h-9 rounded-xl data-[active=true]:font-medium data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:h-5 data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary"
+                    >
                       <Link href={item.href} aria-current={active ? 'page' : undefined}>
                         <item.icon />
                         <span>{item.title}</span>
@@ -153,7 +158,7 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
 export function AppSidebar() {
   const isAdmin = useIsAdmin();
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <TenantSwitcher />
       </SidebarHeader>

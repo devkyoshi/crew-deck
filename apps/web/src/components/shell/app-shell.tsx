@@ -20,7 +20,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         <AppSidebar />
         <SidebarInset>
           <Topbar />
-          <main id="main" className="flex-1 p-4 sm:p-6">
+          <main id="main" className="flex-1 p-4 sm:p-8">
             <div className="mx-auto w-full max-w-6xl">{children}</div>
           </main>
         </SidebarInset>

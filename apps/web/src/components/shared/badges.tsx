@@ -10,7 +10,10 @@ const ROLE_STYLES: Record<string, string> = {
 
 export function RoleBadge({ role }: { role: string }) {
   return (
-    <Badge variant="outline" className={cn('border-transparent capitalize', ROLE_STYLES[role])}>
+    <Badge
+      variant="outline"
+      className={cn('rounded-full border-transparent px-2.5 capitalize', ROLE_STYLES[role])}
+    >
       {role}
     </Badge>
   );

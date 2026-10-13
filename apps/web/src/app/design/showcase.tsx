@@ -57,6 +57,16 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { RoleBadge, StatusChip } from '@/components/shared/badges';
 import { Stepper } from '@/components/shared/stepper';
+import { AvatarStack, Chip, TonePill, TonedHeader } from '@/components/shared/pastel';
+import {
+  CalendarClock,
+  CheckCircle2,
+  CircleAlert,
+  Flag,
+  ListChecks,
+  Paperclip,
+  MessageSquare,
+} from 'lucide-react';
 
 const PEOPLE = [
   { name: 'Alice Acme', email: 'alice@acme.test', role: 'owner', status: 'active' },
@@ -93,6 +103,53 @@ export function Showcase() {
           </Button>
         }
       />
+
+      <Section title="Cards and column headers">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['blue', ListChecks, 'To do', 2, 'Medium', 'amber'],
+              ['pink', CircleAlert, 'On review', 3, 'Low', 'blue'],
+            ] as const
+          ).map(([tone, icon, title, count, prio, pt]) => (
+            <div key={title} className="space-y-3">
+              <TonedHeader
+                tone={tone}
+                icon={icon}
+                title={title}
+                count={count}
+                action={<Plus className="text-muted-foreground size-4" />}
+              />
+              <div className="bg-card space-y-3 rounded-2xl border p-4">
+                <div className="flex items-center justify-between">
+                  <Chip icon={CalendarClock}>Due: 5 Dec, 2026</Chip>
+                  <MoreHorizontal className="text-muted-foreground size-4" />
+                </div>
+                <div>
+                  <div className="font-medium">Design system update</div>
+                  <p className="text-muted-foreground truncate text-xs">
+                    Reviewing updated components and accessibility
+                  </p>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Assigned for</span>
+                  <AvatarStack names={['Alice Acme', 'Ben Builder', 'Cara Coder']} />
+                </div>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <TonePill tone={pt} icon={Flag}>
+                    {prio}
+                  </TonePill>
+                  <div className="flex gap-1.5">
+                    <Chip icon={Paperclip}>3</Chip>
+                    <Chip icon={MessageSquare}>7</Chip>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <TonedHeader tone="green" icon={CheckCircle2} title="Completed" count={6} />
+      </Section>
 
       <Section title="Buttons and badges">
         <div className="flex flex-wrap items-center gap-2">

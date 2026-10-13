@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-13 - UI restyle from reference images
+
+- Cool grey page with an inset white rounded panel, bright blue accent, 16px card radius, soft rounded-square buttons and inputs, segmented-pill tabs, blue active sidebar pill.
+- New shared pieces: toned column headers, chips, tone pills, avatar stack, icon tiles, hero banner (SVG illustration, no external images).
+- Home redesigned with hero banner and shortcut cards; /design page shows the new card and header styles.
+
 ## 2026-10-13 - Phase 1: Authentication and app shell
 
 - Migration 0002: users.password_hash, invitations table (RLS), pre-tenant lookup functions.
