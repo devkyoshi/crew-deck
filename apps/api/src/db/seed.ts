@@ -25,6 +25,12 @@ export const DEMO_TENANTS = [
   },
 ];
 
+const DEV_PEOPLE: { handle: string; name: string; title: string; role: 'admin' | 'member' }[] = [
+  { handle: 'admin', name: 'Ada Admin', title: 'Operations', role: 'admin' },
+  { handle: 'member', name: 'Mia Member', title: 'Engineer', role: 'member' },
+  { handle: 'member2', name: 'Max Member', title: 'Designer', role: 'member' },
+];
+
 /** Idempotent. Must run on the admin (owner) connection, since it writes across tenants. */
 export async function seed(adminUrl: string) {
   const { db, close } = createDb(adminUrl);
@@ -49,6 +55,21 @@ export async function seed(adminUrl: string) {
         .insert(memberships)
         .values({ orgId: org!.id, userId: user!.id, orgRole: 'owner' })
         .onConflictDoNothing();
+      // A few extra people so the demo workspace is not empty (development only).
+      if (dev) {
+        for (const p of DEV_PEOPLE) {
+          const email = `${p.handle}@${t.domain}`;
+          const [person] = await db
+            .insert(users)
+            .values({ email, name: p.name, jobTitle: p.title, status: 'active', passwordHash })
+            .onConflictDoUpdate({ target: users.email, set: { name: p.name, passwordHash } })
+            .returning();
+          await db
+            .insert(memberships)
+            .values({ orgId: org!.id, userId: person!.id, orgRole: p.role })
+            .onConflictDoNothing();
+        }
+      }
       if (dev && t.slug === 'acme') {
         await db
           .insert(invitations)

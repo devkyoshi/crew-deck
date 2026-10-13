@@ -161,7 +161,7 @@ export function sessionCookie(res: { cookies: { name: string; value: string }[] 
   return res.cookies.find((c) => c.name === 'cd_session')?.value;
 }
 
-type Json = Record<string, unknown> | undefined;
+type Json = object | undefined;
 
 /** Thin wrapper over app.inject for tenant-host requests with an optional session cookie. */
 export function caller(app: ReturnType<typeof makeApp>['app']) {

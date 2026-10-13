@@ -60,6 +60,27 @@ The brief puts `status` on `users`, but a user is a global identity that can bel
 
 `@tanstack/react-table` 9.x changed the API; the project is pinned to 8.21.3, which matches the shadcn data-table pattern. Revisit when v9 stabilises.
 
+## ADR-016: Tests run on their own database
+
+API tests create and use `<db>_test` (derived from DATABASE_URL), so they never pollute the development database. The global setup creates the database if missing, mirrors the app-role default privileges, migrates and seeds. This needs the admin role to have CREATEDB (true for the Docker setup and the CI service).
+
+## ADR-017: Group tables carry org_id and composite foreign keys
+
+`group_members` has `org_id` (the brief lists only group_id and user_id) so row-level security applies directly. Composite foreign keys `(group_id, org_id)` and `(org_id, user_id)` make it impossible to link a group and a person from different workspaces, even through a bug or direct SQL. Invitations gained `group_ids` so the groups chosen at invite time are applied on acceptance (groups deleted in the meantime are skipped).
+
+## ADR-018: Spaces
+
+- **Visibility and roles.** Org owners and admins see every space. Everyone else sees open spaces plus private ones where they hold a role. The caller's effective role is the highest of their direct membership and every group they belong to (admin > member > viewer), computed in one SQL expression shared by list and detail queries. Hidden spaces return 404, never 403.
+- **Keys.** Unique per workspace, 2 to 10 characters, stored upper case, immutable, and never reused: deleting a space is a soft delete (`deleted_at`), so the unique constraint still covers it. "NEW" is reserved because it is the create page's URL.
+- **Added beyond the brief's table list:** `space_members.org_id` and `spaces.deleted_at` (as above), and a `space_stars` table, because `POST /spaces/:id/star` needs somewhere to store stars. "Recent" spaces are kept in the browser only.
+- **Permissions.** Creating a space: any member (open decision still pending). Editing, archiving and restoring: space admins and org admins. Deleting: org owners and admins only (the brief's matrix does not cover delete), and the caller must type the key. Archived spaces are read-only until restored.
+- **By id or key.** `/spaces/:id` accepts either, so the web app can use readable URLs (`/spaces/ENG`).
+- **Members tab is read-only in Phase 4;** adding, removing and changing roles belong to Phase 5.
+
+## ADR-019: Searchable pickers query the server
+
+The people and group pickers search on the server (debounced) instead of loading a workspace into the browser. They never return another workspace's records; this is covered by tests.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.

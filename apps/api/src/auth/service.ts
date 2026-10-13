@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { withTenant, type Db } from '../db/client.js';
-import { invitations, memberships, users } from '../db/schema.js';
+import { groupMembers, groups, invitations, memberships, users } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import { sha256 } from '../lib/crypto.js';
 import { hashPassword } from './password.js';
@@ -102,6 +102,7 @@ export type InvitationRow = {
   expires_at: Date;
   accepted_at: Date | null;
   revoked_at: Date | null;
+  group_ids: string[];
 };
 
 const invalidInvite = () =>
@@ -120,7 +121,7 @@ export async function findUsableInvitation(db: Db, token: string): Promise<Invit
 }
 
 export async function findPendingInvitation(db: Db, orgId: string, email: string) {
-  const rows = await db.execute<{ id: string; org_role: OrgRole }>(
+  const rows = await db.execute<{ id: string; org_role: OrgRole; group_ids: string[] }>(
     sql`select * from auth_pending_invitation(${orgId}, ${email})`,
   );
   return rows[0] ?? null;
@@ -140,7 +141,7 @@ export interface AcceptProfile {
 export async function acceptInvitation(
   db: Db,
   org: Org,
-  invitation: { id: string; email: string; role: OrgRole },
+  invitation: { id: string; email: string; role: OrgRole; groupIds?: string[] },
   profile: AcceptProfile,
 ): Promise<string> {
   if (!emailMatchesOrg(invitation.email, org)) {
@@ -194,13 +195,32 @@ export async function acceptInvitation(
       });
       await tx.insert(memberships).values({ orgId: org.id, userId, orgRole: invitation.role });
     }
+    // Groups chosen at invite time. Groups deleted since then are skipped.
+    let joinedGroups: string[] = [];
+    if (invitation.groupIds?.length) {
+      const still = await tx
+        .select({ id: groups.id })
+        .from(groups)
+        .where(and(eq(groups.orgId, org.id), inArray(groups.id, invitation.groupIds)));
+      joinedGroups = still.map((g) => g.id);
+      if (joinedGroups.length) {
+        await tx
+          .insert(groupMembers)
+          .values(joinedGroups.map((groupId) => ({ groupId, orgId: org.id, userId: userId! })))
+          .onConflictDoNothing();
+      }
+    }
     await writeAudit(tx, {
       orgId: org.id,
       actorId: userId,
       action: 'invitation.accepted',
       targetType: 'invitation',
       targetId: invitation.id,
-      after: { email: invitation.email.toLowerCase(), orgRole: invitation.role },
+      after: {
+        email: invitation.email.toLowerCase(),
+        orgRole: invitation.role,
+        ...(joinedGroups.length ? { groupIds: joinedGroups } : {}),
+      },
     });
     return userId;
   });

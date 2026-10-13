@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-13 - Phase 4: Spaces
+
+- Migration 0005: spaces, space_members, space_stars (RLS, composite tenant foreign keys, soft delete for key reuse protection).
+- API: list (visibility, status, mine, starred, search, pagination), get by id or key, create (with initial members and groups), update, archive, restore, delete (admin only, key confirmation), star. Effective role from direct and group membership.
+- Web: spaces directory (cards or table, filters, my spaces), 4-step create wizard, space overview, read-only members tab, settings (general, access, danger zone), sidebar Starred and Recent, top-bar space switcher.
+- Playwright: create a private space, hidden from others, star, edit, archive, restore, admin delete.
+
+## 2026-10-13 - Phase 3: Groups
+
+- Migration 0004: groups, group_members (RLS, composite foreign keys), invitations.group_ids.
+- API: list, get, create, update, delete, replace members (all audited); groups on the member profile; invite into groups.
+- Web: groups list and detail, create and edit dialog, reusable searchable people and group pickers, groups on the member profile, group step in the invite form.
+- Tests now run on a separate database (crewdeck_test). Dev seed adds demo people (admin, member, member2).
+
 ## 2026-10-13 - Phase 2: Members and invitations
 
 - Migration 0003: memberships.status / deactivated_at, append-only audit_logs (RLS), per-workspace status in the sign-in lookup functions.

@@ -8,7 +8,7 @@ import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
 import { withTenant, type Tx } from '../db/client.js';
-import { memberships, users } from '../db/schema.js';
+import { groupMembers, groups, memberships, users } from '../db/schema.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
 import { can } from '../permissions/can.js';
@@ -143,12 +143,19 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.get('/members/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     const isAdmin = can(actor, 'member.deactivate');
-    const row = await withTenant(deps.db, actor.orgId, (tx) =>
-      loadTarget(tx, actor.orgId, req.params.id),
-    );
+    const { row, memberGroups } = await withTenant(deps.db, actor.orgId, async (tx) => {
+      const row = await loadTarget(tx, actor.orgId, req.params.id);
+      const memberGroups = await tx
+        .select({ id: groups.id, name: groups.name })
+        .from(groupMembers)
+        .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+        .where(and(eq(groupMembers.orgId, actor.orgId), eq(groupMembers.userId, row.id)))
+        .orderBy(asc(sql`lower(${groups.name})`));
+      return { row, memberGroups };
+    });
     if (!isAdmin && row.status !== 'active') throw notFound('Member');
     const { membershipId: _m, membershipStatus: _s, ...member } = row;
-    return present(isAdmin, member);
+    return { ...present(isAdmin, member), groups: memberGroups };
   });
 
   r.patch(

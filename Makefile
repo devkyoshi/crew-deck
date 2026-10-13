@@ -30,9 +30,11 @@ seed: install
 dev: install up migrate seed
 	pnpm dev
 
-db-reset:
+db-reset: install
 	docker compose down -v
-	$(MAKE) up migrate seed
+	docker compose up -d --wait postgres redis
+	pnpm db:migrate
+	pnpm db:seed
 
 test: install
 	pnpm test

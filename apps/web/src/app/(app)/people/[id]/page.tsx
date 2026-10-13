@@ -39,7 +39,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { ProfileForm, type ProfileValues } from '@/components/members/profile-form';
 import { actionsFor, useMemberActions } from '@/components/members/use-member-actions';
 import { initials, useIsAdmin, useMe } from '@/components/shell/me-context';
-import { api, ApiError, type Member, type OrgRole } from '@/lib/api';
+import { api, ApiError, type MemberDetail, type OrgRole } from '@/lib/api';
 import { formatDate, timeAgo } from '@/lib/format';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -62,7 +62,7 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
 
   const query = useQuery({
     queryKey: ['member', id],
-    queryFn: () => api<Member>(`/members/${id}`),
+    queryFn: () => api<MemberDetail>(`/members/${id}`),
     retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
   });
 
@@ -205,11 +205,27 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
                 <CardTitle>Groups</CardTitle>
               </CardHeader>
               <CardContent>
-                <EmptyState
-                  icon={Users}
-                  title="No groups yet"
-                  description="Group membership appears here once groups are added."
-                />
+                {m.groups.length === 0 ? (
+                  <EmptyState
+                    icon={Users}
+                    title="No groups yet"
+                    description="This person is not in any group."
+                  />
+                ) : (
+                  <ul className="flex flex-wrap gap-2">
+                    {m.groups.map((g) => (
+                      <li key={g.id}>
+                        <Link
+                          href={`/groups/${g.id}`}
+                          className="bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-500/20 dark:text-violet-300 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm"
+                        >
+                          <Users className="size-3.5" aria-hidden />
+                          {g.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
             <Card>

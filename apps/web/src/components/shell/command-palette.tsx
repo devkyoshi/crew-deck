@@ -47,13 +47,13 @@ export function CommandPalette() {
       <Button
         variant="outline"
         size="sm"
-        className="text-muted-foreground w-9 justify-start px-2.5 sm:w-56"
+        className="text-muted-foreground w-9 justify-start px-2.5 lg:w-56"
         onClick={() => setOpen(true)}
         aria-label="Search and jump to"
       >
         <Search className="size-4 shrink-0" />
-        <span className="hidden flex-1 text-left sm:inline">Search…</span>
-        <kbd className="bg-muted hidden rounded px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
+        <span className="hidden flex-1 text-left lg:inline">Search…</span>
+        <kbd className="bg-muted hidden rounded px-1.5 font-mono text-[10px] lg:inline">Ctrl K</kbd>
       </Button>
       <CommandDialog
         open={open}

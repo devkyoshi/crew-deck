@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS space_stars;
+DROP TABLE IF EXISTS space_members;
+DROP TABLE IF EXISTS spaces;

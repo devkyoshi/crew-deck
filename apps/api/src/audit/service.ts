@@ -5,7 +5,7 @@ export interface AuditEntry {
   orgId: string;
   actorId: string | null;
   action: string;
-  targetType: 'member' | 'invitation';
+  targetType: 'member' | 'invitation' | 'group' | 'space';
   targetId: string;
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;

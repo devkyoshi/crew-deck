@@ -85,7 +85,7 @@ test('command palette navigates with the keyboard', async ({ page }) => {
   await page.getByPlaceholder('Jump to…').fill('groups');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/groups$/);
-  await expect(page.getByText('This screen arrives in Phase 3.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Groups' })).toBeVisible();
 });
 
 for (const [name, size] of [

@@ -12,6 +12,7 @@ export type Action =
   | 'space.create'
   | 'space.viewAll'
   | 'space.edit'
+  | 'space.delete'
   | 'space.manageMembers'
   | 'accessRequest.approve'
   | 'space.view'
@@ -49,6 +50,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'member.editProfile':
     case 'group.manage':
     case 'space.viewAll':
+    case 'space.delete':
     case 'audit.viewOrg':
       return adminLike;
 
@@ -86,5 +88,6 @@ export const ADMIN_ACTIONS: Action[] = [
   'member.editProfile',
   'group.manage',
   'space.viewAll',
+  'space.delete',
   'audit.viewOrg',
 ];

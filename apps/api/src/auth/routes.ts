@@ -156,7 +156,7 @@ export async function authRoutes(
       const userId = await acceptInvitation(
         db,
         org,
-        { id: inv.id, email: inv.email, role: inv.org_role },
+        { id: inv.id, email: inv.email, role: inv.org_role, groupIds: inv.group_ids },
         {
           name: req.body.name,
           password: req.body.password,
@@ -237,7 +237,12 @@ export async function authRoutes(
         userId = await acceptInvitation(
           db,
           org,
-          { id: pending.id, email: profile.email, role: pending.org_role },
+          {
+            id: pending.id,
+            email: profile.email,
+            role: pending.org_role,
+            groupIds: pending.group_ids,
+          },
           { name: profile.name, avatarUrl: profile.picture },
         );
       }

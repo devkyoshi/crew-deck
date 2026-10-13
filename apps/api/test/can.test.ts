@@ -12,6 +12,7 @@ const ORG_MATRIX: [Action, boolean, boolean, boolean][] = [
   ['group.manage', true, true, false],
   ['space.create', true, true, true],
   ['space.viewAll', true, true, false],
+  ['space.delete', true, true, false],
   ['space.edit', true, true, false],
   ['space.manageMembers', true, true, false],
   ['accessRequest.approve', true, true, false],

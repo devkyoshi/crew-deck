@@ -102,3 +102,67 @@ export const qs = (params: Record<string, string | number | undefined | null>) =
   const s = p.toString();
   return s ? `?${s}` : '';
 };
+
+export interface MemberDetail extends Member {
+  groups: { id: string; name: string }[];
+}
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  memberCount: number;
+  members: { id: string; name: string | null; email: string; avatarUrl: string | null }[];
+}
+
+export interface GroupMember {
+  id: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  orgRole: OrgRole;
+  status: MemberStatus;
+}
+
+export interface GroupDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  members: GroupMember[];
+}
+
+export type SpaceRole = 'admin' | 'member' | 'viewer';
+export type SpaceVisibility = 'open' | 'private';
+
+export interface Space {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  visibility: SpaceVisibility;
+  status: 'active' | 'archived';
+  ownerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  myRole: SpaceRole | null;
+  starred: boolean;
+  memberCount: number;
+}
+
+export interface SpaceMemberSummary {
+  type: 'user' | 'group';
+  id: string;
+  name: string | null;
+  email?: string;
+  avatarUrl?: string | null;
+  role: SpaceRole;
+}
+
+export interface SpaceDetail extends Space {
+  members: SpaceMemberSummary[];
+  permissions: { edit: boolean; manageMembers: boolean; delete: boolean };
+}

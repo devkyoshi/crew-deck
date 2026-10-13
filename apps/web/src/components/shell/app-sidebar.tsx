@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useIsAdmin, useMe } from './me-context';
 import { visibleGroups } from './nav';
+import { SpacesNav } from './spaces-nav';
 
 /** Remembers whether a sidebar group is open, per browser. */
 function usePersistedOpen(key: string, initial = true) {
@@ -122,31 +123,30 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
         </SidebarGroupLabel>
         <CollapsibleContent>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => {
-                const active =
-                  item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.title}
-                      className="relative h-9 rounded-xl data-[active=true]:font-medium data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:h-5 data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary"
-                    >
-                      <Link href={item.href} aria-current={active ? 'page' : undefined}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-            {group.id === 'spaces' && (
-              <p className="text-muted-foreground px-2 pt-2 text-xs group-data-[collapsible=icon]:hidden">
-                Starred and recent spaces will show up here.
-              </p>
+            {group.id === 'spaces' ? (
+              <SpacesNav />
+            ) : (
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const active =
+                    item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.title}
+                        className="relative h-9 rounded-xl data-[active=true]:font-medium data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:h-5 data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary"
+                      >
+                        <Link href={item.href} aria-current={active ? 'page' : undefined}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
             )}
           </SidebarGroupContent>
         </CollapsibleContent>

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, ilike, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
@@ -9,7 +9,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { emailMatchesOrg } from '../auth/service.js';
 import { emailEnabled } from '../config.js';
 import { withTenant } from '../db/client.js';
-import { invitations, users } from '../db/schema.js';
+import { groups, invitations, users } from '../db/schema.js';
 import type { EnqueueInviteEmail } from '../email/queue.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
@@ -101,6 +101,8 @@ export async function invitationRoutes(
         body: z.object({
           emails: z.array(email).min(1).max(50),
           orgRole: z.enum(['admin', 'member', 'owner']).default('member'),
+          /** Groups the person joins automatically when they accept. */
+          groupIds: z.array(z.string().uuid()).max(20).default([]),
         }),
       },
     },
@@ -116,6 +118,16 @@ export async function invitationRoutes(
 
       const results = await withTenant(db, actor.orgId, async (tx) => {
         const out: InviteResult[] = [];
+        const groupIds = [...new Set(req.body.groupIds)];
+        if (groupIds.length) {
+          const found = await tx
+            .select({ id: groups.id })
+            .from(groups)
+            .where(and(eq(groups.orgId, actor.orgId), inArray(groups.id, groupIds)));
+          if (found.length !== groupIds.length) {
+            throw new AppError(400, 'invalid_groups', 'One of the selected groups does not exist');
+          }
+        }
         for (const addr of emails) {
           if (!emailMatchesOrg(addr, org)) {
             out.push({ email: addr, status: 'invalid_domain' });
@@ -145,6 +157,7 @@ export async function invitationRoutes(
               orgId: actor.orgId,
               email: addr,
               orgRole: req.body.orgRole as OrgRole,
+              groupIds,
               tokenHash: sha256(token),
               expiresAt,
               invitedBy: actor.userId,
@@ -156,7 +169,11 @@ export async function invitationRoutes(
             action: 'invitation.created',
             targetType: 'invitation',
             targetId: row!.id,
-            after: { email: addr, orgRole: req.body.orgRole },
+            after: {
+              email: addr,
+              orgRole: req.body.orgRole,
+              ...(groupIds.length ? { groupIds } : {}),
+            },
           });
           const link = linkFor(org.slug, token);
           jobs.push({

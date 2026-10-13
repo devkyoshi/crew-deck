@@ -37,7 +37,7 @@ test('admin invites someone, they join and appear in the list, then admin deacti
   await page.getByRole('button', { name: 'Invite people' }).click();
   await page.getByLabel('Email addresses').fill(email);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(page.getByText('Choosing groups to join arrives in Phase 3')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Groups to join' })).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText(email)).toBeVisible();
   await page.getByRole('button', { name: /Send 1 invitation/ }).click();
@@ -76,7 +76,10 @@ test('admin invites someone, they join and appear in the list, then admin deacti
   // 4. Admin deactivates them from the row menu.
   await page.getByRole('tab', { name: 'Members' }).click();
   await page.getByLabel('Search members').fill(email);
-  await page.getByRole('button', { name: `Actions for Eve E2E` }).click();
+  await page
+    .getByRole('row', { name: new RegExp(email) })
+    .getByRole('button', { name: /Actions for/ })
+    .click();
   await page.getByRole('menuitem', { name: 'Deactivate' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Deactivate' }).click();
   await expect(page.getByRole('row', { name: new RegExp(email) })).toContainText('Deactivated');

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, Copy, Info, Plus, UserPlus, Users, FolderKanban } from 'lucide-react';
+import { AlertCircle, Check, Copy, FolderKanban, Info, Plus, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Chip } from '@/components/shared/pastel';
+import { GroupPicker, type PickedGroup } from '@/components/shared/pickers';
 import { RoleBadge } from '@/components/shared/badges';
 import { Stepper } from '@/components/shared/stepper';
 import { useMe } from '@/components/shell/me-context';
@@ -81,6 +82,7 @@ export function InviteDialog() {
   const [text, setText] = useState('');
   const [role, setRole] = useState<OrgRole>('member');
   const [touched, setTouched] = useState(false);
+  const [groups, setGroups] = useState<PickedGroup[]>([]);
   const [response, setResponse] = useState<InviteResponse | null>(null);
 
   const emails = useMemo(() => parseEmails(text), [text]);
@@ -99,7 +101,10 @@ export function InviteDialog() {
   }, [emails, domain]);
 
   const send = useMutation({
-    mutationFn: () => api<InviteResponse>('/invitations', { body: { emails, orgRole: role } }),
+    mutationFn: () =>
+      api<InviteResponse>('/invitations', {
+        body: { emails, orgRole: role, groupIds: groups.map((g) => g.id) },
+      }),
     onSuccess: (r) => {
       setResponse(r);
       qc.invalidateQueries({ queryKey: ['invitations'] });
@@ -113,6 +118,7 @@ export function InviteDialog() {
     setStep(0);
     setText('');
     setRole('member');
+    setGroups([]);
     setTouched(false);
     setResponse(null);
     send.reset();
@@ -252,27 +258,24 @@ export function InviteDialog() {
             )}
 
             {step === 1 && (
-              <div className="space-y-3">
-                {[
-                  { icon: Users, title: 'Groups', phase: 3 },
-                  { icon: FolderKanban, title: 'Spaces', phase: 4 },
-                ].map((s) => (
-                  <div
-                    key={s.title}
-                    className="flex items-center gap-3 rounded-xl border border-dashed p-4"
-                  >
-                    <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-lg">
-                      <s.icon className="size-4" aria-hidden />
-                    </span>
-                    <div>
-                      <div className="font-medium">{s.title}</div>
-                      <div className="text-muted-foreground text-xs">
-                        Choosing {s.title.toLowerCase()} to join arrives in Phase {s.phase}. For
-                        now, add people to them after they join.
-                      </div>
-                    </div>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Groups to join</Label>
+                  <GroupPicker value={groups} onChange={setGroups} label="Groups to join" />
+                  <p className="text-muted-foreground text-xs">
+                    They join these groups automatically when they accept. Optional.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-dashed p-4">
+                  <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-lg">
+                    <FolderKanban className="size-4" aria-hidden />
+                  </span>
+                  <div className="text-muted-foreground text-xs">
+                    <div className="text-foreground text-sm font-medium">Spaces</div>
+                    Spaces can be shared with groups, so adding someone to a group also gives them
+                    that group&apos;s spaces.
                   </div>
-                ))}
+                </div>
               </div>
             )}
 
@@ -291,6 +294,12 @@ export function InviteDialog() {
                     ))}
                   </ul>
                 </div>
+                {groups.length > 0 && (
+                  <div className="rounded-xl border p-4 text-sm">
+                    <span className="text-muted-foreground">Groups: </span>
+                    {groups.map((g) => g.name).join(', ')}
+                  </div>
+                )}
                 <p className="text-muted-foreground text-xs">
                   Invitations expire after 7 days. You can resend or revoke them from the Pending
                   invites tab.

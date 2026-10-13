@@ -21,7 +21,7 @@ export async function auditRoutes(app: FastifyInstance, deps: AuthDeps) {
         querystring: pageQuery.extend({
           actor: z.string().uuid().optional(),
           action: z.string().max(100).optional(),
-          targetType: z.enum(['member', 'invitation']).optional(),
+          targetType: z.enum(['member', 'invitation', 'group', 'space']).optional(),
           target: z.string().max(100).optional(),
           from: z.coerce.date().optional(),
           to: z.coerce.date().optional(),

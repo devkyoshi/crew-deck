@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { CommandPalette } from './command-palette';
+import { SpaceSwitcher } from './space-switcher';
 import { findNavItem } from './nav';
 import { UserMenu } from './user-menu';
 
@@ -26,7 +27,8 @@ function useCrumbs() {
   const parts = pathname.split('/').filter(Boolean);
   return parts.map((part, i) => {
     const href = '/' + parts.slice(0, i + 1).join('/');
-    return { label: findNavItem(href)?.title ?? titleCase(part), href };
+    const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(part);
+    return { label: findNavItem(href)?.title ?? (isId ? 'Details' : titleCase(part)), href };
   });
 }
 
@@ -54,6 +56,7 @@ export function Topbar() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
+      <SpaceSwitcher />
       <CommandPalette />
       <ThemeToggle />
       <UserMenu />
