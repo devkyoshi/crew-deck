@@ -4,9 +4,20 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgres://crew_app:crew_app_dev@localhost:5432/crewdeck
+  DATABASE_ADMIN_URL: postgres://crew_admin:crew_admin_dev@localhost:5432/crewdeck
+  REDIS_URL: redis://localhost:6379
+
 jobs:
   check:
+    name: Lint, types, unit and API tests, build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-alpine
@@ -23,10 +34,6 @@ jobs:
         ports: ['6379:6379']
         options: >-
           --health-cmd "redis-cli ping" --health-interval 3s --health-timeout 3s --health-retries 20
-    env:
-      DATABASE_URL: postgres://crew_app:crew_app_dev@localhost:5432/crewdeck
-      DATABASE_ADMIN_URL: postgres://crew_admin:crew_admin_dev@localhost:5432/crewdeck
-      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -45,3 +52,63 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: crew_admin
+          POSTGRES_PASSWORD: crew_admin_dev
+          POSTGRES_DB: crewdeck
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U crew_admin -d crewdeck" --health-interval 3s
+          --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      CI: 'true'
+      # The suite signs in many times a minute; the production default (10) would rate limit it.
+      AUTH_RATE_LIMIT_MAX: '300'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Environment file for the dev servers
+        run: cp .env.example .env
+      - name: Create restricted app role
+        run: |
+          PGPASSWORD=crew_admin_dev psql -h localhost -U crew_admin -d crewdeck \
+            -v ON_ERROR_STOP=1 -c "CREATE ROLE crew_app LOGIN PASSWORD 'crew_app_dev' NOSUPERUSER NOBYPASSRLS" \
+            -c "GRANT USAGE ON SCHEMA public TO crew_app" \
+            -c "ALTER DEFAULT PRIVILEGES FOR ROLE crew_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crew_app"
+      - name: Migrate and seed (base tenants plus demo workspace)
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm db:seed:demo
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      # Playwright starts the API and web dev servers itself (see playwright.config.ts).
+      - name: Run end-to-end tests
+        run: pnpm exec playwright test
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

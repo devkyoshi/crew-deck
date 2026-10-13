@@ -24,10 +24,10 @@ test('a member creates a private space, others cannot see it, and admins can arc
   await expect(page.getByLabel('Key')).toHaveValue('PL'); // suggested from the name
   await page.getByLabel('Name').fill(name);
   await page.getByLabel('Key').fill(key);
-  await page.getByRole('radio', { name: 'rocket' }).click();
+  await page.getByRole('button', { name: 'rocket' }).click();
   await page.getByLabel('Description').fill('Everything for the launch');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByRole('radio', { name: /Private/ }).click();
+  await page.getByRole('button', { name: /Private/ }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('combobox', { name: 'People to add' }).click();
   await page.getByPlaceholder('Search by name or email').fill(teammate.name);

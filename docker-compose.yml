@@ -32,6 +32,7 @@ services:
   # Full containerised stack: `docker compose --profile full up --build`
   api:
     profiles: [full]
+    image: crew-deck-api
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -53,6 +54,51 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-off: applies pending SQL migrations as the schema owner. Safe to run on every deploy.
+  migrate:
+    profiles: [full, tools]
+    image: crew-deck-api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ['node_modules/.bin/tsx', 'src/db/migrate.ts', 'up']
+    environment:
+      DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-crew_admin}:${POSTGRES_PASSWORD:-crew_admin_dev}@postgres:5432/${POSTGRES_DB:-crewdeck}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: 'no'
+
+  # One-off, development only: base tenants plus the demo workspace content. Run with
+  #   docker compose --profile tools run --rm seed
+  # NODE_ENV=development is required: in production mode the seed adds no passwords or demo people.
+  seed:
+    profiles: [tools]
+    image: crew-deck-api
+    command:
+      [
+        'sh',
+        '-c',
+        'node_modules/.bin/tsx src/db/seed.ts && node_modules/.bin/tsx src/db/seed-demo.ts',
+      ]
+    environment:
+      NODE_ENV: development
+      DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-crew_admin}:${POSTGRES_PASSWORD:-crew_admin_dev}@postgres:5432/${POSTGRES_DB:-crewdeck}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: 'no'
 
   web:
     profiles: [full]
@@ -66,7 +112,7 @@ services:
     ports:
       - '3000:3000'
     depends_on:
-      - api
+      api: { condition: service_healthy }
 
 volumes:
   pgdata:

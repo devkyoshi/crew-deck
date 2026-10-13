@@ -181,7 +181,7 @@ export function CreateSpaceWizard() {
             </div>
             <div className="space-y-1.5">
               <Label>Icon</Label>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Icon">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Icon">
                 {Object.keys(SPACE_ICONS).map((name) => {
                   const Icon = spaceIcon(name);
                   const on = v.icon === name;
@@ -189,8 +189,7 @@ export function CreateSpaceWizard() {
                     <button
                       key={name}
                       type="button"
-                      role="radio"
-                      aria-checked={on}
+                      aria-pressed={on}
                       aria-label={name}
                       onClick={() => setValue('icon', name)}
                       className={cn(
@@ -220,7 +219,7 @@ export function CreateSpaceWizard() {
         )}
 
         {step === 1 && (
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Visibility">
+          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Visibility">
             {(
               [
                 {
@@ -242,8 +241,7 @@ export function CreateSpaceWizard() {
                 <button
                   key={o.id}
                   type="button"
-                  role="radio"
-                  aria-checked={on}
+                  aria-pressed={on}
                   onClick={() => setValue('visibility', o.id)}
                   className={cn(
                     'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors',

@@ -19,4 +19,4 @@ COPY apps/api apps/api
 USER node
 WORKDIR /repo/apps/api
 EXPOSE 4000
-CMD ["pnpm", "start"]
+CMD ["node_modules/.bin/tsx", "src/server.ts"]

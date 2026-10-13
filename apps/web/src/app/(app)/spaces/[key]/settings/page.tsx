@@ -171,7 +171,7 @@ export default function SpaceSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Icon</Label>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Icon">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Icon">
                 {Object.keys(SPACE_ICONS).map((name) => {
                   const Icon = spaceIcon(name);
                   const on = icon === name;
@@ -179,8 +179,7 @@ export default function SpaceSettingsPage() {
                     <button
                       key={name}
                       type="button"
-                      role="radio"
-                      aria-checked={on}
+                      aria-pressed={on}
                       aria-label={name}
                       disabled={archived}
                       onClick={() => setValue('icon', name, { shouldDirty: true })}
@@ -217,7 +216,7 @@ export default function SpaceSettingsPage() {
           <CardDescription>Who can find and open this space.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Visibility">
+          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Visibility">
             {(
               [
                 {
@@ -237,8 +236,7 @@ export default function SpaceSettingsPage() {
               <button
                 key={o.id}
                 type="button"
-                role="radio"
-                aria-checked={visibility === o.id}
+                aria-pressed={visibility === o.id}
                 disabled={archived}
                 onClick={() => setVisibility(o.id)}
                 className={cn(

@@ -93,6 +93,22 @@ A space must keep at least one admin. Changing or removing a space-admin row is 
 
 The test database is dropped and recreated at the start of every API test run, so results never depend on earlier runs.
 
+## ADR-023: Accessibility is tested, not assumed
+
+Every main screen is scanned with axe (WCAG 2.1 A and AA) in light and dark themes, plus open dialogs, menus and the command palette, and keyboard behaviour is tested (skip link, focus visibility, focus trap and return, menus, wizard). Findings fixed in this phase: the primary blue was darkened to reach 4.5:1 contrast with white text; Radix tab triggers no longer point `aria-controls` at unmounted panels; the command palette no longer puts separators inside a listbox; icon and visibility pickers are toggle buttons (`aria-pressed`) rather than radios without arrow-key support. One rule is switched off, only while a modal menu or dialog is open: `aria-hidden-focus`, because Radix hides the page behind the modal and traps focus inside it, which axe cannot see.
+
+## ADR-024: Hardening choices
+
+- A 401 from the API in the browser sends the person to sign in (session ended or account deactivated).
+- Route error boundaries keep the sidebar; a global boundary is the last resort; not-found pages exist inside and outside the shell.
+- Both apps set security headers. API responses are `no-store`. The web CSP only restricts framing, base and form targets; a script-source policy needs per-request nonces and is deferred to deployment work.
+- Large lists: member, group and space lists are server-paged. A group's member list is returned whole by the API (2,000 members measured at about 30 ms) and paged in the browser.
+- No extra database indexes were added: at 5,000 people and 1,500 spaces every list answers in at most 130 ms.
+
+## ADR-025: End-to-end tests run the dev servers in CI
+
+The suite uses the dev-only sign-in box and starts the servers through Playwright's webServer option, so CI runs the same commands as a developer. Production mode (no dev login) is covered separately by the containerised smoke test in the deployment notes.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.

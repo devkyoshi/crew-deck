@@ -12,7 +12,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from '@/components/ui/command';
 import { useIsAdmin } from './me-context';
 import { visibleGroups } from './nav';
@@ -78,7 +77,6 @@ export function CommandPalette() {
               ))}
             </CommandGroup>
           ))}
-          <CommandSeparator />
           <CommandGroup heading="Actions">
             <CommandItem
               onSelect={() => run(() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'))}

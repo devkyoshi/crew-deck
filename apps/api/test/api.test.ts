@@ -83,3 +83,15 @@ describe('cross-tenant access through the API', () => {
     expect(asB.statusCode).toBe(404);
   });
 });
+
+describe('response headers', () => {
+  it('never caches API responses and sets hardening headers, including on errors', async () => {
+    for (const url of ['/api/v1/health', '/api/v1/nope']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
+    }
+  });
+});

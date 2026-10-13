@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-13 - Phase 6: Hardening and polish
+
+- Accessibility: axe scans of every screen (light and dark) and open overlays, keyboard tests, contrast and ARIA fixes, toggle-button pickers.
+- Resilience: error boundaries, not-found pages, route loading skeletons, automatic return to sign-in when a session ends.
+- Tests: full-product walk-through that fails on any console error or failed request; 41 browser tests in total; performance guard with 5,000 people, 1,500 spaces and a 2,000-person group; header tests. Test database is recreated every run.
+- Demo: richer demo workspace (people, teams, open, private and archived spaces, group access, stars, a pending request, audit trail), included in `make dev`.
+- Security headers on both apps; group member list paged in the browser.
+- Docker: migrate and seed services, API health check, API waits for migrations; verified from an empty database in an isolated compose project.
+- CI: separate end-to-end job (Postgres and Redis services, migrate, seed, Playwright with trace upload on failure).
+- README and docs/DEPLOYMENT.md.
+
 ## 2026-10-13 - Phase 5: Space access
 
 - Migration 0006: space_access_requests (RLS, composite tenant foreign keys, one pending request per person per space).

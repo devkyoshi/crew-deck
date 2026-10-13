@@ -4,7 +4,17 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Pencil, Plus, Trash2, UserMinus, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  UserMinus,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -26,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -52,6 +63,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
   const [adding, setAdding] = useState(false);
   const [picked, setPicked] = useState<PickedPerson[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mq, setMq] = useState('');
+  const [mp, setMp] = useState(1);
 
   const query = useQuery({
     queryKey: ['group', id],
@@ -106,6 +119,20 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
 
   const g = query.data;
   const memberIds = g.members.map((m) => m.id);
+  // Big groups are filtered and paged in the browser so thousands of rows never hit the DOM at once.
+  const MEMBER_PAGE = 25;
+  const needle = mq.trim().toLowerCase();
+  const matching = needle
+    ? g.members.filter(
+        (m) =>
+          (m.name ?? '').toLowerCase().includes(needle) || m.email.toLowerCase().includes(needle),
+      )
+    : g.members;
+  const memberPages = Math.max(1, Math.ceil(matching.length / MEMBER_PAGE));
+  const pageMembers = matching.slice(
+    (Math.min(mp, memberPages) - 1) * MEMBER_PAGE,
+    Math.min(mp, memberPages) * MEMBER_PAGE,
+  );
 
   function openAdd() {
     setPicked([]);
@@ -145,6 +172,21 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
         }
       />
 
+      {g.members.length > MEMBER_PAGE && (
+        <div className="relative max-w-sm">
+          <Search className="text-muted-foreground absolute top-3 left-3 size-4" aria-hidden />
+          <Input
+            className="pl-9"
+            placeholder="Search members"
+            aria-label="Search group members"
+            value={mq}
+            onChange={(e) => {
+              setMq(e.target.value);
+              setMp(1);
+            }}
+          />
+        </div>
+      )}
       <div className="overflow-x-auto rounded-2xl border">
         <Table>
           <TableHeader>
@@ -160,7 +202,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
             </TableRow>
           </TableHeader>
           <TableBody>
-            {g.members.map((m) => (
+            {pageMembers.map((m) => (
               <TableRow key={m.id}>
                 <TableCell>
                   <Link href={`/people/${m.id}`} className="group flex items-center gap-3">
@@ -233,6 +275,37 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           </TableBody>
         </Table>
       </div>
+
+      {matching.length > MEMBER_PAGE && (
+        <div className="text-muted-foreground flex items-center justify-between text-sm">
+          <span aria-live="polite">
+            {matching.length} {matching.length === 1 ? 'person' : 'people'}
+          </span>
+          <div className="flex items-center gap-2">
+            <span>
+              Page {Math.min(mp, memberPages)} of {memberPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Previous page"
+              disabled={mp <= 1}
+              onClick={() => setMp((p) => p - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Next page"
+              disabled={mp >= memberPages}
+              onClick={() => setMp((p) => p + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
         <DialogContent>

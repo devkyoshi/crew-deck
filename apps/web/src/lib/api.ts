@@ -42,6 +42,10 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     credentials: 'same-origin',
   });
   const data = await res.json().catch(() => null);
+  // The session expired or was ended (for example the person was deactivated): go to sign in.
+  if (res.status === 401 && !path.startsWith('/auth/') && typeof window !== 'undefined') {
+    window.location.assign('/sign-in');
+  }
   if (!res.ok) {
     const err = (data ?? {}) as Partial<ErrorResponse>;
     throw new ApiError(

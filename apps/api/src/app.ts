@@ -53,6 +53,13 @@ export function buildApp({ db, redis, config, google, enqueueInviteEmail }: AppD
 
   const sessions = new SessionStore(redis, config.SESSION_TTL_SECONDS);
   registerAuthHooks(app, { config });
+  // API responses are personal and never cacheable; they are JSON and must not be sniffed or framed.
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('cache-control', 'no-store');
+    reply.header('referrer-policy', 'no-referrer');
+    reply.header('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
+  });
 
   const googleClient =
     google !== undefined

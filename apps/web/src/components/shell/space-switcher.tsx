@@ -12,7 +12,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { api, qs, type Page, type Space } from '@/lib/api';
@@ -83,7 +82,6 @@ export function SpaceSwitcher() {
                 })}
               </CommandGroup>
             )}
-            <CommandSeparator />
             <CommandGroup>
               <CommandItem value="all" onSelect={() => go('/spaces')}>
                 <LayoutGrid /> All spaces

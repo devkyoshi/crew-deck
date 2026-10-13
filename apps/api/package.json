@@ -11,7 +11,8 @@
     "test": "vitest run",
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts up",
     "db:rollback": "tsx --env-file=../../.env src/db/migrate.ts down",
-    "db:seed": "tsx --env-file=../../.env src/db/seed.ts"
+    "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
+    "db:seed:demo": "tsx --env-file=../../.env src/db/seed-demo.ts"
   },
   "dependencies": {
     "@crew-deck/shared": "workspace:^",
