@@ -19,6 +19,8 @@ import { meRoutes } from './routes/me.js';
 import { auditRoutes } from './routes/audit.js';
 import { invitationRoutes } from './routes/invitations.js';
 import { groupRoutes } from './routes/groups.js';
+import { accessRequestRoutes } from './routes/access-requests.js';
+import { spaceMemberRoutes } from './routes/space-members.js';
 import { spaceRoutes } from './routes/spaces.js';
 import { memberRoutes } from './routes/members.js';
 import type { EnqueueInviteEmail } from './email/queue.js';
@@ -76,6 +78,8 @@ export function buildApp({ db, redis, config, google, enqueueInviteEmail }: AppD
   });
   app.register(groupRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(spaceRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(spaceMemberRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(auditRoutes, { prefix: '/api/v1', ...authDeps });
 
   return app;

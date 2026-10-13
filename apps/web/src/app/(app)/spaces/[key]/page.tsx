@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { AvatarStack } from '@/components/shared/pastel';
-import { useIsAdmin, initials } from '@/components/shell/me-context';
+import { initials } from '@/components/shell/me-context';
 import { SpaceRolePill } from '@/components/spaces/space-bits';
 import { useSpace } from '@/components/spaces/space-context';
 import { api, qs, type Page } from '@/lib/api';
+import { auditLabel } from '@/lib/audit-labels';
 import { formatDate, timeAgo } from '@/lib/format';
 
 type AuditItem = {
@@ -20,13 +21,6 @@ type AuditItem = {
   actorName: string | null;
   actorEmail: string | null;
   after: Record<string, unknown> | null;
-};
-
-const ACTION_TEXT: Record<string, string> = {
-  'space.created': 'created the space',
-  'space.updated': 'updated the space',
-  'space.archived': 'archived the space',
-  'space.restored': 'restored the space',
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -40,16 +34,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default function SpaceOverviewPage() {
   const space = useSpace();
-  const isAdmin = useIsAdmin();
 
-  // The org-wide audit log is admin-only for now; space admins get their own view in Phase 5.
+  // Space admins and workspace admins can read this space's history.
   const activity = useQuery({
     queryKey: ['audit', 'space', space.id],
-    queryFn: () =>
-      api<Page<AuditItem>>(
-        `/audit-logs${qs({ targetType: 'space', target: space.id, pageSize: 5 })}`,
-      ),
-    enabled: isAdmin,
+    queryFn: () => api<Page<AuditItem>>(`/spaces/${space.id}/audit-logs${qs({ pageSize: 5 })}`),
+    enabled: space.permissions.viewAudit,
   });
 
   const people = space.members.filter((m) => m.type === 'user');
@@ -122,7 +112,7 @@ export default function SpaceOverviewPage() {
             <CardTitle>Recent changes</CardTitle>
           </CardHeader>
           <CardContent>
-            {!isAdmin ? (
+            {!space.permissions.viewAudit ? (
               <EmptyState
                 icon={History}
                 title="Activity is for admins"
@@ -153,7 +143,7 @@ export default function SpaceOverviewPage() {
                       <span className="font-medium">
                         {a.actorName ?? a.actorEmail ?? 'Someone'}
                       </span>{' '}
-                      {ACTION_TEXT[a.action] ?? a.action}
+                      {auditLabel(a.action)}
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {timeAgo(a.createdAt)}

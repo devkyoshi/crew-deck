@@ -53,3 +53,25 @@ export const waitForHydration = (page: Page) =>
   page.waitForFunction(
     () => document.querySelector('[data-ready]') !== null || document.readyState === 'complete',
   );
+
+/** Calls the API from inside a signed-in page (same origin, so the session cookie is sent). */
+export async function apiCall(
+  page: Page,
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+  body?: object,
+) {
+  return page.evaluate(
+    async ({ method, path, body }) => {
+      const res = await fetch(`/api/v1${path}`, {
+        method,
+        headers: body ? { 'content-type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: res.status, json: await res.json().catch(() => null) };
+    },
+    { method, path, body },
+  );
+}
+
+export const signInAs = (page: Page, email: string) => signInWithPassword(page, email);

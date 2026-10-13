@@ -53,7 +53,7 @@ const keyTaken = () =>
     key: 'That key is already used (keys are never reused)',
   });
 
-function columnsFor(userId: string, orgId: string) {
+export function columnsFor(userId: string, orgId: string) {
   return {
     id: spaces.id,
     key: spaces.key,
@@ -70,10 +70,10 @@ function columnsFor(userId: string, orgId: string) {
     memberCount: memberCountSql,
   };
 }
-const isOrgAdmin = (a: Actor) => a.orgRole === 'owner' || a.orgRole === 'admin';
+export const isOrgAdmin = (a: Actor) => a.orgRole === 'owner' || a.orgRole === 'admin';
 
 /** Loads a space by id or key, or 404s. Hidden spaces look exactly like missing ones. */
-async function resolveSpace(tx: Tx, actor: Actor, param: string) {
+export async function resolveSpace(tx: Tx, actor: Actor, param: string) {
   const cols = columnsFor(actor.userId, actor.orgId);
   const byId = UUID.test(param);
   const rows = await tx
@@ -90,7 +90,7 @@ async function resolveSpace(tx: Tx, actor: Actor, param: string) {
   return row;
 }
 
-const spaceCtx = (row: { myRole: SpaceRole | null; visibility: 'open' | 'private' }) => ({
+export const spaceCtx = (row: { myRole: SpaceRole | null; visibility: 'open' | 'private' }) => ({
   spaceRole: row.myRole,
   spaceVisibility: row.visibility,
 });
@@ -104,6 +104,7 @@ function presentPermissions(
     edit: can(actor, 'space.edit', ctx),
     manageMembers: can(actor, 'space.manageMembers', ctx),
     delete: can(actor, 'space.delete', ctx),
+    viewAudit: can(actor, 'audit.viewSpace', ctx),
   };
 }
 
@@ -318,6 +319,16 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           })),
         );
 
+        for (const m of byPrincipal.values()) {
+          await writeAudit(tx, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'space.member_added',
+            targetType: 'space',
+            targetId: spaceId,
+            after: { principalType: m.type, principalId: m.id, role: m.role },
+          });
+        }
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,

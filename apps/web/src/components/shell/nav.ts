@@ -1,5 +1,6 @@
 import {
   FileClock,
+  Inbox,
   FolderKanban,
   Home,
   LayoutGrid,
@@ -37,7 +38,10 @@ export const NAV: NavGroup[] = [
   {
     id: 'spaces',
     label: 'Spaces',
-    items: [{ title: 'All spaces', href: '/spaces', icon: LayoutGrid }],
+    items: [
+      { title: 'All spaces', href: '/spaces', icon: LayoutGrid },
+      { title: 'Access requests', href: '/access-requests', icon: Inbox },
+    ],
   },
   {
     id: 'admin',
@@ -47,7 +51,7 @@ export const NAV: NavGroup[] = [
       { title: 'Members', href: '/admin/members', icon: Users },
       { title: 'Groups', href: '/admin/groups', icon: UsersRound },
       { title: 'Spaces', href: '/admin/spaces', icon: FolderKanban },
-      { title: 'Audit log', href: '/admin/audit', icon: FileClock, phase: 5 },
+      { title: 'Audit log', href: '/admin/audit', icon: FileClock },
       { title: 'Settings', href: '/admin/settings', icon: Settings, phase: 9 },
     ],
   },

@@ -3,18 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, LayoutGrid, Plus, Star } from 'lucide-react';
+import { Clock, Inbox, LayoutGrid, Plus, Star } from 'lucide-react';
 import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { api, qs, type Page, type Space } from '@/lib/api';
+import { api, qs, type AccessRequest, type Page, type Space } from '@/lib/api';
 import { useRecentSpaces } from '@/lib/recent-spaces';
 import { spaceIcon } from '@/lib/space-icons';
 
@@ -45,6 +46,14 @@ export function SpacesNav() {
       api<Page<Space>>(`/spaces${qs({ starred: 'true', status: 'all', pageSize: 8 })}`),
     staleTime: 30_000,
   });
+  const pending = useQuery({
+    queryKey: ['access-requests', { mine: false, status: 'pending', badge: true }],
+    queryFn: () =>
+      api<Page<AccessRequest>>(`/access-requests${qs({ status: 'pending', pageSize: 1 })}`),
+    refetchInterval: 60_000,
+  });
+  const pendingCount = pending.data?.total ?? 0;
+  const requestsActive = pathname === '/access-requests' || pathname === '/request-access';
   const starredItems = starred.data?.items ?? [];
   const starredKeys = new Set(starredItems.map((s) => s.key));
   const recentItems = recent.filter((r) => !starredKeys.has(r.key)).slice(0, 4);
@@ -70,6 +79,27 @@ export function SpacesNav() {
               <Plus />
             </Link>
           </SidebarMenuAction>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            asChild
+            isActive={requestsActive}
+            tooltip="Access requests"
+            className="h-9 rounded-xl"
+          >
+            <Link href="/access-requests" aria-current={requestsActive ? 'page' : undefined}>
+              <Inbox />
+              <span>Access requests</span>
+            </Link>
+          </SidebarMenuButton>
+          {pendingCount > 0 && (
+            <SidebarMenuBadge
+              aria-label={`${pendingCount} pending`}
+              className="bg-primary text-primary-foreground rounded-full"
+            >
+              {pendingCount}
+            </SidebarMenuBadge>
+          )}
         </SidebarMenuItem>
       </SidebarMenu>
 

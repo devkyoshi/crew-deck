@@ -81,6 +81,18 @@ API tests create and use `<db>_test` (derived from DATABASE_URL), so they never 
 
 The people and group pickers search on the server (debounced) instead of loading a workspace into the browser. They never return another workspace's records; this is covered by tests.
 
+## ADR-020: Access requests keep private spaces hidden
+
+A private space stays invisible to non-members, including its name, so there is no "locked card" in the directory. People ask by typing the space key an admin shared. `POST /spaces/:id/access-requests` returns the same answer whether the space exists, is open, is archived, or the caller already has access, and it is rate limited per session, so keys cannot be probed. Requesters see only the key they asked for, never the space name. Space admins and workspace owners/admins review and approve (choosing the role); requests do not expire; requesters can cancel. One pending request per person per space is enforced by a partial unique index.
+
+## ADR-021: Last-admin rule
+
+A space must keep at least one admin. Changing or removing a space-admin row is refused when no other admin would remain. A group row counts as an admin only while the group has at least one active person, and a person row only while their membership is active. Indirect changes are not blocked (editing a group's members, deleting a group, deactivating a person), because they happen outside the space; workspace admins can always repair a space from its Members tab.
+
+## ADR-022: Hermetic test database
+
+The test database is dropped and recreated at the start of every API test run, so results never depend on earlier runs.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.

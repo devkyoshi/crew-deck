@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-13 - Phase 5: Space access
+
+- Migration 0006: space_access_requests (RLS, composite tenant foreign keys, one pending request per person per space).
+- API: space members list (search, effective and inherited roles), add, change role, remove with last-admin protection; access requests (request with identical answers, inbox, mine, approve with role, decline, cancel); per-space audit log; initial space members are now audited too.
+- Web: full Members tab with add dialog, role change and remove; Request access page; Access requests inbox with pending badge in the sidebar; org-wide Audit log page (filters by person, action and dates, expandable details); space overview shows recent changes to space admins.
+- Tests: a permission matrix test runs every row of section 5 for all six roles through the real routes; 38 more API tests; Playwright flows for request, approve, group access and audit.
+
 ## 2026-10-13 - Phase 4: Spaces
 
 - Migration 0005: spaces, space_members, space_stars (RLS, composite tenant foreign keys, soft delete for key reuse protection).

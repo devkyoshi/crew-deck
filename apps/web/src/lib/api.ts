@@ -164,5 +164,51 @@ export interface SpaceMemberSummary {
 
 export interface SpaceDetail extends Space {
   members: SpaceMemberSummary[];
-  permissions: { edit: boolean; manageMembers: boolean; delete: boolean };
+  permissions: { edit: boolean; manageMembers: boolean; delete: boolean; viewAudit: boolean };
+}
+
+export interface SpaceMemberRow {
+  id: string;
+  type: 'user' | 'group';
+  principalId: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  role: SpaceRole;
+  effectiveRole: SpaceRole;
+  inheritedRole: SpaceRole | null;
+  memberCount: number | null;
+  deactivated: boolean;
+}
+
+export interface AccessRequest {
+  id: string;
+  status: 'pending' | 'approved' | 'declined' | 'cancelled';
+  message: string | null;
+  grantedRole: SpaceRole | null;
+  createdAt: string;
+  decidedAt: string | null;
+  requesterId: string;
+  requesterName: string | null;
+  requesterEmail: string;
+  requesterAvatar: string | null;
+  spaceKey: string;
+  spaceId: string | null;
+  spaceName: string | null;
+  spaceIcon: string | null;
+  decidedByName: string | null;
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  createdAt: string;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
 }

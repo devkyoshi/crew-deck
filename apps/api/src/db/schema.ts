@@ -148,3 +148,18 @@ export const spaceStars = pgTable(
   },
   (t) => [primaryKey({ columns: [t.spaceId, t.userId] })],
 );
+
+export const spaceAccessRequests = pgTable('space_access_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  spaceId: uuid('space_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  message: text('message'),
+  status: text('status', { enum: ['pending', 'approved', 'declined', 'cancelled'] })
+    .notNull()
+    .default('pending'),
+  decidedBy: uuid('decided_by').references(() => users.id),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  grantedRole: text('granted_role', { enum: ['admin', 'member', 'viewer'] }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

@@ -77,9 +77,18 @@ export default function SpaceLayout({
             : 'Something went wrong.'
         }
         action={
-          <Button variant="outline" asChild>
-            <Link href="/spaces">Back to spaces</Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/spaces">Back to spaces</Link>
+            </Button>
+            {missing && (
+              <Button asChild>
+                <Link href={`/request-access?key=${encodeURIComponent(key.toUpperCase())}`}>
+                  Request access
+                </Link>
+              </Button>
+            )}
+          </div>
         }
       />
     );

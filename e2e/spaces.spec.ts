@@ -45,7 +45,7 @@ test('a member creates a private space, others cannot see it, and admins can arc
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.getByText('Private').first()).toBeVisible();
   await expect(page.getByText('Everything for the launch')).toBeVisible();
-  await expect(page.getByText('Mia Member')).toBeVisible();
+  await expect(page.getByText('Mia Member').first()).toBeVisible();
 
   // 3. Starring puts it in the sidebar; opening it puts it in Recent.
   await page.getByRole('button', { name: `Star ${name}` }).click();

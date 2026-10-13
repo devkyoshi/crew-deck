@@ -97,7 +97,12 @@ describe('creating spaces', () => {
     expect(d.members).toContainEqual(
       expect.objectContaining({ type: 'user', id: alice.id, role: 'admin' }),
     );
-    expect(d.permissions).toEqual({ edit: true, manageMembers: true, delete: false });
+    expect(d.permissions).toEqual({
+      edit: true,
+      manageMembers: true,
+      delete: false,
+      viewAudit: true,
+    });
     expect(await auditFor('space.created', s.id)).toHaveLength(1);
   });
 
