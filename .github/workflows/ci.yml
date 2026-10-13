@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: crew_admin
+          POSTGRES_PASSWORD: crew_admin_dev
+          POSTGRES_DB: crewdeck
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U crew_admin -d crewdeck" --health-interval 3s
+          --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://crew_app:crew_app_dev@localhost:5432/crewdeck
+      DATABASE_ADMIN_URL: postgres://crew_admin:crew_admin_dev@localhost:5432/crewdeck
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create restricted app role
+        run: |
+          PGPASSWORD=crew_admin_dev psql -h localhost -U crew_admin -d crewdeck \
+            -v ON_ERROR_STOP=1 -c "CREATE ROLE crew_app LOGIN PASSWORD 'crew_app_dev' NOSUPERUSER NOBYPASSRLS" \
+            -c "GRANT USAGE ON SCHEMA public TO crew_app" \
+            -c "ALTER DEFAULT PRIVILEGES FOR ROLE crew_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crew_app"
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

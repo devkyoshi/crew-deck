@@ -1,0 +1,17 @@
+import { buildApp } from './app.js';
+import { loadConfig } from './config.js';
+import { createDb } from './db/client.js';
+
+const config = loadConfig();
+const { db, close } = createDb(config.DATABASE_URL);
+const app = buildApp({ db, logLevel: config.LOG_LEVEL });
+
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, async () => {
+    await app.close();
+    await close();
+    process.exit(0);
+  });
+}
+
+await app.listen({ port: config.API_PORT, host: config.API_HOST });

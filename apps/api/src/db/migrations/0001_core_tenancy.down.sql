@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS memberships;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS organizations;
+DROP FUNCTION IF EXISTS current_org_id();
