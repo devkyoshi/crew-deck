@@ -1,10 +1,11 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *):not(.light *));
 
 /* Design tokens. One neutral scale plus a single accent (--primary), which becomes a per-tenant setting in Phase 9. */
-:root {
+:root,
+.light {
   --radius: 0.5rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

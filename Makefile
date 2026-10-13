@@ -8,11 +8,9 @@ help:
 	@echo "make db-reset   - wipe DB volume, then migrate and seed"
 	@echo "make test lint typecheck build format"
 
-node_modules: package.json pnpm-lock.yaml
-	pnpm install
-	@touch node_modules
 
-install: node_modules
+install:
+	pnpm install
 
 up:
 	docker compose up -d --wait postgres redis
@@ -20,33 +18,33 @@ up:
 down:
 	docker compose down
 
-migrate: node_modules
+migrate: install
 	pnpm db:migrate
 
-rollback: node_modules
+rollback: install
 	pnpm --filter @crew-deck/api db:rollback
 
-seed: node_modules
+seed: install
 	pnpm db:seed
 
-dev: node_modules up migrate seed
+dev: install up migrate seed
 	pnpm dev
 
 db-reset:
 	docker compose down -v
 	$(MAKE) up migrate seed
 
-test: node_modules
+test: install
 	pnpm test
 
-lint: node_modules
+lint: install
 	pnpm lint
 
-typecheck: node_modules
+typecheck: install
 	pnpm typecheck
 
-build: node_modules
+build: install
 	pnpm build
 
-format: node_modules
+format: install
 	pnpm format
