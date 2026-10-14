@@ -16,6 +16,7 @@ import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError, type Providers } from '@/lib/api';
+import { rememberWorkspace } from '@/lib/recent-workspaces';
 
 const ERRORS: Record<string, string> = {
   domain_not_allowed: 'That Google account is not on this workspace’s email domain.',
@@ -83,6 +84,8 @@ export function SignInForm({ initialError }: { initialError?: string }) {
     setFormError(null);
     try {
       await api(path, { body });
+      if (providers?.tenant)
+        rememberWorkspace({ slug: providers.tenant.slug, name: providers.tenant.name });
       router.replace('/');
       router.refresh();
     } catch (e) {

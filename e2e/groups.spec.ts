@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   asAnotherPerson,
+  completeInvite,
   createMember,
   PASSWORD,
   rand,
@@ -108,10 +109,7 @@ test('inviting someone into a group puts them in it after they accept', async ({
 
   await asAnotherPerson(browser, async (p) => {
     await p.goto(link);
-    await p.getByLabel('Full name').fill('Ivy Invited');
-    await p.getByLabel('Password', { exact: true }).fill('a-long-enough-password');
-    await p.getByLabel('Confirm password').fill('a-long-enough-password');
-    await p.getByRole('button', { name: 'Create account' }).click();
+    await completeInvite(p, 'Ivy Invited', 'a-long-enough-password');
     await expect(p.getByRole('heading', { name: /Hello, Ivy/ })).toBeVisible();
   });
 

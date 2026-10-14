@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-14 - Guided, photo-led signed-out screens
+
+- One shared split layout for every signed-out screen (photo and message beside the task; a short banner on phones): sign-in, find workspace, accept invitation, platform sign-in, sign-up and verify. Six Unsplash photos downloaded into `apps/web/public/auth` with `CREDITS.md`.
+- Sign-up is now conversational: you, company and address (live check, free alternatives when taken), review, then "check your inbox" with a resend cooldown. Verify is guided too: confirm your name, choose a password (strength guide), then a ready screen that carries you to the workspace.
+- Navigation: the step is in the URL, so the browser Back and Forward buttons and refresh work; answers are kept for the tab; you cannot skip ahead; completed steps in the progress bar are buttons; focus moves to each new heading; the whole flow works from the keyboard.
+- Pricing page: photo hero, "Most popular" plan, three-step "how it works", FAQ and closing call to action.
+- Accept invitation is two steps (name, password). Sign-in remembers workspaces and the finder lists recent ones.
+- API: the name given at sign-up is stored and returned by the verify preview (migration 0010).
+- Tests: stepped sign-up flows, browser Back and refresh, no skipping ahead, keyboard-only, expired links, per-step accessibility scans; invite flows updated.
+
 ## 2026-10-14 - Phase 9: Plans, self-serve sign-up and the platform console
 
 - Docs: docs/FEATURES.md (every feature with its plan gate key) and docs/PRICING.md (Free, Team, Business).

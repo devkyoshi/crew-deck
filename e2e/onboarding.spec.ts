@@ -11,6 +11,22 @@ async function signInToPlatform(page: Page) {
   await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
 }
 
+/** Walks the sign-up steps up to and including "Email me the link". */
+async function walkSignUp(
+  page: Page,
+  a: { name: string; email: string; company: string; slug?: string },
+) {
+  await page.goto(`${APEX}/signup`);
+  await page.getByLabel('What should we call you?').fill(a.name);
+  await page.getByLabel('Your work email').fill(a.email);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Company name').fill(a.company);
+  if (a.slug) await page.getByLabel('Workspace address').fill(a.slug);
+  await expect(page.getByText(/is available/)).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Email me the link' }).click();
+}
+
 test('the pricing page compares the plans, and sign-up is one click away', async ({ page }) => {
   await page.goto(`${APEX}/pricing`);
   await expect(page.getByRole('heading', { name: /Simple plans/ })).toBeVisible();
@@ -23,7 +39,7 @@ test('the pricing page compares the plans, and sign-up is one click away', async
     table.getByRole('row', { name: /Per-space audit log Not included Not included Included/ }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Start free trial' }).first().click();
-  await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /set up your workspace/ })).toBeVisible();
 });
 
 test('a new company signs up, runs on a trial, is isolated, and the platform can suspend and restore it', async ({
@@ -37,8 +53,12 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   const company = `E2E Company ${tag}`;
   const origin = `http://${slug}.localhost:3000`;
 
-  // ---- Sign up: details, then the emailed link --------------------------------------------------
+  // ---- Sign up: guided steps, then the emailed link ---------------------------------------------
   await page.goto(`${APEX}/signup`);
+  await page.getByLabel('What should we call you?').fill('Nora Founder');
+  await page.getByLabel('Your work email').fill(email);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: /Nice to meet you, Nora/ })).toBeFocused();
   await page.getByLabel('Company name').fill(company);
   // The address follows the company name, and is checked live.
   await expect(page.getByLabel('Workspace address')).toHaveValue(
@@ -46,15 +66,28 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   );
   await page.getByLabel('Workspace address').fill(slug);
   await expect(page.getByText(`${slug}.localhost is available`)).toBeVisible();
-  await page.getByLabel('Work email').fill(email);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
+  await expect(page.getByText(email)).toBeVisible();
   await page.getByRole('button', { name: 'Email me the link' }).click();
-  await expect(page.getByText('Check your email', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   await page.getByTestId('dev-link').click();
 
-  await expect(page.getByText(`Create ${company}`, { exact: true })).toBeVisible();
-  await page.getByLabel('Your name').fill('Nora Founder');
-  await page.getByLabel('Choose a password').fill('a-good-password-123');
+  // The link greets us by name; a new person then chooses a password.
+  await expect(page.getByRole('heading', { name: /Welcome, Nora/ })).toBeVisible();
+  await expect(page.getByLabel('Your name')).toHaveValue('Nora Founder');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose a password' })).toBeVisible();
+  await page.getByLabel('Password').fill('short');
+  await expect(page.getByText(/more characters to go/)).toBeVisible();
   await page.getByRole('button', { name: 'Create my workspace' }).click();
+  await expect(page.getByText('Use at least 10 characters')).toBeVisible();
+  await page.getByLabel('Password').fill('a-good-password-123');
+  await expect(page.getByText(/Strong|Good/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Create my workspace' }).click();
+  await expect(
+    page.getByRole('heading', { name: new RegExp(`${company} is ready`) }),
+  ).toBeVisible();
 
   // ---- We land signed in on the new workspace, on a Business trial --------------------------------
   await page.waitForURL(`${origin}/`);
@@ -166,10 +199,14 @@ test('platform settings can block free email providers at sign-up', async ({ pag
     await expect(admin.getByText('Settings saved').first()).toBeVisible();
 
     await page.goto(`${APEX}/signup`);
-    await page.getByLabel('Company name').fill(`Gmail Co ${tag}`);
-    await page.getByLabel('Work email').fill(`someone-${tag}@gmail.com`);
-    await page.getByRole('button', { name: 'Email me the link' }).click();
+    await walkSignUp(page, {
+      name: 'Gina Gmail',
+      email: `someone-${tag}@gmail.com`,
+      company: `Gmail Co ${tag}`,
+    });
+    // The platform rule is applied when the link is requested, and sends us back to fix the email.
     await expect(page.getByText(/use your work email/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /set up your workspace/ })).toBeVisible();
 
     // Back to the default so later runs are not affected.
     await toggle.click();
@@ -179,9 +216,12 @@ test('platform settings can block free email providers at sign-up', async ({ pag
         async () => (await apiCall(admin, 'GET', '/platform/settings')).json.blockFreeEmailDomains,
       )
       .toBe(false);
-    await page.getByLabel('Work email').fill(`someone2-${tag}@gmail.com`);
+    // Our earlier answers were kept: carry on from the first step with the email fixed.
+    await page.getByLabel('Your work email').fill(`someone2-${tag}@gmail.com`);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Email me the link' }).click();
-    await expect(page.getByText('Check your email', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   } finally {
     await ctx.close();
   }
@@ -196,4 +236,109 @@ test('the platform console is not reachable from a workspace, or without signing
   await page.goto('http://acme.localhost:3000/sign-in');
   expect((await apiCall(page, 'GET', '/platform/tenants')).status).toBe(404);
   expect((await apiCall(page, 'GET', '/platform/me')).status).toBe(404);
+});
+
+test.describe('guided sign-up navigation', () => {
+  test('each step checks its answers, Back and the browser Back keep them, and you cannot skip ahead', async ({
+    page,
+  }) => {
+    const tag = rand(3);
+    await page.goto(`${APEX}/signup`);
+    await expect(page.getByText('Step 1 of 4: You')).toBeVisible();
+
+    // Step 1 will not continue without answers, and says what is missing.
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByText('Tell us what to call you')).toBeVisible();
+    await expect(page.getByText(/Enter your work email/)).toBeVisible();
+    await page.getByLabel('What should we call you?').fill('Sam Guide');
+    await page.getByLabel('Your work email').fill(`sam-${tag}@guided.test`);
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 2: a bad or reserved address is refused before moving on.
+    await expect(page).toHaveURL(/step=company/);
+    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await page.getByLabel('Company name').fill(`Guided ${tag}`);
+    await page.getByLabel('Workspace address').fill('Bad Address!');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByText(/Use 3 to 30 lowercase letters/).first()).toBeVisible();
+    await page.getByLabel('Workspace address').fill('admin');
+    await expect(page.getByText(/reserved/)).toBeVisible();
+    await page.getByLabel('Workspace address').fill(`guided-${tag}`);
+    await expect(page.getByText(/is available/)).toBeVisible();
+
+    // The browser's Back button returns to step 1 with the answers still there; Forward comes back.
+    await page.goBack();
+    await expect(page).toHaveURL(/step=you/);
+    await expect(page.getByLabel('What should we call you?')).toHaveValue('Sam Guide');
+    await page.goForward();
+    await expect(page.getByLabel('Company name')).toHaveValue(`Guided ${tag}`);
+
+    // A refresh keeps the step and the answers.
+    await page.reload();
+    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await expect(page.getByLabel('Workspace address')).toHaveValue(`guided-${tag}`);
+
+    // Typing a later step into the address bar cannot skip the questions.
+    await page.goto(`${APEX}/signup?step=sent`);
+    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await expect(page).toHaveURL(/step=company/);
+
+    // Review shows the answers, with a way back to change each one.
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Change work email' }).click();
+    await expect(page.getByLabel('Your work email')).toHaveValue(`sam-${tag}@guided.test`);
+    // Completed steps in the progress bar are buttons back to them.
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page
+      .getByRole('navigation', { name: 'Progress' })
+      .getByRole('button', { name: /Company/ })
+      .click();
+    await expect(page.getByLabel('Company name')).toHaveValue(`Guided ${tag}`);
+  });
+
+  test('after the link is sent you can resend only after a short wait, and change your details', async ({
+    page,
+  }) => {
+    const tag = rand(3);
+    await walkSignUp(page, {
+      name: 'Rae Resend',
+      email: `rae-${tag}@resend.test`,
+      company: `Resend ${tag}`,
+    });
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(page.getByText(`rae-${tag}@resend.test`)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Send again in \d+s/ })).toBeDisabled();
+    await page.getByRole('button', { name: 'Change my details' }).click();
+    await expect(page.getByRole('heading', { name: /set up your workspace/ })).toBeVisible();
+  });
+
+  test('the whole sign-up can be done with the keyboard, and focus follows each step', async ({
+    page,
+  }) => {
+    const tag = rand(3);
+    await page.goto(`${APEX}/signup`);
+    await expect(page.getByLabel('What should we call you?')).toBeFocused();
+    await page.keyboard.type('Kay Board');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type(`kay-${tag}@keys.test`);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: /Nice to meet you, Kay/ })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.type(`Keys ${tag}`);
+    await expect(page.getByText(/is available/)).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeFocused();
+    await page.getByRole('button', { name: 'Email me the link' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeFocused();
+  });
+
+  test('a used or expired link explains what to do', async ({ page }) => {
+    await page.goto(`${APEX}/signup/verify?token=not-a-real-token-at-all`);
+    await expect(page.getByRole('heading', { name: 'This link has expired' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Start again' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Find my workspace' })).toBeVisible();
+  });
 });

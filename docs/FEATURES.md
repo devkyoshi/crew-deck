@@ -62,6 +62,19 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Read-only, audited impersonation                                      | Built  |      |
 | Platform settings (for example block free email providers at sign-up) | Built  |      |
 
+## Work management (planned, see docs/work-items)
+
+| Feature                                                              | Status  | Gate               |
+| -------------------------------------------------------------------- | ------- | ------------------ |
+| Work items, hierarchy, statuses and Kanban board (W1, W2)            | Planned | `work_items`       |
+| Drag and drop, filters, swimlanes, labels, bulk actions (W2)         | Planned |                    |
+| Rich text, comments, mentions, attachments, links, activity (W3)     | Planned | `max_attachment_mb`, `storage_mb` |
+| List view, epics, search, My work, saved filters (W4)                | Planned | `shared_filters`   |
+| Notifications: in-app, email, preferences (W5)                       | Planned |                    |
+| Backlog and sprints (Scrum) (W6)                                     | Planned | `scrum_sprints`    |
+| Burndown and sprint report (W6)                                      | Planned | `burndown_reports` |
+| Live updates (W7)                                                    | Planned |                    |
+
 ## Not built yet
 
-Work items and boards, chat, file storage, notifications, payments, custom domains, per-tenant SSO.
+Chat, payments, custom domains, per-tenant SSO, and the work management module above.

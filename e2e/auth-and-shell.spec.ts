@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 import { expect, test, type Page } from '@playwright/test';
+import { completeInvite } from './helpers';
 
 const OWNER = {
   email: 'owner@acme.test',
@@ -65,17 +66,14 @@ test('an invited person can accept the invite and land signed in', async ({ page
   const { token, email } = await createInvite();
   await page.goto(`/accept-invite?token=${token}`);
   await expect(page.getByText(email)).toBeVisible();
-  await page.getByLabel('Full name').fill('Eve Invited');
-  await page.getByLabel('Password', { exact: true }).fill('a-long-enough-password');
-  await page.getByLabel('Confirm password').fill('a-long-enough-password');
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await completeInvite(page, 'Eve Invited', 'a-long-enough-password');
   await expect(page.getByRole('heading', { name: /Hello, Eve/ })).toBeVisible();
 
   // The link is single use.
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await page.goto(`/accept-invite?token=${token}`);
-  await expect(page.getByText('Invitation not valid')).toBeVisible();
+  await expect(page.getByText('This invitation is not valid')).toBeVisible();
 });
 
 test('command palette navigates with the keyboard', async ({ page }) => {

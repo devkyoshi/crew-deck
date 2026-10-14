@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { completeInvite } from './helpers';
 const ADMIN = {
   email: 'owner@acme.test',
   password: process.env.SEED_PASSWORD ?? 'dev-password-123',
@@ -56,10 +57,7 @@ test('admin invites someone, they join and appear in the list, then admin deacti
   await asAnotherPerson(browser, async (p) => {
     await p.goto(link);
     await expect(p.getByText(email)).toBeVisible();
-    await p.getByLabel('Full name').fill('Eve E2E');
-    await p.getByLabel('Password', { exact: true }).fill(NEW_PASSWORD);
-    await p.getByLabel('Confirm password').fill(NEW_PASSWORD);
-    await p.getByRole('button', { name: 'Create account' }).click();
+    await completeInvite(p, 'Eve E2E', NEW_PASSWORD);
     await expect(p.getByRole('heading', { name: /Hello, Eve/ })).toBeVisible();
   });
 

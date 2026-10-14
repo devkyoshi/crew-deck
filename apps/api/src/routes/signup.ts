@@ -107,6 +107,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         body: z.object({
           email,
           company: z.string().trim().min(2, 'Enter your company name').max(80),
+          name: z.string().trim().max(100).optional(),
           slug,
         }),
       },
@@ -146,7 +147,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         );
       }
       const token = randomToken();
-      await db.execute(sql`select signup_request_create(${sha256(token)}, ${b.email}, ${null}::text, ${b.company},
+      await db.execute(sql`select signup_request_create(${sha256(token)}, ${b.email}, ${b.name || null}::text, ${b.company},
         ${b.slug}, ${new Date(Date.now() + SIGNUP_LINK_HOURS * 3_600_000).toISOString()}::timestamptz)`);
       const link = `${config.WEB_ORIGIN}/signup/verify?token=${encodeURIComponent(token)}`;
       try {
@@ -183,6 +184,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         company: string;
         slug: string;
         has_account: boolean;
+        name: string | null;
       }>(sql`select * from signup_request_peek(${sha256(req.body.token)})`);
       const row = rows[0];
       if (!row)
@@ -196,6 +198,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         company: row.company,
         slug: row.slug,
         hasAccount: row.has_account,
+        name: row.name,
       };
     },
   );
@@ -222,6 +225,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         company: string;
         slug: string;
         has_account: boolean;
+        name: string | null;
       }>(sql`select * from signup_request_peek(${hash})`);
       const row = rows[0];
       if (!row)

@@ -169,6 +169,46 @@ A sign-up gets a Business trial (14 days by default, a platform setting). `loadP
 
 Platform admins are a separate table with their own session cookie and Redis namespace, reachable only on the bare domain (404 on a workspace address). The application database role has no direct access to `platform_admins`, `platform_settings`, `signup_requests` or `platform_audit_logs`, and cannot update a workspace's status, plan or limits (column-level grants); everything cross-workspace goes through narrow SECURITY DEFINER functions, the same pattern as sign-in. A suspended workspace is refused at the tenant gate, so sign-in, invitations and already-open sessions all stop at once, and its data is kept. Impersonation opens a workspace as its owner for 30 minutes without extension, is read-only (any non-GET request is refused), shows a banner, and is recorded both in that workspace's audit log and in the platform log.
 
+## ADR-041: Guided flows keep their step in the URL
+
+Multi-step signed-out flows (sign-up, verify, accept invitation) use one hook, `useWizard`. The current step is the `?step=` query parameter, so the browser's Back and Forward buttons move between steps and a refresh stays put. Answers and the furthest step reached are kept in sessionStorage (sign-up only; verify and invitations keep them in memory because they sit beside one-time secrets). Typing a later step into the address bar is redirected to the furthest step reached, so questions cannot be skipped. Focus moves to the new step's heading so screen readers announce it. The photo panel is decorative (empty alt) with a dark gradient so its text keeps its contrast; photos are served from the repo, not hotlinked.
+
+## ADR-041: Attachments live on local disk behind a storage adapter
+
+Attachments are stored through a `StorageDriver` interface (put, get, delete, signed URL). The first driver writes to a directory on the VM outside the web root (`STORAGE_DIR`); an S3-compatible driver can replace it later without API changes. Keys start with the tenant id (`{org_id}/{space_id}/{item_id}/{uuid}-{name}`), downloads use short-lived signed URLs that are checked against tenant and space access, and size is limited per plan (`max_attachment_mb`, `storage_mb`). Status: planned (W3).
+
+## ADR-042: Rich text is Tiptap, stored as JSON
+
+Work item descriptions and comments use Tiptap and are stored as ProseMirror JSON, never HTML. A plain-text projection is kept for search. Status: planned (W3).
+
+## ADR-043: Members delete only the items they reported
+
+Space admins (and org owners and admins) can delete any item; members only items they reported; viewers none. Deleting is a soft delete and history is never hard-deleted. Status: planned (W1).
+
+## ADR-044: Kanban spaces stay continuous flow
+
+Sprints exist only in Scrum spaces. Board type is chosen at space creation and can be switched only when no sprint is active. Status: planned (W1, W6).
+
+## ADR-045: Epics are not shown as cards on the board
+
+Epics are reached through the epic filter, the epic swimlane and the Epics page; the board shows stories, tasks and bugs, and subtasks as progress on their parent. Status: planned (W1).
+
+## ADR-046: Estimates are story points only
+
+`work_items.estimate` is a number of story points. Subtask estimates are optional and never double-counted with the parent. Hours may be added later as a separate field. Status: planned (W1).
+
+## ADR-047: Work-item limits and gates follow the plans mechanism
+
+New limit keys `work_items` and `max_attachment_mb`, enforcement of the existing `storage_mb`, and feature keys `scrum_sprints`, `shared_filters` and `burndown_reports` use the ADR-037 mechanism (server-checked, 402 `plan_limit` / `feature_locked`, never deleting data). Proposed split is in `docs/work-items/PRICING-GATES.md`. Kanban boards, comments, links and search are available on every plan. Status: planned (W1 onward).
+
+## ADR-048: Item types are fixed
+
+Epic, story, task, bug and subtask are fixed enums. Hierarchy: epic, then story/task/bug, then subtask; depth is capped at three and enforced by the API. Tenant-defined types are out of scope. Status: planned (W1).
+
+## ADR-049: Live updates use server-sent events
+
+Board and item changes reach other browsers over server-sent events scoped by tenant and space access, with Redis pub/sub fan-out; clients refetch on focus as a fallback. Work items use string ranks from `fractional-indexing` (decided in W2) while CRM deals keep their numeric positions (ADR-034). Status: planned (W2, W7).
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, check-in policy, hosting target.

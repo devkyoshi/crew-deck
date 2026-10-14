@@ -32,3 +32,17 @@ Prices are display-only until payments are added (there is no payment integratio
 - A trial runs for 14 days from sign-up on the Business plan. When it ends, the workspace moves to Free automatically and the owner is told.
 - Seats count active members (invited, not yet accepted, count as well so the limit cannot be bypassed by sending many invitations).
 - Platform admins can change a workspace's plan, extend its trial and set custom limits.
+
+## Planned: work management limits (not live yet)
+
+Proposed for the work items module; details, behaviour and wiring are in [work-items/PRICING-GATES.md](work-items/PRICING-GATES.md). These rows are added to the table above when the matching phase ships.
+
+|                                                        | Free  | Team      | Business  |
+| ------------------------------------------------------ | ----- | --------- | --------- |
+| **Work items** (`work_items`)                          | 250   | Unlimited | Unlimited |
+| **Max attachment size** (`max_attachment_mb`)          | 5 MB  | 25 MB     | 100 MB    |
+| Scrum backlog and sprints (`scrum_sprints`)            | No    | Yes       | Yes       |
+| Filters shared with the space (`shared_filters`)       | No    | Yes       | Yes       |
+| Burndown and sprint report (`burndown_reports`)        | No    | No        | Yes       |
+
+Kanban boards, statuses, comments, links and search are included in every plan. Storage (`storage_mb`) starts being enforced when attachments ship.

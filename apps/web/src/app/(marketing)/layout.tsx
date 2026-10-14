@@ -1,10 +1,28 @@
-import Link from 'next/link';
-import { Layers } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/theme-toggle';
+'use client';
 
-/** Public pages on the bare domain: pricing and sign-up. */
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Layers } from 'lucide-react';
+import { SplitLayout } from '@/components/auth/split-layout';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
+
+/** Public pages on the bare domain. Sign-up pages get the photo split; pricing gets the full-width header. */
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/signup')) {
+    const verifying = pathname.startsWith('/signup/verify');
+    return (
+      <SplitLayout
+        variant={verifying ? 'verify' : 'signup'}
+        top={{ text: 'Already have a workspace?', label: 'Sign in', href: '/workspaces' }}
+      >
+        {children}
+      </SplitLayout>
+    );
+  }
+
   return (
     <div className="bg-page flex min-h-svh flex-col">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4">
@@ -16,7 +34,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </Link>
         <nav aria-label="Main" className="flex items-center gap-2">
           <Button variant="ghost" asChild>
-            <Link href="/pricing">Pricing</Link>
+            <Link href="/pricing" aria-current="page">
+              Pricing
+            </Link>
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/workspaces">Sign in</Link>
@@ -27,9 +47,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <ThemeToggle />
         </nav>
       </header>
-      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-5 pb-20">
+      <main id="main" className="flex-1 pb-20">
         {children}
       </main>
+      <footer className="text-muted-foreground border-t px-5 py-6 text-center text-xs">
+        Crew Deck. Photos from Unsplash.
+      </footer>
     </div>
   );
 }

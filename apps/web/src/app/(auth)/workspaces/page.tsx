@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,20 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Illustration } from '@/components/illustrations';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
+import { readRecentWorkspaces, type RecentWorkspace } from '@/lib/recent-workspaces';
 
 /** Shown on the bare domain, where no workspace can be resolved. */
 export default function WorkspacesPage() {
   const [slug, setSlug] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { shakeKey, fail } = useFormFeedback();
+  const [recent, setRecent] = useState<RecentWorkspace[]>([]);
+  useEffect(() => setRecent(readRecentWorkspaces()), []);
+
+  function open(slug: string) {
+    const { protocol, host } = window.location;
+    window.location.assign(`${protocol}//${slug}.${host}/sign-in`);
+  }
 
   function go(e: React.FormEvent) {
     e.preventDefault();
@@ -40,6 +48,29 @@ export default function WorkspacesPage() {
         <CardDescription>Enter your workspace name to continue.</CardDescription>
       </CardHeader>
       <CardContent>
+        {recent.length > 0 && (
+          <section aria-labelledby="recent" className="mb-5 space-y-2">
+            <h2 id="recent" className="text-sm font-medium">
+              Recent workspaces
+            </h2>
+            <ul className="space-y-2">
+              {recent.map((w) => (
+                <li key={w.slug}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between"
+                    onClick={() => open(w.slug)}
+                  >
+                    <span className="truncate">{w.name}</span>
+                    <span className="text-muted-foreground text-xs">{w.slug}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground pt-1 text-xs">Or enter a different one:</p>
+          </section>
+        )}
         <form onSubmit={go} className="space-y-3" noValidate>
           <Field label="Workspace" htmlFor="slug" error={error} shakeKey={shakeKey}>
             <Input

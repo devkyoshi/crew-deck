@@ -90,3 +90,11 @@ export async function signInDev(page: Page, email: string) {
   await page.getByRole('button', { name: 'Dev sign in' }).click();
   await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
 }
+
+/** Walks the two guided steps of the accept-invite page: your name, then a password. */
+export async function completeInvite(page: Page, name: string, password: string) {
+  await page.getByLabel('Your full name').fill(name);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: /^Join / }).click();
+}

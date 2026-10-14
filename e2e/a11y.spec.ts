@@ -64,7 +64,7 @@ test.describe('accessibility: signed-out screens', () => {
 
   test('accept-invite page, invalid link', async ({ page }) => {
     await page.goto('/accept-invite?token=nope-nope-nope-nope');
-    await expect(page.getByText('Invitation not valid')).toBeVisible();
+    await expect(page.getByText('This invitation is not valid')).toBeVisible();
     await scan(page, 'accept-invite');
   });
 
@@ -108,6 +108,36 @@ test.describe('accessibility: public pages and the platform console', () => {
       await expect(page.getByRole('heading', { name: 'Acme Inc', level: 1 })).toBeVisible();
       await expect(page.locator('[role="status"][aria-label^="Loading"]')).toHaveCount(0);
       await scan(page, `/platform/tenants (${theme})`);
+    });
+  }
+});
+
+test.describe('accessibility: guided sign-up steps', () => {
+  test.setTimeout(120_000);
+  for (const theme of ['light', 'dark'] as const) {
+    test(`every step of sign-up and the verify page (${theme})`, async ({ page }) => {
+      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      await page.goto('http://localhost:3000/signup');
+      await expect(page.getByLabel('What should we call you?')).toBeVisible();
+      await scan(page, `signup you (${theme})`);
+      await page.getByLabel('What should we call you?').fill('Ada Access');
+      await page.getByLabel('Your work email').fill(`ada-${theme}-${Date.now()}@a11y.test`);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByLabel('Company name').fill(`Access ${theme} ${Date.now() % 100000}`);
+      await expect(page.getByText(/is available/)).toBeVisible();
+      await scan(page, `signup company (${theme})`);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
+      await scan(page, `signup review (${theme})`);
+      await page.getByRole('button', { name: 'Email me the link' }).click();
+      await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+      await scan(page, `signup sent (${theme})`);
+      await page.getByTestId('dev-link').click();
+      await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
+      await scan(page, `verify you (${theme})`);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByLabel('Password').fill('a-good-password-123');
+      await scan(page, `verify password (${theme})`);
     });
   }
 });

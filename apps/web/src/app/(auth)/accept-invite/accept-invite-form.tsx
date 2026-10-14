@@ -1,59 +1,206 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Globe, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
-import { FormRow, FormSection } from '@/components/ui/form-layout';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
-import { Illustration } from '@/components/illustrations';
-import { Notice } from '@/components/shared/notice';
-import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Notice } from '@/components/shared/notice';
+import { MIN_PASSWORD, PasswordStrength } from '@/components/auth/password-strength';
+import { useWizard, WizardProgress } from '@/components/auth/wizard';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError, type Providers } from '@/lib/api';
 
-const MIN_PASSWORD = 10;
+const STEPS = ['you', 'password'] as const;
+const LABELS = [
+  { id: 'you', label: 'You' },
+  { id: 'password', label: 'Password' },
+];
 
-const schema = z
-  .object({
-    name: z.string().trim().min(1, 'Enter your name').max(100),
-    password: z.string().min(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters`),
-    confirm: z.string(),
-    timezone: z.string().min(1),
-    avatarUrl: z.string().trim().url('Enter a valid URL').or(z.literal('')),
-  })
-  .refine((v) => v.password === v.confirm, {
-    path: ['confirm'],
-    message: 'Passwords do not match',
-  });
-type Values = z.infer<typeof schema>;
-
+interface Answers {
+  name: string;
+  password: string;
+  timezone: string;
+}
 type Preview = { email: string; orgName: string; orgSlug: string };
 
-export function AcceptInviteForm({ token }: { token: string }) {
+function Heading({
+  headingRef,
+  children,
+  lead,
+}: {
+  headingRef: React.Ref<HTMLHeadingElement>;
+  children: React.ReactNode;
+  lead?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6 space-y-2">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
+      >
+        {children}
+      </h1>
+      {lead && <p className="text-muted-foreground">{lead}</p>}
+    </div>
+  );
+}
+
+function Wizard({
+  token,
+  preview,
+  onInvalid,
+}: {
+  token: string;
+  preview: Preview;
+  onInvalid: () => void;
+}) {
+  const router = useRouter();
+  const w = useWizard<Answers>({
+    steps: STEPS,
+    initial: {
+      name: '',
+      password: '',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    },
+  });
+  const { shakeKey, fail } = useFormFeedback();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const a = w.data;
+
+  async function accept() {
+    setBusy(true);
+    setFormError(null);
+    try {
+      await api('/auth/invite/accept', {
+        body: { token, name: a.name.trim(), password: a.password, timezone: a.timezone },
+      });
+      router.replace('/');
+      router.refresh();
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code === 'invalid_invitation') onInvalid();
+      else if (err.code === 'domain_not_allowed')
+        setFormError('Your email is not on this workspace’s domain.');
+      else setFormError(err.message);
+      fail();
+      setBusy(false);
+    }
+  }
+
+  if (!w.ready)
+    return <Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-2xl" />;
+  const first = a.name.trim().split(/\s+/)[0];
+
+  return (
+    <Card className="shadow-lg">
+      <CardContent className="p-6 sm:p-8">
+        <WizardProgress steps={LABELS} index={w.index} reached={w.reached} onGo={w.go} />
+        {formError && (
+          <div className="mb-4">
+            <Notice variant="error">{formError}</Notice>
+          </div>
+        )}
+
+        {w.step === 'you' && (
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!a.name.trim()) {
+                setErrors({ name: 'Tell us what to call you' });
+                return fail();
+              }
+              setErrors({});
+              w.next({ name: a.name.trim() });
+            }}
+          >
+            <Heading
+              headingRef={w.headingRef}
+              lead={
+                <>
+                  Set up your account for{' '}
+                  <span className="text-foreground font-medium">{preview.email}</span>.
+                </>
+              }
+            >
+              Join {preview.orgName}
+            </Heading>
+            <Field label="Your full name" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
+              <Input
+                autoFocus
+                autoComplete="name"
+                value={a.name}
+                maxLength={100}
+                onChange={(e) => w.set({ name: e.target.value })}
+              />
+            </Field>
+            <div className="mt-6 flex justify-end">
+              <Button type="submit">
+                Continue <ArrowRight />
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {w.step === 'password' && (
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (a.password.length < MIN_PASSWORD) {
+                setErrors({ password: `Use at least ${MIN_PASSWORD} characters` });
+                return fail();
+              }
+              setErrors({});
+              void accept();
+            }}
+          >
+            <Heading headingRef={w.headingRef} lead="You will use it with your email to sign in.">
+              {first ? `Nearly there, ${first}. Choose a password` : 'Choose a password'}
+            </Heading>
+            <div className="space-y-4">
+              <Field
+                label="Password"
+                htmlFor="password"
+                error={errors.password}
+                shakeKey={shakeKey}
+              >
+                <PasswordInput
+                  autoFocus
+                  autoComplete="new-password"
+                  value={a.password}
+                  onChange={(e) => w.set({ password: e.target.value })}
+                />
+              </Field>
+              <PasswordStrength password={a.password} />
+            </div>
+            <div className="mt-6 flex items-center justify-between">
+              <Button type="button" variant="ghost" onClick={w.back} disabled={busy}>
+                <ArrowLeft /> Back
+              </Button>
+              <Button type="submit" disabled={busy}>
+                {busy ? 'Joining…' : `Join ${preview.orgName}`}
+              </Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Inner({ token }: { token: string }) {
   const router = useRouter();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [invalid, setInvalid] = useState(!token);
-  const [formError, setFormError] = useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<Values>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      avatarUrl: '',
-    },
-  });
-
-  const { shakeKey, onInvalid } = useFormFeedback();
 
   useEffect(() => {
     if (!token) return;
@@ -77,133 +224,36 @@ export function AcceptInviteForm({ token }: { token: string }) {
     })();
   }, [token]);
 
-  async function onSubmit(v: Values) {
-    setFormError(null);
-    try {
-      await api('/auth/invite/accept', {
-        body: {
-          token,
-          name: v.name,
-          password: v.password,
-          timezone: v.timezone,
-          ...(v.avatarUrl ? { avatarUrl: v.avatarUrl } : {}),
-        },
-      });
-      router.replace('/');
-      router.refresh();
-    } catch (e) {
-      const err = e as ApiError;
-      if (err.code === 'invalid_invitation') setInvalid(true);
-      else if (err.code === 'domain_not_allowed')
-        setFormError('Your email is not on this workspace’s domain.');
-      else setFormError(err.message);
-    }
-  }
-
   if (invalid) {
     return (
-      <Card>
-        <CardHeader className="items-center text-center">
-          <Illustration name="lock" />
-          <CardTitle className="text-xl">Invitation not valid</CardTitle>
-          <CardDescription>
-            This link is invalid, already used, or has expired. Ask a workspace admin to send a new
-            invitation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="outline" className="w-full" onClick={() => router.push('/sign-in')}>
+      <Card className="shadow-lg">
+        <CardContent className="space-y-4 p-6 sm:p-8">
+          <h1 className="text-2xl font-semibold tracking-tight">This invitation is not valid</h1>
+          <p className="text-muted-foreground">
+            The link is invalid, already used, or has expired. Ask a workspace admin to send you a
+            new invitation.
+          </p>
+          <Button variant="outline" onClick={() => router.push('/sign-in')}>
             Go to sign in
           </Button>
         </CardContent>
       </Card>
     );
   }
-
   if (!preview) {
     return (
-      <Card>
-        <CardContent className="space-y-3" aria-busy="true" aria-label="Loading invitation">
-          <Skeleton className="h-6 w-2/3" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </CardContent>
-      </Card>
+      <Skeleton role="status" aria-label="Loading invitation" className="h-80 w-full rounded-2xl" />
     );
   }
+  return <Wizard token={token} preview={preview} onInvalid={() => setInvalid(true)} />;
+}
 
+export function AcceptInviteForm({ token }: { token: string }) {
   return (
-    <Card>
-      <CardHeader className="items-center text-center">
-        <CardTitle className="text-xl">Join {preview.orgName}</CardTitle>
-        <CardDescription>
-          Set up your account for{' '}
-          <span className="text-foreground font-medium">{preview.email}</span>.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-5" noValidate>
-          {formError && <Notice variant="error">{formError}</Notice>}
-
-          <FormSection title="Your profile" icon={UserRound}>
-            <Field
-              label="Full name"
-              htmlFor="name"
-              error={errors.name?.message}
-              shakeKey={shakeKey}
-            >
-              <Input autoComplete="name" {...register('name')} />
-            </Field>
-            <Field
-              label="Avatar URL (optional)"
-              htmlFor="avatarUrl"
-              error={errors.avatarUrl?.message}
-              shakeKey={shakeKey}
-            >
-              <Input placeholder="https://…" {...register('avatarUrl')} />
-            </Field>
-          </FormSection>
-
-          <FormSection title="Security" icon={ShieldCheck}>
-            <FormRow>
-              <Field
-                label="Password"
-                htmlFor="password"
-                error={errors.password?.message}
-                hint={`At least ${MIN_PASSWORD} characters.`}
-                shakeKey={shakeKey}
-              >
-                <PasswordInput autoComplete="new-password" {...register('password')} />
-              </Field>
-              <Field
-                label="Confirm password"
-                htmlFor="confirm"
-                error={errors.confirm?.message}
-                shakeKey={shakeKey}
-              >
-                <PasswordInput autoComplete="new-password" {...register('confirm')} />
-              </Field>
-            </FormRow>
-          </FormSection>
-
-          <FormSection title="Preferences" icon={Globe}>
-            <Field
-              label="Timezone"
-              htmlFor="timezone"
-              error={errors.timezone?.message}
-              hint="Used to work out your day."
-              shakeKey={shakeKey}
-            >
-              <Input {...register('timezone')} />
-            </Field>
-          </FormSection>
-
-          <Button type="submit" className="w-full" loading={isSubmitting}>
-            {isSubmitting ? 'Creating account…' : 'Create account'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <Suspense
+      fallback={<Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-2xl" />}
+    >
+      <Inner token={token} />
+    </Suspense>
   );
 }

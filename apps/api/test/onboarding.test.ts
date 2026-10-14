@@ -827,3 +827,28 @@ describe('platform console', () => {
     );
   });
 });
+
+describe('sign-up name', () => {
+  it('keeps the name given at sign-up and returns it on the verify page', async () => {
+    const email = uniqueEmail('named', 'named.test');
+    const res = await bare({
+      method: 'POST',
+      url: '/signup',
+      payload: { email, company: 'Named Co', slug: slug(), name: 'Sam Founder' },
+    });
+    expect(res.statusCode).toBe(200);
+    const token = tokenFrom(j(res).devLink);
+    const preview = j(await bare({ method: 'POST', url: '/signup/preview', payload: { token } }));
+    expect(preview).toMatchObject({ name: 'Sam Founder', company: 'Named Co' });
+    // The name is optional.
+    const anon = await requestSignup(uniqueEmail('anon', 'named.test'));
+    const p2 = j(
+      await bare({
+        method: 'POST',
+        url: '/signup/preview',
+        payload: { token: tokenFrom(j(anon.res).devLink) },
+      }),
+    );
+    expect(p2.name).toBeNull();
+  });
+});
