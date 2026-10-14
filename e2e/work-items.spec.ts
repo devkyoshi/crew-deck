@@ -19,8 +19,8 @@ test('create, open, edit and organise work items on a space board', async ({ pag
 
   // Inline create in the first column: Enter creates the item and gives it the first key.
   await page.getByRole('button', { name: 'Create', exact: true }).first().click();
-  await page.getByLabel('Title of the new item').fill('Write the spec');
-  await page.getByLabel('Title of the new item').press('Enter');
+  await page.getByLabel('Title of the new work item').fill('Write the spec');
+  await page.getByLabel('Title of the new work item').press('Enter');
   await expect(page.getByRole('article', { name: `${key}-1 Write the spec` })).toBeVisible();
   await expect(page.getByText('No work items yet')).toHaveCount(0);
 

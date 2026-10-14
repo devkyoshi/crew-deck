@@ -73,7 +73,7 @@ export function BulkBar({
   return (
     <div
       role="region"
-      aria-label={`Selected ${vocab.nounPlural}`}
+      aria-label="Selected items"
       className="bg-popover text-popover-foreground fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-xl border p-2 pl-3 shadow-xl sm:inset-x-0"
     >
       <span className="text-sm font-medium tabular-nums" aria-live="polite">

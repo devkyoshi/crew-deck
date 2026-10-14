@@ -113,10 +113,11 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
   await expect(page.getByText(/Business trial: 14 days left/)).toBeVisible();
 
-  // Isolation: it has one person, no spaces, and none of Acme's data.
+  // Isolation: it has one person, only its own starter space, and none of Acme's data.
   const members = await apiCall(page, 'GET', '/members');
   expect(members.json.total).toBe(1);
-  expect((await apiCall(page, 'GET', '/spaces')).json.total).toBe(0);
+  const spaces = (await apiCall(page, 'GET', '/spaces')).json;
+  expect(spaces.items.map((sp: { key: string }) => sp.key)).toEqual(['SALES']);
   await page.goto(`${origin}/admin/billing`);
   await expect(page.getByRole('heading', { name: 'Plan and billing', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Business', level: 2 })).toBeVisible();

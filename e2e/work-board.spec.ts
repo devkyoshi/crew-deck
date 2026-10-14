@@ -152,7 +152,7 @@ test('select several cards and change them together', async ({ page }) => {
 
   await bar.getByRole('combobox', { name: 'Move selected items to' }).click();
   await page.getByRole('option', { name: 'Done' }).click();
-  await expect(page.getByText('2 items moved')).toBeVisible();
+  await expect(page.getByText('2 work items moved')).toBeVisible();
   await expect(bar).toBeHidden();
   await expect(column(page, 'Done').getByRole('article')).toHaveCount(2);
   await expect(column(page, 'To Do').getByRole('article')).toHaveCount(1);

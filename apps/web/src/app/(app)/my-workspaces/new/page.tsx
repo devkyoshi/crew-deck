@@ -88,7 +88,9 @@ export default function NewWorkspacePage() {
     }
   }
 
-  const domain = typeof window === 'undefined' ? 'localhost' : window.location.host.split('.').slice(1).join('.');
+  // Read the address after mount, so the server render and the first client render match.
+  const [domain, setDomain] = useState('localhost');
+  useEffect(() => setDomain(window.location.host.split('.').slice(1).join('.')), []);
 
   return (
     <div className="max-w-3xl">
