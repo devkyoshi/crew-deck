@@ -99,6 +99,7 @@ export const refreshWork = (qc: QueryClient) =>
 export type ItemPatch = Partial<{
   title: string;
   description: string | null;
+  descriptionDoc: unknown;
   type: WorkItem['type'];
   parentId: string | null;
   statusId: string;

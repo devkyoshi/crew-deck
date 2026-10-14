@@ -24,7 +24,7 @@ export default function ItemPage({ params }: { params: Promise<{ ref: string }> 
         <ItemDetail
           itemRef={decodeURIComponent(ref)}
           variant="page"
-          onOpenItem={(key) => router.push(`/spaces/${space.key}/items/${key}`)}
+          onOpenItem={(key) => router.push(`/spaces/${key.split('-')[0]}/items/${key}`)}
         />
       </div>
     </div>

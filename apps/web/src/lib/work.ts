@@ -61,6 +61,8 @@ export interface WorkItem {
   parent: { id: string; key: string; title: string; type: ItemType } | null;
   title: string;
   description: string;
+  /** The description as rich text (ProseMirror JSON), or null when empty. */
+  descriptionDoc?: unknown;
   statusId: string;
   status: { id: string; name: string; category: StatusCategory; color: StatusColor };
   priority: Priority;

@@ -4,12 +4,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowRightLeft,
   Check,
   Copy,
+  CopyPlus,
   ExternalLink,
   Link2,
   Loader2,
   MoreHorizontal,
+  Paperclip,
   Plus,
   Trash2,
   X,
@@ -62,6 +65,18 @@ import {
   StatusSelect,
 } from './work-pickers';
 import { useVocabulary } from './use-vocabulary';
+import {
+  AttachmentsSection,
+  Conversation,
+  DescriptionEditor,
+  DuplicateDialog,
+  LinksSection,
+  TransferDialog,
+  WatchButton,
+  type AttachmentsHandle,
+  type ConversationHandle,
+  type LinksHandle,
+} from './item-depth';
 
 const dateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -160,8 +175,12 @@ export function ItemDetail({
   const update = useUpdateItem();
   const del = useDeleteItem();
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dialog, setDialog] = useState<'duplicate' | 'transfer' | null>(null);
+  const conversation = useRef<ConversationHandle>(null);
+  const links = useRef<LinksHandle>(null);
+  const attachments = useRef<AttachmentsHandle>(null);
+  const root = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<'link' | 'key' | null>(null);
 
   // Keep the drafts in step with the server whenever the item changes underneath us (not while typing).
@@ -171,11 +190,33 @@ export function ItemDetail({
     const active = document.activeElement;
     if (!(active instanceof HTMLTextAreaElement && active.closest('[data-item-detail]'))) {
       setTitle(item.title);
-      setDescription(item.description);
     }
   }, [serverVersion]);
 
-  const dirty = !!item && (title.trim() !== item.title || description.trim() !== item.description.trim());
+  // Panel shortcuts: M comment, A assignee, L labels (ignored while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      if (!root.current || (el && el !== document.body && !root.current.contains(el))) return;
+      const key = e.key.toLowerCase();
+      if (key === 'm') {
+        e.preventDefault();
+        conversation.current?.focusComment();
+      } else if (key === 'a' || key === 'l') {
+        const target = root.current.querySelector<HTMLElement>(key === 'a' ? '#f-assignee' : '#f-labels');
+        if (target && !target.hasAttribute('disabled')) {
+          e.preventDefault();
+          target.click();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const dirty = !!item && title.trim() !== item.title;
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -221,10 +262,10 @@ export function ItemDetail({
     }
     if (t !== item!.title) save({ title: t }, { title: t });
   }
-  function commitDescription() {
-    const d = description.trim();
-    if (d !== item!.description.trim()) save({ description: d || null }, { description: d });
-  }
+  const openKey = (key: string) => {
+    if (onOpenItem) onOpenItem(key);
+    else window.location.assign(`/spaces/${key.split('-')[0]}/items/${key}`);
+  };
   async function copy(what: 'link' | 'key') {
     try {
       await navigator.clipboard.writeText(
@@ -243,7 +284,7 @@ export function ItemDetail({
   const done = item.status.category === 'done';
 
   return (
-    <div data-item-detail className={cn('space-y-6', variant === 'panel' ? 'p-6' : 'py-2')}>
+    <div ref={root} data-item-detail className={cn('space-y-6', variant === 'panel' ? 'p-6' : 'py-2')}>
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
@@ -311,6 +352,7 @@ export function ItemDetail({
             )}
             {saveState === 'error' && 'Not saved'}
           </span>
+          <WatchButton itemId={item.id} />
           <Button variant="ghost" size="icon" className="size-8" onClick={() => copy('link')} aria-label="Copy link">
             {copied === 'link' ? <Check /> : <Link2 />}
           </Button>
@@ -324,7 +366,7 @@ export function ItemDetail({
               </Link>
             </Button>
           )}
-          {canDelete && (
+          {(canEdit || canDelete) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="size-8" aria-label="More actions">
@@ -332,10 +374,32 @@ export function ItemDetail({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuSeparator className="hidden" />
-                <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                  <Trash2 /> Delete
-                </DropdownMenuItem>
+                {canEdit && (
+                  <>
+                    <DropdownMenuItem onSelect={() => attachments.current?.pick()}>
+                      <Paperclip /> Attach files
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => links.current?.startAdding()}>
+                      <Link2 /> Link {vocab.noun}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setDialog('duplicate')}>
+                      <CopyPlus /> Duplicate
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canDelete && (
+                  <>
+                    {item.type !== 'subtask' && (
+                      <DropdownMenuItem onSelect={() => setDialog('transfer')}>
+                        <ArrowRightLeft /> Move to another space
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+                      <Trash2 /> Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -363,15 +427,11 @@ export function ItemDetail({
 
           <section aria-label="Description" className="space-y-2">
             <h2 className="text-sm font-semibold">Description</h2>
-            <AutoText
-              label="Description"
-              value={description}
-              onChange={setDescription}
-              onCommit={commitDescription}
-              readOnly={!canEdit}
-              maxLength={20000}
-              placeholder={canEdit ? 'Add a description…' : 'No description'}
-              className="min-h-24 text-sm leading-relaxed"
+            <DescriptionEditor
+              key={item.id}
+              item={item}
+              canEdit={canEdit}
+              onSave={(doc) => save({ descriptionDoc: doc })}
             />
           </section>
 
@@ -385,6 +445,10 @@ export function ItemDetail({
               todoStatusId={firstOf('todo')?.id}
             />
           )}
+
+          <LinksSection ref={links} item={item} onOpenItem={openKey} />
+          <AttachmentsSection ref={attachments} item={item} />
+          <Conversation ref={conversation} item={item} onOpenItem={openKey} />
         </div>
 
         {/* Fields column */}
@@ -527,6 +591,18 @@ export function ItemDetail({
         </aside>
       </div>
 
+      <DuplicateDialog
+        item={item}
+        open={dialog === 'duplicate'}
+        onOpenChange={(o) => setDialog(o ? 'duplicate' : null)}
+        onDone={openKey}
+      />
+      <TransferDialog
+        item={item}
+        open={dialog === 'transfer'}
+        onOpenChange={(o) => setDialog(o ? 'transfer' : null)}
+        onDone={openKey}
+      />
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>

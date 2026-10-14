@@ -31,6 +31,15 @@ const groups = (noun: string): { title: string; items: [string[], string][] }[] 
     ],
   },
   {
+    title: `In an open ${noun}`,
+    items: [
+      [['M'], 'Write a comment'],
+      [['A'], 'Change the assignee'],
+      [['L'], 'Change the labels'],
+      [['Ctrl', 'Enter'], 'Send the comment'],
+    ],
+  },
+  {
     title: 'Selecting',
     items: [
       [['Ctrl', 'click'], 'Select or unselect a card (Cmd on a Mac)'],
