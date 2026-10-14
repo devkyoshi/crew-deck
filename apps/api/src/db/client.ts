@@ -53,6 +53,10 @@ const TENANT = {
   crmActivities: 'crm_activities',
   crmNotes: 'crm_notes',
   crmRecordTags: 'crm_record_tags',
+  comments: 'comments',
+  workItemLinks: 'work_item_links',
+  watchers: 'watchers',
+  activityEvents: 'activity_events',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -99,6 +103,10 @@ export interface TenantDocs {
   crmActivities: T.CrmActivityDoc;
   crmNotes: T.CrmNoteDoc;
   crmRecordTags: T.CrmRecordTagDoc;
+  comments: T.CommentDoc;
+  workItemLinks: T.WorkItemLinkDoc;
+  watchers: T.WatcherDoc;
+  activityEvents: T.ActivityEventDoc;
 }
 
 export interface GlobalDocs {
@@ -113,7 +121,7 @@ export interface GlobalDocs {
 
 /** Collections whose `name` is unique case-insensitively: a lowercase copy is kept in `nameLower`. */
 /** Collections nobody may update or delete through a tenant scope (the old grants made them SELECT/INSERT only). */
-const APPEND_ONLY = new Set<string>(['auditLogs', 'workDayEdits']);
+const APPEND_ONLY = new Set<string>(['auditLogs', 'workDayEdits', 'activityEvents']);
 
 const LOWER_NAME = new Set<string>(['groups', 'sites', 'labels', 'crmCompanies', 'spaceStatuses', 'crmTags']);
 
@@ -282,6 +290,10 @@ const DEFAULTS: Record<string, () => Document> = {
   }),
   crmNotes: () => ({ mentions: [], createdAt: now(), updatedAt: now() }),
   crmRecordTags: () => ({}),
+  comments: () => ({ mentions: [], editedAt: null, deletedAt: null, createdAt: now() }),
+  workItemLinks: () => ({ createdAt: now() }),
+  watchers: () => ({ createdAt: now() }),
+  activityEvents: () => ({ field: null, oldValue: null, newValue: null, createdAt: now() }),
 };
 
 /** Collections with no `id` field (their identity is a composite of other fields). */
@@ -291,6 +303,7 @@ const NO_ID = new Set<string>([
   'tenantSettings',
   'spaceCounters',
   'crmRecordTags',
+  'watchers',
   'platformSettings',
   'plans',
 ]);
@@ -562,6 +575,10 @@ export class TenantDb {
   readonly crmActivities!: TenantRepos['crmActivities'];
   readonly crmNotes!: TenantRepos['crmNotes'];
   readonly crmRecordTags!: TenantRepos['crmRecordTags'];
+  readonly comments!: TenantRepos['comments'];
+  readonly workItemLinks!: TenantRepos['workItemLinks'];
+  readonly watchers!: TenantRepos['watchers'];
+  readonly activityEvents!: TenantRepos['activityEvents'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

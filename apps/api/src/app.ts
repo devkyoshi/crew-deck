@@ -31,6 +31,7 @@ import { workSettingsRoutes } from './routes/work-settings.js';
 import { statusRoutes } from './routes/statuses.js';
 import { boardRoutes } from './routes/board.js';
 import { workItemRoutes } from './routes/work-items.js';
+import { workDepthRoutes } from './routes/work-depth.js';
 import { workMoveRoutes } from './routes/work-move.js';
 import { labelRoutes } from './routes/labels.js';
 import type { EnqueueRebalance } from './work/jobs.js';
@@ -118,6 +119,7 @@ export function buildApp({
   app.register(boardRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workMoveRoutes, { prefix: '/api/v1', ...authDeps, enqueueRebalance });
+  app.register(workDepthRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });

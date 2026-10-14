@@ -153,3 +153,38 @@ describe('can(): CRM roles', () => {
     });
   }
 });
+
+describe('can(): work item depth (comments, links, watching, attachments)', () => {
+  const m = actor('member');
+  const as = (spaceRole: SpaceRole | null, extra: object = {}) => ({ spaceRole, spaceVisibility: 'private' as const, ...extra });
+
+  it('lets space members and admins comment, link, duplicate and attach; viewers only watch', () => {
+    for (const action of ['comment.create', 'item.link', 'item.duplicate', 'attachment.add'] as Action[]) {
+      expect(can(m, action, as('admin'))).toBe(true);
+      expect(can(m, action, as('member'))).toBe(true);
+      expect(can(m, action, as('viewer'))).toBe(false);
+      expect(can(actor('admin'), action, as(null))).toBe(true);
+    }
+    expect(can(m, 'item.watch', as('viewer'))).toBe(true);
+    expect(can(m, 'item.watch', as(null))).toBe(false);
+  });
+
+  it('lets people edit only their own comments, and space admins delete anyone’s', () => {
+    expect(can(m, 'comment.editOwn', as('member', { isAuthor: true }))).toBe(true);
+    expect(can(m, 'comment.editOwn', as('member', { isAuthor: false }))).toBe(false);
+    expect(can(m, 'comment.editOwn', as('admin', { isAuthor: false }))).toBe(false);
+    // A viewer who once commented (before losing the member role) cannot edit any more.
+    expect(can(m, 'comment.editOwn', as('viewer', { isAuthor: true }))).toBe(false);
+    expect(can(m, 'comment.deleteAny', as('admin'))).toBe(true);
+    expect(can(m, 'comment.deleteAny', as('member'))).toBe(false);
+  });
+
+  it('lets members remove their own attachments and transfer only what they reported', () => {
+    expect(can(m, 'attachment.delete', as('member', { isAuthor: true }))).toBe(true);
+    expect(can(m, 'attachment.delete', as('member', { isAuthor: false }))).toBe(false);
+    expect(can(m, 'attachment.delete', as('admin'))).toBe(true);
+    expect(can(m, 'item.transfer', as('member', { isReporter: true }))).toBe(true);
+    expect(can(m, 'item.transfer', as('member', { isReporter: false }))).toBe(false);
+    expect(can(m, 'item.transfer', as('viewer', { isReporter: true }))).toBe(false);
+  });
+});

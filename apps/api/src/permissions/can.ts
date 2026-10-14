@@ -22,6 +22,15 @@ export type Action =
   | 'item.create'
   | 'item.edit'
   | 'item.delete'
+  | 'item.link'
+  | 'item.watch'
+  | 'item.duplicate'
+  | 'item.transfer'
+  | 'comment.create'
+  | 'comment.editOwn'
+  | 'comment.deleteAny'
+  | 'attachment.add'
+  | 'attachment.delete'
   | 'status.manage'
   | 'board.manage'
   | 'label.create'
@@ -58,6 +67,8 @@ export interface Resource {
   isManager?: boolean;
   /** For item actions: the caller reported the item (members may delete only these). */
   isReporter?: boolean;
+  /** For comments and attachments: the caller wrote or uploaded it. */
+  isAuthor?: boolean;
 }
 
 const isAdminLike = (role: OrgRole) => role === 'owner' || role === 'admin';
@@ -112,6 +123,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
 
     // Work items (brief section 7). Viewing follows the space; editing needs member or better.
     case 'item.view':
+    case 'item.watch':
     case 'space.view':
       if (adminLike) return true;
       if (resource.spaceRole) return true;
@@ -125,11 +137,28 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
 
     case 'item.create':
     case 'item.edit':
+    case 'item.link':
+    case 'item.duplicate':
     case 'label.create':
+    case 'comment.create':
+    case 'attachment.add':
       return adminLike || spaceAdmin || resource.spaceRole === 'member';
 
-    // Members delete only what they reported; viewers never delete.
+    // People edit only their own comments, and only while they can still comment.
+    case 'comment.editOwn':
+      return (
+        resource.isAuthor === true && (adminLike || spaceAdmin || resource.spaceRole === 'member')
+      );
+    case 'comment.deleteAny':
+      return adminLike || spaceAdmin;
+    case 'attachment.delete':
+      return (
+        adminLike || spaceAdmin || (resource.spaceRole === 'member' && resource.isAuthor === true)
+      );
+
+    // Members delete (or move to another space) only what they reported; viewers never do.
     case 'item.delete':
+    case 'item.transfer':
       return (
         adminLike || spaceAdmin || (resource.spaceRole === 'member' && resource.isReporter === true)
       );

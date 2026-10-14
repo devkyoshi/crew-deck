@@ -10,9 +10,12 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { containsRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
+import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import { textToDoc } from '../work/doc.js';
+import { mentionsIn, sanitizeDoc } from '../work/rich-text.js';
 import {
   assertAssignable,
+  assertMentionable,
   assertWritable,
   ifMatch,
   listStatuses,
@@ -42,6 +45,8 @@ const createBody = z.object({
   type: z.enum(ITEM_TYPES),
   title: titleSchema,
   description: descriptionSchema.nullable().optional(),
+  /** Rich text from the editor; takes the place of `description`. */
+  descriptionDoc: z.unknown().optional(),
   parentId: z.string().uuid().nullable().optional(),
   statusId: z.string().uuid().optional(),
   priority: z.enum(PRIORITIES).default('medium'),
@@ -56,6 +61,7 @@ const patchBody = z
     type: z.enum(ITEM_TYPES),
     title: titleSchema,
     description: descriptionSchema.nullable(),
+    descriptionDoc: z.unknown(),
     parentId: z.string().uuid().nullable(),
     statusId: z.string().uuid(),
     priority: z.enum(PRIORITIES),
@@ -66,7 +72,8 @@ const patchBody = z
   })
   .partial()
   .strict()
-  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to update')
+  .refine((v) => v.description === undefined || v.descriptionDoc === undefined, 'Send description or descriptionDoc, not both');
 
 const listQuery = z.object({
   status: z.string().uuid().optional(),
@@ -215,6 +222,8 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         }
         const status = await statusIn(tx, space, statusId);
         if (b.assigneeId) await assertAssignable(tx, actor.orgId, space, b.assigneeId);
+        const rich = b.descriptionDoc !== undefined ? sanitizeDoc(b.descriptionDoc, 'descriptionDoc') : null;
+        if (rich) await assertMentionable(tx, space, rich.mentions, 'descriptionDoc');
 
         // The space lock serialises creates, moves and bulk changes, so ranks cannot collide.
         await lockSpace(tx, space.id);
@@ -227,7 +236,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           type: b.type,
           parentId: b.parentId ?? null,
           title: b.title,
-          description: textToDoc(b.description),
+          description: rich ? rich.doc : textToDoc(b.description),
           statusId,
           priority: b.priority,
           assigneeId: b.assigneeId ?? null,
@@ -240,6 +249,8 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           updatedAt: now,
         });
         if (b.labelIds?.length) await setItemLabels(tx, actor.orgId, space, created.id, b.labelIds);
+        await recordActivity(tx, { item: created, actorId: actor.userId, kind: 'created' });
+        await addWatchers(tx, created.id, [actor.userId, b.assigneeId, ...(rich?.mentions ?? [])]);
         return fresh(tx, actor, space, created.id);
       });
     },
@@ -307,12 +318,17 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           validateHierarchy(type, parent, kids.map((k) => k.type));
         }
         if (b.assigneeId) await assertAssignable(tx, actor.orgId, space, b.assigneeId);
+        const rich = b.descriptionDoc !== undefined ? sanitizeDoc(b.descriptionDoc, 'descriptionDoc') : null;
+        const before = mentionsIn(row.description);
+        const newMentions = (rich?.mentions ?? []).filter((m) => !before.includes(m));
+        await assertMentionable(tx, space, newMentions, 'descriptionDoc');
 
         await lockSpace(tx, space.id);
         const now = new Date();
         const set: Partial<WorkItemDoc> = { updatedAt: now };
         if (b.title !== undefined) set.title = b.title;
         if (b.description !== undefined) set.description = textToDoc(b.description);
+        if (rich) set.description = rich.doc;
         if (b.type !== undefined) set.type = b.type;
         if (b.parentId !== undefined) set.parentId = b.parentId;
         if (b.priority !== undefined) set.priority = b.priority;
@@ -330,7 +346,10 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         const updated = await tx.workItems.updateOne({ id: row.id, ...matchesVersion(expected) }, set);
         if (updated === 0) throw stale();
         if (b.labelIds !== undefined) await setItemLabels(tx, actor.orgId, space, row.id, b.labelIds);
-        return fresh(tx, actor, space, row.id);
+        const after = await fresh(tx, actor, space, row.id);
+        await recordChanges(tx, row, actor.userId, itemChanges(presentItem(row, space.key), after));
+        await addWatchers(tx, row.id, [b.assigneeId, ...newMentions]);
+        return after;
       });
     },
   );
@@ -359,6 +378,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         { id: { $in: ids }, deletedAt: null },
         { deletedAt: now, updatedAt: now },
       );
+      await recordActivity(tx, { item: row, actorId: actor.userId, kind: 'deleted' });
       return { deleted: ids.length, subtasks: children.length };
     });
   });

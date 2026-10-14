@@ -162,6 +162,7 @@ export function presentItem(row: ItemRow, spaceKey: string) {
         : null,
     title: row.title,
     description: docToText(row.description),
+    descriptionDoc: (row.description ?? null) as unknown,
     statusId: row.statusId,
     status: {
       id: row.statusId,
@@ -312,16 +313,31 @@ export function validateHierarchy(
 
 // ---- People ---------------------------------------------------------------------------------------------
 
+/** True when this person is an active member who can open the space. */
+export async function canOpenSpace(t: TenantDb, space: SpaceRow, userId: string) {
+  const m = await t.memberships.findOne({ userId, status: 'active' });
+  if (!m) return false;
+  if (space.visibility === 'open' || m.orgRole === 'owner' || m.orgRole === 'admin') return true;
+  return (await effectiveRole(t, userId, space.id)) !== null;
+}
+
 /** An assignee must be an active member who can actually open the space. */
 export async function assertAssignable(t: TenantDb, _orgId: string, space: SpaceRow, userId: string) {
-  const bad = () =>
-    new AppError(422, 'invalid_assignee', 'Choose someone who has access to this space', {
+  if (!(await canOpenSpace(t, space, userId))) {
+    throw new AppError(422, 'invalid_assignee', 'Choose someone who has access to this space', {
       assigneeId: 'Choose someone who has access to this space',
     });
-  const m = await t.memberships.findOne({ userId, status: 'active' });
-  if (!m) throw bad();
-  if (space.visibility === 'open' || m.orgRole === 'owner' || m.orgRole === 'admin') return;
-  if (!(await effectiveRole(t, userId, space.id))) throw bad();
+  }
+}
+
+/** Mentions may only name people who can open the space, so nobody hears about work they cannot see. */
+export async function assertMentionable(t: TenantDb, space: SpaceRow, ids: string[], field = 'body') {
+  for (const id of ids) {
+    if (!(await canOpenSpace(t, space, id))) {
+      const msg = 'You can only mention people who can open this space';
+      throw new AppError(422, 'invalid_mention', msg, { [field]: msg });
+    }
+  }
 }
 
 // ---- Statuses -------------------------------------------------------------------------------------------

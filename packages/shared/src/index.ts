@@ -20,6 +20,10 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export const ITEM_TYPES = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
+/** How two work items relate. Stored once, read from either end ("blocks" / "is blocked by"). */
+export const LINK_TYPES = ['blocks', 'relates_to', 'duplicates'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
 export const PRIORITIES = ['highest', 'high', 'medium', 'low', 'lowest'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 

@@ -445,3 +445,64 @@ export interface CrmRecordTagDoc {
   recordType: CrmRecordType;
   recordId: string;
 }
+
+// ---- Work item depth: comments, links, watchers, activity ----------------------------------------------
+
+export type ActivityKind =
+  | 'created'
+  | 'updated'
+  | 'moved'
+  | 'deleted'
+  | 'commented'
+  | 'comment_deleted'
+  | 'linked'
+  | 'unlinked'
+  | 'attachment_added'
+  | 'attachment_removed'
+  | 'transferred'
+  | 'duplicated';
+
+export interface CommentDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  itemId: string;
+  authorId: string;
+  /** Rich text (sanitised ProseMirror JSON); null once deleted. */
+  body: unknown;
+  mentions: string[];
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface WorkItemLinkDoc {
+  id: string;
+  orgId: string;
+  fromItemId: string;
+  toItemId: string;
+  linkType: 'blocks' | 'relates_to' | 'duplicates';
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface WatcherDoc {
+  orgId: string;
+  itemId: string;
+  userId: string;
+  createdAt: Date;
+}
+
+/** Append-only history of an item. Values are display snapshots. */
+export interface ActivityEventDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  itemId: string;
+  actorId: string;
+  kind: ActivityKind;
+  field: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  createdAt: Date;
+}

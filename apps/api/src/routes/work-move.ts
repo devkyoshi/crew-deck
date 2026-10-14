@@ -9,6 +9,7 @@ import { withTenantTx } from '../db/client.js';
 import type { WorkItemDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can } from '../permissions/can.js';
+import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import type { EnqueueRebalance } from '../work/jobs.js';
 import {
   assertAssignable,
@@ -178,6 +179,14 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         if (needsRebalance(rank)) rebalance = { spaceId: space.id, statusId: target.id };
 
         const [fresh] = await loadItemRows(tx, { id: row.id });
+        await recordChanges(
+          tx,
+          row,
+          actor.userId,
+          itemChanges(presentItem(row, space.key), presentItem(fresh!, space.key)),
+          { statusAsMove: true },
+        );
+        await addWatchers(tx, row.id, [b.assigneeId]);
         const wip = await tx.workItems.count({
           spaceId: space.id,
           statusId: target.id,
@@ -256,6 +265,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
       }
       const now = new Date();
       const idsOk = ok.map((x) => x.id);
+      const before = ok.length && b.action !== 'delete' ? await loadItemRows(tx, { id: { $in: idsOk } }) : [];
 
       if (ok.length) {
         if (b.action === 'move') {
@@ -305,6 +315,27 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
             { id: { $in: [...idsOk, ...subtaskRows.map((x) => x.id)] }, deletedAt: null },
             { deletedAt: now, updatedAt: now },
           );
+        }
+      }
+      // History: one event per changed field per item (or one deletion each).
+      if (b.action === 'delete') {
+        await recordActivity(
+          tx,
+          ok.map((item) => ({ item, actorId: actor.userId, kind: 'deleted' as const })),
+        );
+      } else if (before.length) {
+        const after = new Map((await loadItemRows(tx, { id: { $in: idsOk } })).map((x) => [x.id, x]));
+        for (const row of before) {
+          const now2 = after.get(row.id);
+          if (!now2) continue;
+          await recordChanges(
+            tx,
+            row,
+            actor.userId,
+            itemChanges(presentItem(row, space.key), presentItem(now2, space.key)),
+            { statusAsMove: true },
+          );
+          if (b.action === 'assign') await addWatchers(tx, row.id, [b.assigneeId]);
         }
       }
       return { updated: ok.length, failed };

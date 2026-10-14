@@ -157,6 +157,23 @@ const INDEXES: Record<string, Ix[]> = {
     ['pk', { tagId: 1, recordType: 1, recordId: 1 }, U],
     ['record', { recordType: 1, recordId: 1 }],
   ],
+  comments: [
+    ['id', { id: 1 }, U],
+    ['item', { itemId: 1, createdAt: 1, id: 1 }],
+  ],
+  work_item_links: [
+    ['id', { id: 1 }, U],
+    ['triple', { fromItemId: 1, toItemId: 1, linkType: 1 }, U],
+    ['to', { toItemId: 1 }],
+  ],
+  watchers: [
+    ['pk', { itemId: 1, userId: 1 }, U],
+    ['user', { orgId: 1, userId: 1 }],
+  ],
+  activity_events: [
+    ['id', { id: 1 }, U],
+    ['item', { itemId: 1, createdAt: -1, id: -1 }],
+  ],
 };
 
 export async function ensureIndexes(handle: MongoDb) {
