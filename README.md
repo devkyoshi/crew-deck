@@ -4,11 +4,12 @@ A multi-tenant company workspace platform in the spirit of Jira and Slack. Compa
 workspace with members, groups and spaces, per-space access control, invitations, and a full audit
 trail. It is built to be used internally first and sold to other companies later.
 
-**Built so far (Phases 0 to 7 of the build brief in [docs/BRIEF.md](docs/BRIEF.md)):**
+**Built so far (Phases 0 to 8 of the build brief in [docs/BRIEF.md](docs/BRIEF.md)):**
 tenant isolation, sign-in (Google or password), members and invitations, groups, spaces with
 open and private visibility, space roles, access requests, audit log, daily check-in/out with a team
-status board, accessibility and hardening.
-**Not built yet:** CRM (Phase 8), tenant onboarding and the platform admin console (Phase 9),
+status board, a CRM (leads, contacts, companies, deals board, activities, CSV import and export),
+accessibility and hardening.
+**Not built yet:** tenant onboarding and the platform admin console (Phase 9),
 work items, boards and chat (later modules).
 
 ## Quick start

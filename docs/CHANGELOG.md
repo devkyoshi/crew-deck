@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-14 - Phase 8: CRM
+
+- Migration 0008: memberships.crm_role, CRM tables (tags, companies, contacts, leads, pipelines, stages, deals, activities, notes, record tags), all with RLS and composite tenant foreign keys; `crm` added to the workspace modules.
+- API: CRUD with search, filters and paging for companies, contacts, leads and deals; lead conversion (one transaction, no double conversion); deal move with fractional ordering and won/lost handling; deals board with per-currency totals; pipelines and stages (add, edit, reorder, delete with in-use checks); activities (complete, overdue) and notes with validated mentions; tags; dashboard; CSV import (dry run, row errors, all-or-nothing, 5,000 rows) and spreadsheet-safe CSV export; CRM module switch and per-member CRM role; audit entries for every change.
+- Web: CRM sidebar group; dashboard; leads, contacts and companies lists and record pages with activity and notes; deals board (drag and drop, keyboard, card menu, quick add) and table; lead conversion dialog; import wizard; Administration > CRM (module switch, pipeline editor); CRM access on member profiles.
+- Demo workspace now includes tags, companies, contacts, leads, a pipeline with deals in every stage, activities (two overdue) and notes.
+- Tests: 37 CRM API tests (roles, tenant isolation including search and linking, conversion rollback, move rules, import validation, CSV safety, dashboard figures, database-level foreign keys) and `can()` rows; six browser flows (capture, convert, move, log activity, import, keyboard drag, roles, module switch, pipeline editing); CRM pages added to the accessibility scans and the error-free walk-through.
+
 ## 2026-10-13 - Phase 7: Daily check-in and check-out
 
 - Migration 0007: tenant_settings, sites, holidays, work_days, work_day_edits (append-only), memberships.reports_to, workspace-listing function for the job.

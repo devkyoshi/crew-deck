@@ -24,6 +24,7 @@ export interface AuthUser {
   timezone: string;
   status: 'invited' | 'active' | 'deactivated';
   orgRole: OrgRole;
+  crmRole: 'none' | 'viewer' | 'member' | 'admin';
 }
 
 export const emailDomain = (email: string) => email.split('@')[1]?.toLowerCase() ?? '';
@@ -80,6 +81,7 @@ export async function loadAuthUser(
           AuthUser['status']
         >`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`,
         orgRole: memberships.orgRole,
+        crmRole: memberships.crmRole,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.orgId, orgId)))

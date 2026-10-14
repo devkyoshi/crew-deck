@@ -25,6 +25,7 @@ const columns = {
   jobTitle: users.jobTitle,
   timezone: users.timezone,
   orgRole: memberships.orgRole,
+  crmRole: memberships.crmRole,
   status: effectiveStatus,
   lastLoginAt: users.lastLoginAt,
   joinedAt: memberships.createdAt,
@@ -57,6 +58,7 @@ const patchBody = z
   .object({
     orgRole: orgRoleSchema,
     reportsTo: z.string().uuid().nullable(),
+    crmRole: z.enum(['none', 'viewer', 'member', 'admin']),
     name: z.string().trim().min(1).max(100),
     jobTitle: z.string().trim().max(100).nullable(),
     timezone: timezoneSchema,
@@ -168,7 +170,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam, body: patchBody } },
     async (req) => {
       const actor = actorOf(req);
-      const { orgRole, reportsTo, ...profile } = req.body;
+      const { orgRole, reportsTo, crmRole, ...profile } = req.body;
       const isSelf = req.params.id === actor.userId;
 
       return withTenant(deps.db, actor.orgId, async (tx) => {
@@ -195,6 +197,26 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
             targetId: target.id,
             before: { orgRole: target.orgRole },
             after: { orgRole },
+          });
+        }
+
+        if (crmRole !== undefined && crmRole !== target.crmRole) {
+          // CRM access is granted by admins; owners and admins always have full CRM access regardless.
+          if (!can(actor, 'member.editProfile')) throw forbidden();
+          await tx
+            .update(memberships)
+            .set({ crmRole })
+            .where(
+              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
+            );
+          await writeAudit(tx, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'member.crm_role_changed',
+            targetType: 'member',
+            targetId: target.id,
+            before: { crmRole: target.crmRole },
+            after: { crmRole },
           });
         }
 

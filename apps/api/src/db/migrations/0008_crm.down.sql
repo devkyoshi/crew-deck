@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS crm_record_tags;
+DROP TABLE IF EXISTS crm_notes;
+DROP TABLE IF EXISTS crm_activities;
+DROP TABLE IF EXISTS crm_deals;
+DROP TABLE IF EXISTS crm_stages;
+DROP TABLE IF EXISTS crm_pipelines;
+DROP TABLE IF EXISTS crm_leads;
+DROP TABLE IF EXISTS crm_contacts;
+DROP TABLE IF EXISTS crm_companies;
+DROP TABLE IF EXISTS crm_tags;
+ALTER TABLE tenant_settings ALTER COLUMN enabled_modules SET DEFAULT '{members,spaces,checkin}';
+UPDATE tenant_settings SET enabled_modules = array_remove(enabled_modules, 'crm');
+ALTER TABLE memberships DROP COLUMN IF EXISTS crm_role;

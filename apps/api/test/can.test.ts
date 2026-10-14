@@ -131,3 +131,25 @@ describe('can(): work days', () => {
     }
   });
 });
+
+describe('can(): CRM roles', () => {
+  type Crm = 'none' | 'viewer' | 'member' | 'admin' | undefined;
+  const crm = (orgRole: OrgRole, crmRole: Crm) => ({ userId: 'u1', orgId: 'o1', orgRole, crmRole });
+  // Columns: view, edit, admin.
+  const TABLE: [OrgRole, Crm, boolean, boolean, boolean][] = [
+    ['member', 'none', false, false, false],
+    ['member', 'viewer', true, false, false],
+    ['member', 'member', true, true, false],
+    ['member', 'admin', true, true, true],
+    ['member', undefined, false, false, false],
+    ['admin', 'none', true, true, true],
+    ['owner', 'none', true, true, true],
+  ];
+  for (const [org, role, view, edit, admin] of TABLE) {
+    it(`org ${org} with CRM role ${role}: view=${view} edit=${edit} admin=${admin}`, () => {
+      expect(can(crm(org, role), 'crm.view')).toBe(view);
+      expect(can(crm(org, role), 'crm.edit')).toBe(edit);
+      expect(can(crm(org, role), 'crm.admin')).toBe(admin);
+    });
+  }
+});

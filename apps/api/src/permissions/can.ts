@@ -22,12 +22,19 @@ export type Action =
   | 'attendance.viewAll'
   | 'attendance.export'
   | 'workday.editOthers'
-  | 'workday.viewTimes';
+  | 'workday.viewTimes'
+  | 'crm.view'
+  | 'crm.edit'
+  | 'crm.admin';
+
+export type CrmRole = 'none' | 'viewer' | 'member' | 'admin';
 
 export interface Actor {
   userId: string;
   orgId: string;
   orgRole: OrgRole;
+  /** The member's CRM role. Owners and admins act as CRM admins regardless of it. */
+  crmRole?: CrmRole;
 }
 
 export interface Resource {
@@ -70,6 +77,14 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'workday.editOthers':
     case 'workday.viewTimes':
       return adminLike || resource.isSelf === true || resource.isManager === true;
+
+    // CRM: viewers read, members create and edit, CRM admins configure, import and delete.
+    case 'crm.view':
+      return adminLike || (actor.crmRole !== undefined && actor.crmRole !== 'none');
+    case 'crm.edit':
+      return adminLike || actor.crmRole === 'member' || actor.crmRole === 'admin';
+    case 'crm.admin':
+      return adminLike || actor.crmRole === 'admin';
 
     case 'member.changeRole':
       if (!adminLike) return false;

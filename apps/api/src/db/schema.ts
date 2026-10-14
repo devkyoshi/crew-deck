@@ -52,6 +52,9 @@ export const memberships = pgTable(
       .default('active'),
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
     reportsTo: uuid('reports_to'),
+    crmRole: text('crm_role', { enum: ['none', 'viewer', 'member', 'admin'] })
+      .notNull()
+      .default('member'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique().on(t.orgId, t.userId)],
@@ -245,3 +248,5 @@ export const workDayEdits = pgTable('work_day_edits', {
   reason: text('reason').notNull(),
   editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export * from './schema-crm.js';

@@ -1,5 +1,11 @@
 import {
+  Building2,
   CalendarCheck,
+  CalendarClock,
+  Contact,
+  Handshake,
+  LayoutDashboard,
+  UserPlus,
   ClipboardList,
   FileClock,
   Inbox,
@@ -23,6 +29,8 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Hidden when check-in is switched off for the workspace. */
   needsCheckin?: boolean;
+  /** Hidden when the CRM is off or the person has no CRM access. */
+  needsCrm?: boolean;
 }
 
 export interface NavGroup {
@@ -60,6 +68,18 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'crm',
+    label: 'CRM',
+    items: [
+      { title: 'Dashboard', href: '/crm', icon: LayoutDashboard, needsCrm: true },
+      { title: 'Leads', href: '/crm/leads', icon: UserPlus, needsCrm: true },
+      { title: 'Contacts', href: '/crm/contacts', icon: Contact, needsCrm: true },
+      { title: 'Companies', href: '/crm/companies', icon: Building2, needsCrm: true },
+      { title: 'Deals', href: '/crm/deals', icon: Handshake, needsCrm: true },
+      { title: 'Activities', href: '/crm/activities', icon: CalendarClock, needsCrm: true },
+    ],
+  },
+  {
     id: 'admin',
     label: 'Administration',
     adminOnly: true,
@@ -67,6 +87,7 @@ export const NAV: NavGroup[] = [
       { title: 'Members', href: '/admin/members', icon: Users },
       { title: 'Groups', href: '/admin/groups', icon: UsersRound },
       { title: 'Spaces', href: '/admin/spaces', icon: FolderKanban },
+      { title: 'CRM', href: '/admin/crm', icon: Handshake },
       { title: 'Audit log', href: '/admin/audit', icon: FileClock },
       { title: 'Settings', href: '/admin/settings', icon: Settings },
     ],
@@ -79,12 +100,15 @@ export function findNavItem(pathname: string) {
   return ALL_ITEMS.find((i) => i.href === pathname);
 }
 
-export function visibleGroups(isAdmin: boolean, checkinEnabled = true) {
+export function visibleGroups(isAdmin: boolean, checkinEnabled = true, crmVisible = true) {
   return NAV.filter((g) => !g.adminOnly || isAdmin)
     .map((g) => ({
       ...g,
       items: g.items.filter(
-        (i) => (!i.adminOnly || isAdmin) && (!i.needsCheckin || checkinEnabled),
+        (i) =>
+          (!i.adminOnly || isAdmin) &&
+          (!i.needsCheckin || checkinEnabled) &&
+          (!i.needsCrm || crmVisible),
       ),
     }))
     .filter((g) => g.items.length > 0);

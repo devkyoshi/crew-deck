@@ -12,6 +12,7 @@ export type WorkSettings = {
   autoCloseTime: string;
   requireNote: boolean;
   checkinEnabled: boolean;
+  crmEnabled: boolean;
 };
 
 export const DEFAULT_SETTINGS: WorkSettings = {
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS: WorkSettings = {
   autoCloseTime: '20:00',
   requireNote: false,
   checkinEnabled: true,
+  crmEnabled: true,
 };
 
 /** Postgres returns time columns as HH:MM:SS; the API speaks HH:MM. */
@@ -39,6 +41,7 @@ export async function loadSettings(tx: Tx, orgId: string): Promise<WorkSettings>
     autoCloseTime: hhmm(row.autoCloseTime),
     requireNote: row.requireNote,
     checkinEnabled: row.enabledModules.includes('checkin'),
+    crmEnabled: row.enabledModules.includes('crm'),
   };
 }
 

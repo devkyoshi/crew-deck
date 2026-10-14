@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useIsAdmin, useMe } from './me-context';
 import { useToday } from '@/components/checkin/use-today';
+import { useCrmAccess } from '@/lib/crm';
 import { visibleGroups } from './nav';
 import { SpacesNav } from './spaces-nav';
 
@@ -130,7 +131,9 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
               <SidebarMenu>
                 {group.items.map((item) => {
                   const active =
-                    item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                    item.href === '/' || item.href === '/crm'
+                      ? pathname === item.href
+                      : pathname.startsWith(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -159,13 +162,14 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
 export function AppSidebar() {
   const isAdmin = useIsAdmin();
   const checkinOn = useToday().data?.enabled !== false;
+  const crmVisible = useCrmAccess().data?.canView === true;
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <TenantSwitcher />
       </SidebarHeader>
       <SidebarContent>
-        {visibleGroups(isAdmin, checkinOn).map((g) => (
+        {visibleGroups(isAdmin, checkinOn, crmVisible).map((g) => (
           <NavGroupSection key={g.id} group={g} />
         ))}
       </SidebarContent>

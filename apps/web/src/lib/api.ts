@@ -64,6 +64,7 @@ export type MemberStatus = 'active' | 'invited' | 'deactivated';
 export interface Member {
   reportsTo?: string | null;
   reportsToName?: string | null;
+  crmRole?: 'none' | 'viewer' | 'member' | 'admin';
   id: string;
   email: string;
   name: string | null;

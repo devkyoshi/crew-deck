@@ -69,6 +69,15 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update the manager'),
   });
+  const setCrmRole = useMutation({
+    mutationFn: (crmRole: string) => api(`/members/${id}`, { method: 'PATCH', body: { crmRole } }),
+    onSuccess: () => {
+      toast.success('CRM access updated');
+      qc.invalidateQueries({ queryKey: ['member'] });
+      qc.invalidateQueries({ queryKey: ['members'] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update CRM access'),
+  });
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
@@ -243,6 +252,35 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
                     else if (m.reportsTo && next.length === 0) setManager.mutate(null);
                   }}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>CRM access</CardTitle>
+                <CardDescription>
+                  Viewers can read, members can create and edit, admins can also delete, import and
+                  export. Workspace owners and admins always have full CRM access.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={m.crmRole ?? 'member'}
+                  onValueChange={(v) => setCrmRole.mutate(v)}
+                  disabled={setCrmRole.isPending}
+                >
+                  <SelectTrigger className="w-56" aria-label="CRM role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No access</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">CRM admin</SelectItem>
+                  </SelectContent>
+                </Select>
               </CardContent>
             </Card>
           )}

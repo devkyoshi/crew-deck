@@ -27,6 +27,9 @@ function watch(page: Page) {
 const settle = async (page: Page) => {
   await expect(page.locator('#main')).toBeVisible();
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.locator('[role="status"][aria-label^="Loading"]')).toHaveCount(0, {
+    timeout: 10_000,
+  });
 };
 
 test('an admin walks through the whole product without a single error', async ({ page }) => {
@@ -61,8 +64,15 @@ test('an admin walks through the whole product without a single error', async ({
     '/admin/groups',
     '/admin/spaces',
     '/admin/audit',
+    '/admin/crm',
+    '/crm',
+    '/crm/leads',
+    '/crm/contacts',
+    '/crm/companies',
+    '/crm/deals',
+    '/crm/activities',
     '/spaces/new',
-    '/admin/settings', // a placeholder for a later phase
+    '/admin/settings',
   ]) {
     await page.goto(path);
     await settle(page);

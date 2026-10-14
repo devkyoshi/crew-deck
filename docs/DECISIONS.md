@@ -133,6 +133,26 @@ A repeatable job ticks every minute. The tick belongs to no tenant, so it only l
 
 Cells starting with = + - @ tab or CR are prefixed with an apostrophe so a note like `=HYPERLINK(...)` cannot run as a formula. The file carries a UTF-8 byte-order mark so Excel reads it correctly.
 
+## ADR-032: CRM scope and roles
+
+Decided with the owner: a focused sales CRM, not a marketing suite. Leads, contacts, companies, deals in configurable pipelines, activities (call, meeting, email, task), notes with mentions, tags, CSV import and export, and a dashboard. It is a module a workspace can switch off (`tenant_settings.enabled_modules` contains `crm`); when off, every CRM endpoint answers 404 `module_disabled` and the UI hides it. CRM access is its own role per member (`memberships.crm_role`: none, viewer, member, admin; new members default to member). Viewers read, members create and edit, CRM admins also delete, import, export and configure pipelines. Workspace owners and admins always act as CRM admins. Everything goes through `can()` (`crm.view`, `crm.edit`, `crm.admin`).
+
+## ADR-033: Lead conversion is one transaction
+
+Converting a lead can create a company, a contact and a deal, or link an existing company. It runs in one tenant transaction, so a failure part-way (for example a company name clash) leaves nothing behind. The lead keeps links to what it became and cannot be converted twice (409). Records are soft-deleted so history and links never dangle; a company with open deals cannot be deleted.
+
+## ADR-034: Deals on a board with fractional positions
+
+Deals have a stage and a floating point `position`. Dropping a card between two others gives it the midpoint, so one move writes one row. Moving into a won or lost stage sets the status and close time; moving back out reopens it. Money is `numeric(14,2)` with a currency per deal and is never added across currencies: column and dashboard totals are shown per currency. Cross-tenant links are impossible at the database level through composite foreign keys (`(x_id, org_id)`).
+
+## ADR-035: Imports are all-or-nothing with a dry run
+
+A CSV import maps columns to fields, is checked first (dry run), and is rejected as a whole if any row is invalid, with row numbers and reasons, so people never end up with a half-imported file. Up to 5,000 rows per file. Exports are spreadsheet-safe like ADR-031. Import and export are CRM-admin actions and are audited.
+
+## ADR-036: Accessible drag and drop
+
+The board uses dnd-kit with a dedicated drag handle button (so cards do not nest interactive elements), the keyboard sensor, and screen reader announcements that name the card and the stage. Every card also has a menu with "Move to stage", which works for anyone who prefers not to drag. Moves are optimistic and roll back with a message if the server refuses.
+
 ## Open (not blocking)
 
-Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, CRM scope, check-in policy, hosting target.
+Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, check-in policy, hosting target.

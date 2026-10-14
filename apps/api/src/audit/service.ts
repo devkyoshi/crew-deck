@@ -12,6 +12,12 @@ export const AUDIT_TARGET_TYPES = [
   'settings',
   'site',
   'holiday',
+  'crm_company',
+  'crm_contact',
+  'crm_lead',
+  'crm_deal',
+  'crm_pipeline',
+  'crm_import',
 ] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 

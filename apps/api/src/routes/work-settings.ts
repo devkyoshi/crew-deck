@@ -61,7 +61,13 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
       const b = req.body;
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const before = await loadSettings(tx, actor.orgId);
-        const modules = ['members', 'spaces', ...(b.checkinEnabled ? ['checkin'] : [])];
+        // Keep the other modules as they are; this form only controls check-in.
+        const modules = [
+          'members',
+          'spaces',
+          ...(b.checkinEnabled ? ['checkin'] : []),
+          ...(before.crmEnabled ? ['crm'] : []),
+        ];
         const values = {
           timezone: b.timezone,
           workDays: b.workDays,

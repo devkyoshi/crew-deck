@@ -2,7 +2,18 @@ import { fileURLToPath } from 'node:url';
 import { and, eq, inArray } from 'drizzle-orm';
 import { hashPassword } from '../auth/password.js';
 import { createDb } from './client.js';
+import { DEFAULT_STAGES } from '../crm/helpers.js';
 import {
+  crmActivities,
+  crmCompanies,
+  crmContacts,
+  crmDeals,
+  crmLeads,
+  crmNotes,
+  crmPipelines,
+  crmRecordTags,
+  crmStages,
+  crmTags,
   holidays,
   sites,
   tenantSettings,
@@ -432,6 +443,231 @@ export async function seedDemo(adminUrl: string) {
       await db.insert(workDays).values(rows).onConflictDoNothing();
     }
     // Two weeks of history for a few people (weekdays only).
+    const orgId = org.id;
+    async function seedCrm() {
+      const have = await db
+        .select({ id: crmCompanies.id })
+        .from(crmCompanies)
+        .where(eq(crmCompanies.orgId, orgId))
+        .limit(1);
+      if (have.length) return;
+      const o = userId('owner');
+      const p = userId('priya');
+      const [tagVip, tagPartner, tagEu] = await db
+        .insert(crmTags)
+        .values([
+          { orgId: orgId, name: 'VIP', color: 'pink' },
+          { orgId: orgId, name: 'Partner', color: 'violet' },
+          { orgId: orgId, name: 'EU', color: 'blue' },
+        ])
+        .returning();
+      const companies = await db
+        .insert(crmCompanies)
+        .values(
+          [
+            ['Northwind Traders', 'northwind.example', 'Retail', '201-500'],
+            ['Globex Logistics', 'globexlogistics.example', 'Logistics', '51-200'],
+            ['Initech Software', 'initech.example', 'Software', '11-50'],
+            ['Umbrella Health', 'umbrellahealth.example', 'Healthcare', '501-1000'],
+            ['Stark Robotics', 'starkrobotics.example', 'Manufacturing', '51-200'],
+            ['Wayne Foods', 'waynefoods.example', 'Food and beverage', '201-500'],
+          ].map(([name, website, industry, size], i) => ({
+            orgId: orgId,
+            name: name!,
+            website,
+            industry,
+            size,
+            ownerId: i % 2 ? p : o,
+            createdBy: o,
+          })),
+        )
+        .returning();
+      const co = (n: number) => companies[n]!.id;
+      const contacts = await db
+        .insert(crmContacts)
+        .values(
+          (
+            [
+              ['Alice Bennett', 'alice@northwind.example', 'Head of Procurement', 0],
+              ['Marcus Chen', 'marcus@northwind.example', 'IT Director', 0],
+              ['Sofia Alvarez', 'sofia@globexlogistics.example', 'COO', 1],
+              ['Tom Brandt', 'tom@initech.example', 'CTO', 2],
+              ['Nadia Karim', 'nadia@umbrellahealth.example', 'Operations Lead', 3],
+              ['Leo Fischer', 'leo@starkrobotics.example', 'VP Engineering', 4],
+              ['Maya Patel', 'maya@waynefoods.example', 'Buyer', 5],
+            ] as const
+          ).map(([name, email, jobTitle, c]) => ({
+            orgId: orgId,
+            name,
+            email,
+            jobTitle,
+            companyId: co(c),
+            ownerId: o,
+            createdBy: o,
+          })),
+        )
+        .returning();
+      await db.insert(crmRecordTags).values([
+        { orgId: orgId, tagId: tagVip!.id, recordType: 'company', recordId: co(0) },
+        { orgId: orgId, tagId: tagPartner!.id, recordType: 'company', recordId: co(2) },
+        { orgId: orgId, tagId: tagEu!.id, recordType: 'company', recordId: co(1) },
+        { orgId: orgId, tagId: tagVip!.id, recordType: 'contact', recordId: contacts[0]!.id },
+      ]);
+      await db.insert(crmLeads).values(
+        (
+          [
+            ['Rina Okada', 'rina@kestrel.example', 'Kestrel Air', 'Website', 'new'],
+            ['Jonas Weber', 'jonas@brightwave.example', 'Brightwave', 'Referral', 'contacted'],
+            ['Aisha Bello', 'aisha@lagoon.example', 'Lagoon Pay', 'Event', 'qualified'],
+            ['Paolo Neri', 'paolo@verona.example', 'Verona Studio', 'Website', 'new'],
+            ['Hana Kim', 'hana@moonrise.example', 'Moonrise Labs', 'Outbound', 'unqualified'],
+            [
+              'Victor Hale',
+              'victor@ironclad.example',
+              'Ironclad Security',
+              'Referral',
+              'contacted',
+            ],
+          ] as const
+        ).map(([name, email, companyName, source, status]) => ({
+          orgId: orgId,
+          name,
+          email,
+          companyName,
+          source,
+          status,
+          ownerId: o,
+          createdBy: o,
+        })),
+      );
+      const [pipeline] = await db
+        .insert(crmPipelines)
+        .values({ orgId: orgId, name: 'Sales pipeline', isDefault: true })
+        .returning();
+      const stages = (
+        await db
+          .insert(crmStages)
+          .values(
+            DEFAULT_STAGES.map((s, i) => ({
+              ...s,
+              orgId: orgId,
+              pipelineId: pipeline!.id,
+              position: i + 1,
+            })),
+          )
+          .returning()
+      ).sort((a, b) => a.position - b.position);
+      const deals = await db
+        .insert(crmDeals)
+        .values(
+          (
+            [
+              ['Northwind renewal', 0, 0, 48000, 'USD', 14, 0],
+              ['Globex fleet tracking', 1, 1, 22000, 'EUR', 30, 1],
+              ['Initech platform migration', 2, 2, 75000, 'USD', 45, 2],
+              ['Umbrella clinic rollout', 3, 3, 120000, 'USD', 21, 3],
+              ['Stark pilot programme', 4, 1, 15000, 'USD', 10, 4],
+              ['Wayne Foods supply portal', 5, 0, 9500, 'GBP', 60, 5],
+              ['Northwind add-on seats', 0, 4, 12000, 'USD', -5, 0],
+              ['Globex expansion', 1, 5, 30000, 'EUR', -20, 1],
+            ] as const
+          ).map(([title, c, s, value, currency, close, k], i) => {
+            const stage = stages[s]!;
+            const closed = stage.isWon || stage.isLost;
+            return {
+              orgId: orgId,
+              pipelineId: pipeline!.id,
+              stageId: stage.id,
+              companyId: co(c),
+              contactId: contacts[k]!.id,
+              title,
+              value: String(value),
+              currency,
+              expectedClose: inDays(close),
+              status: stage.isWon
+                ? ('won' as const)
+                : stage.isLost
+                  ? ('lost' as const)
+                  : ('open' as const),
+              closedAt: closed ? new Date(Date.now() - 3 * 86_400_000) : null,
+              position: (i + 1) * 1000,
+              ownerId: i % 3 === 0 ? p : o,
+              createdBy: o,
+            };
+          }),
+        )
+        .returning();
+      const hours = (h: number) => new Date(Date.now() + h * 3_600_000);
+      await db.insert(crmActivities).values([
+        {
+          orgId: orgId,
+          type: 'call',
+          subject: 'Intro call with Alice',
+          dueAt: hours(-30),
+          assigneeId: o,
+          linkedType: 'contact',
+          linkedId: contacts[0]!.id,
+          createdBy: o,
+        },
+        {
+          orgId: orgId,
+          type: 'task',
+          subject: 'Send revised proposal',
+          dueAt: hours(-4),
+          assigneeId: o,
+          linkedType: 'deal',
+          linkedId: deals[2]!.id,
+          createdBy: o,
+        },
+        {
+          orgId: orgId,
+          type: 'meeting',
+          subject: 'Clinic rollout kickoff',
+          dueAt: hours(26),
+          assigneeId: o,
+          linkedType: 'deal',
+          linkedId: deals[3]!.id,
+          createdBy: o,
+        },
+        {
+          orgId: orgId,
+          type: 'email',
+          subject: 'Follow up on pricing',
+          dueAt: hours(50),
+          assigneeId: p,
+          linkedType: 'company',
+          linkedId: co(1),
+          createdBy: o,
+        },
+        {
+          orgId: orgId,
+          type: 'task',
+          subject: 'Prepare QBR deck',
+          dueAt: hours(-72),
+          completedAt: hours(-60),
+          assigneeId: o,
+          createdBy: o,
+        },
+      ]);
+      await db.insert(crmNotes).values([
+        {
+          orgId: orgId,
+          body: 'Alice prefers email over calls. Budget is approved for this quarter.',
+          authorId: o,
+          linkedType: 'contact',
+          linkedId: contacts[0]!.id,
+        },
+        {
+          orgId: orgId,
+          body: 'Waiting on legal review of the master agreement.',
+          authorId: p,
+          linkedType: 'deal',
+          linkedId: deals[3]!.id,
+          mentions: [o],
+        },
+      ]);
+    }
+
     const people: [string, 'onsite' | 'remote'][] = [
       ['priya', 'onsite'],
       ['ben', 'remote'],
@@ -461,6 +697,7 @@ export async function seedDemo(adminUrl: string) {
       }));
       await db.insert(workDays).values(rows).onConflictDoNothing();
     }
+    await seedCrm();
     console.log('seeded demo workspace (acme)');
   } finally {
     await close();

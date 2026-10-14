@@ -41,6 +41,13 @@ const ADMIN_PAGES = [
   '/admin/groups',
   '/admin/spaces',
   '/admin/audit',
+  '/admin/crm',
+  '/crm',
+  '/crm/leads',
+  '/crm/contacts',
+  '/crm/companies',
+  '/crm/deals',
+  '/crm/activities',
 ];
 
 test.describe('accessibility: signed-out screens', () => {
@@ -80,6 +87,9 @@ test.describe('accessibility: signed-in screens', () => {
         // Let skeletons resolve so we scan real content.
         await page.waitForLoadState('networkidle').catch(() => undefined);
         await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 10_000 });
+        await expect(page.locator('[role="status"][aria-label^="Loading"]')).toHaveCount(0, {
+          timeout: 10_000,
+        });
         await scan(page, `${path} (${theme})`);
       }
     });

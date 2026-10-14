@@ -22,6 +22,10 @@ import { groupRoutes } from './routes/groups.js';
 import { accessRequestRoutes } from './routes/access-requests.js';
 import { spaceMemberRoutes } from './routes/space-members.js';
 import { checkinRoutes } from './routes/checkin.js';
+import { crmRecordRoutes } from './routes/crm-records.js';
+import { crmDealRoutes } from './routes/crm-deals.js';
+import { crmActivityRoutes } from './routes/crm-activity.js';
+import { crmIoRoutes } from './routes/crm-io.js';
 import { spaceRoutes } from './routes/spaces.js';
 import { workSettingsRoutes } from './routes/work-settings.js';
 import { memberRoutes } from './routes/members.js';
@@ -91,6 +95,10 @@ export function buildApp({ db, redis, config, google, enqueueInviteEmail }: AppD
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(checkinRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(crmRecordRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(crmDealRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(crmActivityRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(crmIoRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(auditRoutes, { prefix: '/api/v1', ...authDeps });
 
   return app;
