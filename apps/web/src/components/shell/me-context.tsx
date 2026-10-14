@@ -15,6 +15,11 @@ export function useMe() {
   return me;
 }
 
+/** The signed-in person, or null outside the signed-in app (for example the /design showcase). */
+export function useMaybeMe() {
+  return useContext(MeContext);
+}
+
 /** UI mirror of the server's can(). The API still enforces every action. */
 export function useIsAdmin() {
   return useMe().permissions.includes('group.manage');

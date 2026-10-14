@@ -54,6 +54,23 @@ test('a construction company signs up and its first space starts with constructi
   await page.waitForURL(`http://${slug}.localhost:3000/`);
   await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
 
+  // The workspace starts with a job board in the team's own words.
+  await page.goto(`http://${slug}.localhost:3000/spaces/JOBS/board`);
+  await expect(page.getByText('No jobs yet')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'My jobs' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create the first job' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Create job' });
+  const types = dialog.getByRole('radiogroup', { name: 'Type' });
+  for (const name of ['Project', 'Job', 'Defect', 'Subtask']) {
+    await expect(types.getByRole('radio', { name })).toBeVisible();
+  }
+  await expect(types.getByRole('radio', { name: 'Story' })).toHaveCount(0);
+  await types.getByRole('radio', { name: 'Job' }).click();
+  await dialog.getByLabel('Title').fill('Pour the level 1 slab');
+  await dialog.getByRole('button', { name: /^Create/ }).click();
+  await expect(page.getByRole('article', { name: /JOBS-1 Pour the level 1 slab/ })).toBeVisible();
+  await expect(page.getByText('1 job on the board')).toBeVisible();
+
   // The create-space wizard says which columns a new space gets.
   await page.goto(`http://${slug}.localhost:3000/spaces/new`);
   await page.getByLabel('Name', { exact: true }).fill('Riverside');
@@ -122,3 +139,19 @@ test('a person in several workspaces switches between them and starts another', 
   await page.reload();
   await expect(page.getByRole('link', { name: 'Leads' })).toBeVisible();
 });
+
+test('switching to another workspace needs no second sign-in', async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInWithPassword(page, 'multi@crewdeck.test', PASSWORD);
+  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('menuitem', { name: /Buildwell Construction/ }).click();
+  await page.waitForURL('http://buildwell.localhost:3000/');
+  await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
+  expect((await apiCall(page, 'GET', '/me')).json.org.slug).toBe('buildwell');
+  // And back again from the "Your workspaces" page.
+  await page.goto('http://buildwell.localhost:3000/my-workspaces');
+  await page.getByTestId('workspace-acme').getByRole('button', { name: /Open/ }).click();
+  await page.waitForURL('http://acme.localhost:3000/');
+  await expect(page.getByRole('heading', { name: /Hello/ })).toBeVisible();
+});
+

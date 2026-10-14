@@ -129,8 +129,9 @@ Deploying it somewhere real: see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - MongoDB has no foreign keys or check constraints. Integrity between documents (same-tenant links,
   valid status for an item, times in order) is enforced by the API and covered by tests, not by the
   database. Unique indexes still guarantee keys, item numbers and one pending request per person.
-- Sessions are per workspace address, so opening another workspace from the switcher asks you to sign in
-  there (creating a new workspace signs you in automatically).
+- Sessions are per workspace address. The switcher and "Your workspaces" open another workspace already
+  signed in by handing a new session over with a one-time link; typing another workspace's address in
+  the browser still shows its sign-in page.
 - Google sign-in and Brevo email are covered by tests with fakes; they have not been exercised against
   the real services because they need credentials.
 - Indirect changes can leave a space without an active admin (for example deleting the only admin group).

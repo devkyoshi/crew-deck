@@ -267,3 +267,20 @@ usage implies) and the columns new spaces start with. Usage options that are not
 `planned`, shown as *Coming soon*, and tracked in docs/MISSING-FEATURES.md. Changing the type later
 (`PUT /settings/workspace`) only adds modules, never removes them, so no data is hidden.
 
+## ADR-055: Workspace vocabulary, starter content and switching without signing in again
+
+- **Vocabulary is presentation only.** Each template names its work item (`itemNoun`, for example "job",
+  "ticket", "case") and may rename item types (`typeLabels`, for example a construction task is a "Job"
+  and a bug a "Defect"). `vocabularyFor()` in `packages/shared/src/workspace.ts` resolves them, and the web
+  app reads them through `useVocabulary()`. Type pickers offer the template's `itemTypes` (subtasks always),
+  but the API keeps accepting all five types, so changing the kind of work later never strands items.
+  Software, product, data science and "other" keep "work item".
+- **Starter content.** When a workspace of a known kind is created by someone who already has an account
+  (sign-up, "Create a workspace"), the same transaction creates the template's first space (owner as space
+  admin, the template's columns, its labels). A workspace created by the platform waits for its owner and
+  starts empty.
+- **Switching.** Sessions stay per workspace address. `POST /workspaces/:slug/open` checks the person is an
+  active member of an active workspace, creates a session there and returns the one-time hand-over link
+  sign-up already uses. Workspaces you are not in look like they do not exist; impersonated sessions cannot
+  switch.
+

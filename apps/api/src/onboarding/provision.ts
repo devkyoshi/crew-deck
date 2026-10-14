@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { modulesFor, WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
-import type { Db } from '../db/client.js';
+import type { Db, TenantDb } from '../db/client.js';
 import { AppError, isUniqueViolation } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
+import { seedSpaceWork } from '../work/seed.js';
 
 export interface ProvisionInput {
   name: string;
@@ -108,6 +109,8 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
           });
         }
         await t.memberships.insert({ userId, orgRole: 'owner' });
+        // A workspace of a known kind starts with a first space, so the team lands on a real board.
+        if (workType) await createStarterSpace(t, workType, userId);
       } else {
         inviteToken = randomToken();
         await t.invitations.insert({
@@ -139,3 +142,39 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
     throw e;
   }
 }
+
+/**
+ * The template's first space: the owner as its admin, the template's columns, and a few labels. Only for
+ * workspaces whose owner already exists (sign-up, "Create a workspace"); a workspace created by the
+ * platform waits for its owner to accept the invitation and starts empty.
+ */
+async function createStarterSpace(t: TenantDb, workType: WorkType, ownerId: string) {
+  const { space, labels } = WORKSPACE_TEMPLATES[workType].starter;
+  const created = await t.spaces.insert({
+    key: space.key,
+    name: space.name,
+    description: space.description,
+    icon: space.icon,
+    visibility: 'open',
+    ownerId,
+  });
+  await seedSpaceWork(t, created.id, { statuses: WORKSPACE_TEMPLATES[workType].statuses });
+  await t.spaceMembers.insert({
+    spaceId: created.id,
+    principalType: 'user',
+    principalId: ownerId,
+    spaceRole: 'admin',
+  });
+  if (labels.length) {
+    await t.labels.insert(labels.map((l) => ({ spaceId: created.id, name: l.name, color: l.color })));
+  }
+  await writeAudit(t, {
+    orgId: t.orgId,
+    actorId: ownerId,
+    action: 'space.created',
+    targetType: 'space',
+    targetId: created.id,
+    after: { key: space.key, name: space.name, visibility: 'open', starter: true },
+  });
+}
+

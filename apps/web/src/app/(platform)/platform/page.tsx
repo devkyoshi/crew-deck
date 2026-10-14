@@ -1,5 +1,6 @@
 'use client';
 
+import { WorkTypeBadge } from '@/components/workspace/work-type-picker';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -54,6 +55,7 @@ export interface TenantRow {
   trialEndsAt: string | null;
   createdAt: string;
   createdVia: string;
+  workType?: string | null;
   memberCount: number;
   lastLoginAt: string | null;
 }
@@ -268,6 +270,7 @@ export default function PlatformTenantsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Workspace</TableHead>
+                  <TableHead>Kind of work</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>People</TableHead>
                   <TableHead>Status</TableHead>
@@ -288,6 +291,9 @@ export default function PlatformTenantsPage() {
                       <div className="text-muted-foreground text-xs">
                         {t.slug} · {t.domain}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <WorkTypeBadge type={t.workType} />
                     </TableCell>
                     <TableCell>{planLabel(t)}</TableCell>
                     <TableCell className="tabular-nums">{t.memberCount}</TableCell>

@@ -223,3 +223,121 @@ describe('changing what the workspace is for', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe('starter content', () => {
+  it('a new workspace of a known kind starts with its first space, columns and labels', async () => {
+    const { slug, email, org } = await signUp({ workType: 'construction' });
+    const cookie = await signInAs(t.app, slug, (await t.db.global.users.findOne({ email }))!);
+    const spaces = (await call({ method: 'GET', url: '/spaces', slug, cookie })).json().items;
+    expect(spaces.map((s: { key: string }) => s.key)).toEqual(['JOBS']);
+    expect(spaces[0]).toMatchObject({ name: 'Jobs', myRole: 'admin', visibility: 'open' });
+    const statuses = (await call({ method: 'GET', url: '/spaces/JOBS/statuses', slug, cookie })).json().items;
+    expect(statuses.map((s: { name: string }) => s.name)).toEqual(
+      WORKSPACE_TEMPLATES.construction.statuses.map((s) => s.name),
+    );
+    const labels = (await call({ method: 'GET', url: '/spaces/JOBS/labels', slug, cookie })).json().items;
+    expect(labels.map((l: { name: string }) => l.name).sort()).toEqual(
+      WORKSPACE_TEMPLATES.construction.starter.labels.map((l) => l.name).sort(),
+    );
+    // Items can be created straight away, and the key carries on from the starter space's counter.
+    const item = await call({
+      method: 'POST',
+      url: '/spaces/JOBS/items',
+      slug,
+      cookie,
+      payload: { type: 'task', title: 'Pour the slab' },
+    });
+    expect(item.statusCode, item.body).toBe(200);
+    expect(item.json().key).toBe('JOBS-1');
+    const log = await t.db.tenant(org!.id).auditLogs.find({ action: 'space.created' });
+    expect(log).toHaveLength(1);
+  });
+
+  it('a workspace with no kind chosen starts empty', async () => {
+    const { slug, email } = await signUp({});
+    const cookie = await signInAs(t.app, slug, (await t.db.global.users.findOne({ email }))!);
+    expect((await call({ method: 'GET', url: '/spaces', slug, cookie })).json().total).toBe(0);
+  });
+
+  it('a workspace created by the platform starts empty, since its owner has not joined yet', async () => {
+    const { provisionWorkspace } = await import('../src/onboarding/provision.js');
+    const s = `plat-${randomUUID().slice(0, 6)}`;
+    const out = await provisionWorkspace(t.db, {
+      name: 'Platform Co',
+      slug: s,
+      domain: 'plat.test',
+      ownerEmail: `owner@${s}.test`,
+      plan: 'team',
+      trialDays: 0,
+      domainRestricted: true,
+      via: 'platform',
+      ownerMode: 'invite',
+      createdBy: 'platform@crewdeck.test',
+      workType: 'construction',
+    });
+    expect(await t.db.tenant(out.orgId).spaces.count({})).toBe(0);
+  });
+});
+
+describe('one sign-in across workspaces', () => {
+  async function twoWorkspaces() {
+    const a = await createOrg('switch-a');
+    const b = await createOrg('switch-b');
+    await t.db.tenant(b.org.id).memberships.insert({ userId: a.owner.id, orgRole: 'member' });
+    return { a, b, cookie: await signInAs(t.app, a.slug, a.owner) };
+  }
+
+  it('opens another workspace the person belongs to without signing in again', async () => {
+    const { a, b, cookie } = await twoWorkspaces();
+    const res = await call({ method: 'POST', url: `/workspaces/${b.slug}/open`, slug: a.slug, cookie });
+    expect(res.statusCode, res.body).toBe(200);
+    const url = new URL(res.json().url);
+    expect(url.host).toBe(`${b.slug}.localhost:3000`);
+    // Following the link on the target address sets that workspace's session.
+    const done = await t.app.inject({
+      method: 'GET',
+      url: `${url.pathname}${url.search}`,
+      headers: { host: url.host },
+    });
+    expect(done.statusCode).toBe(302);
+    const sid = done.cookies.find((c) => c.name === 'cd_session')?.value;
+    expect(sid).toBeTruthy();
+    const me = (await call({ method: 'GET', url: '/me', slug: b.slug, cookie: sid })).json();
+    expect(me).toMatchObject({ orgRole: 'member', org: { slug: b.slug } });
+    // The ticket works once.
+    const again = await t.app.inject({ method: 'GET', url: `${url.pathname}${url.search}`, headers: { host: url.host } });
+    expect(again.headers.location).toContain('sso_failed');
+  });
+
+  it('looks like nothing is there for workspaces you do not belong to, or were removed from', async () => {
+    const { a, b, cookie } = await twoWorkspaces();
+    const stranger = await createOrg('switch-c');
+    for (const target of [stranger.slug, 'no-such-workspace']) {
+      const res = await call({ method: 'POST', url: `/workspaces/${target}/open`, slug: a.slug, cookie });
+      expect(res.statusCode, target).toBe(404);
+    }
+    await t.db.tenant(b.org.id).memberships.updateOne({ userId: a.owner.id }, { status: 'deactivated' });
+    const res = await call({ method: 'POST', url: `/workspaces/${b.slug}/open`, slug: a.slug, cookie });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('refuses a suspended workspace and an impersonated session', async () => {
+    const { a, b, cookie } = await twoWorkspaces();
+    await t.db.global.organizations.updateOne({ id: b.org.id }, { status: 'suspended' });
+    const suspended = await call({ method: 'POST', url: `/workspaces/${b.slug}/open`, slug: a.slug, cookie });
+    expect(suspended.statusCode).toBe(403);
+    expect(suspended.json().code).toBe('workspace_suspended');
+
+    const { SessionStore } = await import('../src/auth/sessions.js');
+    const { createRedis } = await import('../src/lib/redis.js');
+    const redis = createRedis(t.config.REDIS_URL);
+    try {
+      const sessions = new SessionStore(redis, 600);
+      const sid = await sessions.create(a.org.id, a.owner.id, { impersonatedBy: 'platform@crewdeck.test' });
+      const res = await call({ method: 'POST', url: `/workspaces/${b.slug}/open`, slug: a.slug, cookie: sid });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      redis.disconnect();
+    }
+  });
+});

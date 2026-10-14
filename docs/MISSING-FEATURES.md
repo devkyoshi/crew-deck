@@ -60,12 +60,11 @@ From [work-items/PHASES.md](work-items/PHASES.md):
 - Custom domains per workspace.
 - Per-workspace SSO (SAML, Azure AD). Only Google sign-in exists.
 - Chat.
-- A workspace template gallery beyond the starting columns (sample items, labels, saved views per type).
-- Per-type language in the UI. Templates define an `itemNoun` (for example "job", "ticket", "case"), but the UI
-  still says "item" everywhere.
-- Per-type item types. Templates define `itemTypes`, but every workspace can still create all five types.
-- A single sign-in across workspaces. Sessions are per workspace address, so switching to another
-  workspace asks you to sign in there (creating a new workspace signs you in automatically).
+- A workspace template gallery beyond the starter space and labels (sample items, saved views per type).
+- Per-type language outside the work screens (navigation, notifications, emails still say "space" and "item"
+  in places), and custom words chosen by the workspace instead of the template's.
+- Restricting item types in the API. Templates limit which types the UI offers, but the API accepts all five,
+  so changing the kind of work never strands existing items.
 - Leaving a workspace or transferring ownership yourself.
 
 ## 5. Partly built or known gaps

@@ -12,6 +12,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Notice } from '@/components/shared/notice';
 import { MIN_PASSWORD, PasswordStrength } from '@/components/auth/password-strength';
 import { useWizard } from '@/components/auth/wizard';
+import { workTypeLabel } from '@/components/workspace/work-type-picker';
 import {
   bigInput,
   FieldGroup,
@@ -46,6 +47,7 @@ interface Preview {
   slug: string;
   hasAccount: boolean;
   name: string | null;
+  workType?: string | null;
 }
 
 function Expired() {
@@ -152,7 +154,7 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
           <StepHero
             headingRef={w.headingRef}
             title={first ? `Welcome, ${first}. Is this you?` : 'Welcome. Is this you?'}
-            lead={`You are creating ${preview.company} at ${preview.slug}.`}
+            lead={`You are creating ${preview.company} at ${preview.slug}${preview.workType ? `, set up for ${workTypeLabel(preview.workType).toLowerCase()}` : ''}.`}
           />
           <FieldStack>
             <FieldGroup title="Account">

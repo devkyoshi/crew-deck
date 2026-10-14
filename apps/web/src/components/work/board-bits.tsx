@@ -8,6 +8,7 @@ import { WorkItemCardSkeleton, type Density } from './work-card';
 import { StatusChip, WipBadge } from './work-bits';
 import { CATEGORY_META, STATUS_DOT, type StatusCategory, type StatusColor } from '@/lib/work';
 import { cn } from '@/lib/utils';
+import { useVocabulary } from './use-vocabulary';
 
 /** A column: a rounded lane with a thin category-coloured bar, a sticky header and its own scroll area. */
 export function BoardColumn({
@@ -77,13 +78,14 @@ export function ColumnHeader({
   onToggle?: () => void;
   menu?: ReactNode;
 }) {
+  const vocab = useVocabulary();
   const Icon = CATEGORY_META[category].icon;
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onToggle}
-        aria-label={`Expand ${name}, ${total ?? count} items`}
+        aria-label={`Expand ${name}, ${vocab.count(total ?? count)}`}
         className="hover:bg-accent flex w-full flex-col items-center gap-3 rounded-md py-2 outline-none focus-visible:ring-2"
       >
         <ChevronsLeftRight className="text-muted-foreground size-4 rotate-90" aria-hidden />
@@ -101,7 +103,7 @@ export function ColumnHeader({
       <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[color])} aria-hidden />
       <span
         className="text-muted-foreground text-xs font-medium tabular-nums"
-        aria-label={`${total ?? count} items`}
+        aria-label={vocab.count(total ?? count)}
       >
         {total ?? count}
       </span>
@@ -134,6 +136,7 @@ export function ColumnCreateRow({
   placeholder?: string;
   busy?: boolean;
 }) {
+  const vocab = useVocabulary();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const ref = useRef<HTMLInputElement>(null);
@@ -159,7 +162,7 @@ export function ColumnCreateRow({
       className="bg-card space-y-1.5 rounded-lg border p-2 shadow-soft"
     >
       <label className="sr-only" htmlFor="inline-create">
-        Title of the new item
+        Title of the new {vocab.noun}
       </label>
       <input
         id="inline-create"

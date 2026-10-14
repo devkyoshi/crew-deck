@@ -85,6 +85,9 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | "What kind of work do you do?" and "How will you use it?" at sign-up     | Built   |      |
 | Templates: modules and starting columns per kind of work                 | Built   |      |
 | Change the kind of work later (Settings, Kind of work)                   | Built   |      |
+| The team's own words for work (job, ticket, case) and item types         | Built   |      |
+| A first space with columns and labels for a new workspace                | Built   |      |
+| Switch to another workspace without signing in again                     | Built   |      |
 | Type-specific modules (ticket queues, punch lists, approvals, calendar)  | Planned |      |
 
 ## Not built yet

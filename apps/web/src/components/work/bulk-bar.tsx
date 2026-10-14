@@ -26,6 +26,7 @@ import { useBulk, useLabels, errorText, type BulkBody } from '@/lib/work-api';
 import type { BoardData, Person } from '@/lib/work';
 import { LabelChip } from './label-bits';
 import { AssigneePicker } from './work-pickers';
+import { useVocabulary } from './use-vocabulary';
 
 /**
  * Appears at the foot of the board while cards are selected (Ctrl or Cmd-click, or "Select" in a card
@@ -45,6 +46,7 @@ export function BulkBar({
   canDelete: boolean;
   onClear: () => void;
 }) {
+  const vocab = useVocabulary();
   const bulk = useBulk();
   const labels = useLabels(space);
   const [confirm, setConfirm] = useState(false);
@@ -64,14 +66,14 @@ export function BulkBar({
       } else toast.success(done(res.updated));
       onClear();
     } catch (e) {
-      toast.error(errorText(e, 'Could not change those items'));
+      toast.error(errorText(e, `Could not change those ${vocab.nounPlural}`));
     }
   }
 
   return (
     <div
       role="region"
-      aria-label="Selected items"
+      aria-label={`Selected ${vocab.nounPlural}`}
       className="bg-popover text-popover-foreground fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-xl border p-2 pl-3 shadow-xl sm:inset-x-0"
     >
       <span className="text-sm font-medium tabular-nums" aria-live="polite">
@@ -82,7 +84,7 @@ export function BulkBar({
       <Select
         value=""
         onValueChange={(statusId) =>
-          run({ action: 'move', ids, statusId }, (u) => `${u} item${u === 1 ? '' : 's'} moved`)
+          run({ action: 'move', ids, statusId }, (u) => `${vocab.count(u)} moved`)
         }
         disabled={bulk.isPending}
       >
@@ -107,7 +109,7 @@ export function BulkBar({
             setAssignee(p);
             void run(
               { action: 'assign', ids, assigneeId: p?.id ?? null },
-              (u) => `${u} item${u === 1 ? '' : 's'} ${p ? `assigned to ${p.name ?? p.email}` : 'unassigned'}`,
+              (u) => `${vocab.count(u)} ${p ? `assigned to ${p.name ?? p.email}` : 'unassigned'}`,
             );
           }}
         />
@@ -132,7 +134,7 @@ export function BulkBar({
                   onClick={() =>
                     run(
                       { action: 'label', ids, labelId: l.id, mode: 'add' },
-                      (u) => `“${l.name}” added to ${u} item${u === 1 ? '' : 's'}`,
+                      (u) => `“${l.name}” added to ${vocab.count(u)}`,
                     )
                   }
                 >
@@ -145,7 +147,7 @@ export function BulkBar({
                   onClick={() =>
                     run(
                       { action: 'label', ids, labelId: l.id, mode: 'remove' },
-                      (u) => `“${l.name}” removed from ${u} item${u === 1 ? '' : 's'}`,
+                      (u) => `“${l.name}” removed from ${vocab.count(u)}`,
                     )
                   }
                 >
@@ -154,7 +156,7 @@ export function BulkBar({
               </li>
             ))}
             {labels.isSuccess && labels.data.items.length === 0 && (
-              <li className="text-muted-foreground p-1 text-xs">No labels yet. Create one from an item.</li>
+              <li className="text-muted-foreground p-1 text-xs">No labels yet. Create one from a {vocab.noun}.</li>
             )}
           </ul>
         </PopoverContent>
@@ -172,7 +174,7 @@ export function BulkBar({
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {n} item{n === 1 ? '' : 's'}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {vocab.count(n)}?</AlertDialogTitle>
             <AlertDialogDescription>
               They leave the board and search, and so do any subtasks. History is kept. Items you are not
               allowed to delete are skipped.
@@ -182,7 +184,7 @@ export function BulkBar({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => run({ action: 'delete', ids }, (u) => `${u} item${u === 1 ? '' : 's'} deleted`)}
+              onClick={() => run({ action: 'delete', ids }, (u) => `${vocab.count(u)} deleted`)}
             >
               Delete
             </AlertDialogAction>

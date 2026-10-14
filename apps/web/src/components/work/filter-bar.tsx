@@ -22,7 +22,6 @@ import { NO_FILTERS, type Filters } from '@/lib/work-filters';
 import { searchAssignees, searchItems, useLabels } from '@/lib/work-api';
 import {
   PRIORITY_META,
-  TYPE_META,
   type ItemType,
   type Person,
   type Priority,
@@ -30,6 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import { LabelChip } from './label-bits';
 import { PriorityIcon, TypeIcon, UserAvatar } from './work-bits';
+import { useVocabulary } from './use-vocabulary';
 
 const DUE_LABEL: Record<Exclude<Filters['due'], ''>, string> = {
   overdue: 'Overdue',
@@ -134,6 +134,7 @@ export function FilterBar({
   onChange: (next: Filters) => void;
   searchRef?: RefObject<HTMLInputElement | null>;
 }) {
+  const vocab = useVocabulary();
   const [text, setText] = useState(filters.q);
   const debounced = useDebounced(text, 300);
   // The box follows the URL (Back button, "Clear all") and the URL follows the box once typing settles.
@@ -184,7 +185,7 @@ export function FilterBar({
   for (const t of filters.type)
     chips.push({
       key: `t-${t}`,
-      label: <>Type: {TYPE_META[t]?.label ?? t}</>,
+      label: <>Type: {vocab.typeLabel(t)}</>,
       remove: () => set({ type: filters.type.filter((x) => x !== t) }),
     });
   for (const p of filters.priority)
@@ -207,7 +208,7 @@ export function FilterBar({
     });
   if (filters.due)
     chips.push({ key: 'due', label: DUE_LABEL[filters.due], remove: () => set({ due: '' }) });
-  if (filters.mine) chips.push({ key: 'mine', label: 'My items', remove: () => set({ mine: false }) });
+  if (filters.mine) chips.push({ key: 'mine', label: `My ${vocab.nounPlural}`, remove: () => set({ mine: false }) });
   if (filters.recent)
     chips.push({ key: 'recent', label: 'Recently updated', remove: () => set({ recent: false }) });
 
@@ -267,9 +268,9 @@ export function FilterBar({
         </FilterPopover>
 
         <FilterPopover icon={Shapes} label="Type" count={filters.type.length} width="w-44">
-          {BOARD_TYPES.map((t) => (
+          {BOARD_TYPES.filter((t) => vocab.allowedTypes.includes(t) || filters.type.includes(t)).map((t) => (
             <Option key={t} checked={filters.type.includes(t)} onToggle={() => set({ type: toggle(filters.type, t) })}>
-              <TypeIcon type={t} /> {TYPE_META[t].label}
+              <TypeIcon type={t} /> {vocab.typeLabel(t)}
             </Option>
           ))}
         </FilterPopover>
@@ -322,7 +323,7 @@ export function FilterBar({
           aria-pressed={filters.mine}
           onClick={() => set({ mine: !filters.mine })}
         >
-          My items
+          My {vocab.nounPlural}
         </Button>
         <Button
           type="button"

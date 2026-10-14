@@ -24,7 +24,6 @@ import { searchAssignees, searchItems } from '@/lib/work-api';
 import {
   CATEGORY_META,
   PRIORITY_META,
-  TYPE_META,
   type ItemType,
   type Person,
   type Priority,
@@ -33,6 +32,7 @@ import {
 } from '@/lib/work';
 import { cn } from '@/lib/utils';
 import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
+import { useVocabulary } from './use-vocabulary';
 
 function useDebounced<T>(value: T, ms = 200) {
   const [v, setV] = useState(value);
@@ -306,16 +306,19 @@ export function TypeSelect({
   types?: ItemType[];
   id?: string;
 }) {
+  const vocab = useVocabulary();
   return (
     <Select value={value} onValueChange={(v) => onChange(v as ItemType)} disabled={disabled}>
       <SelectTrigger id={id} size="sm" className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {types.map((t) => (
+        {types
+          .filter((t) => vocab.allowedTypes.includes(t) || t === value)
+          .map((t) => (
           <SelectItem key={t} value={t}>
             <span className="flex items-center gap-2">
-              <TypeIcon type={t} /> {TYPE_META[t].label}
+              <TypeIcon type={t} /> {vocab.typeLabel(t)}
             </span>
           </SelectItem>
         ))}

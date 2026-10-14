@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-14 - Templates fully real: the team's own words, a first space, one-click switching
+
+- Each kind of work now speaks its own language on the board, the item panel, filters and bulk actions:
+  jobs, projects and defects for construction, tickets, requests and incidents for IT support, cases for
+  customer service, and so on. Type pickers offer the kind's item types. Software keeps "work item".
+- A new workspace of a known kind starts with a first space (for example "Jobs" for construction) with its
+  columns and labels, created in the same transaction as the workspace.
+- The switcher and "Your workspaces" open another workspace already signed in (`POST /workspaces/:slug/open`).
+- The kind of work shows on the sign-up verify page and in the platform console's workspace list.
+- Tests: shared vocabulary unit tests (20), 6 new API tests (432 in total), new browser tests for the
+  construction wording, the starter board and switching. ADR-055.
+
 ## 2026-10-14 - MongoDB, workspaces of every kind, dev logins per role
 
 - Data store moved from Postgres to MongoDB (ADR-051). Docker compose runs `mongo:7` as a single-node

@@ -7,12 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useVocabulary } from './use-vocabulary';
 
-const GROUPS: { title: string; items: [string[], string][] }[] = [
+const groups = (noun: string): { title: string; items: [string[], string][] }[] => [
   {
     title: 'Board',
     items: [
-      [['C'], 'Create a work item'],
+      [['C'], `Create a ${noun}`],
       [['/'], 'Search the board'],
       [['?'], 'Show this list'],
       [['Esc'], 'Close the panel, a dialog or the selection'],
@@ -39,6 +40,7 @@ const GROUPS: { title: string; items: [string[], string][] }[] = [
 ];
 
 export function ShortcutsOverlay({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const vocab = useVocabulary();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -47,7 +49,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: { open: boolean; onOpen
           <DialogDescription>Everything on the board can be done without a mouse.</DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
-          {GROUPS.map((g) => (
+          {groups(vocab.noun).map((g) => (
             <section key={g.title} aria-label={g.title}>
               <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">{g.title}</h3>
               <dl className="space-y-1.5">

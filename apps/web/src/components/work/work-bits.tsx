@@ -16,6 +16,7 @@ import {
   type StatusColor,
 } from '@/lib/work';
 import { cn } from '@/lib/utils';
+import { useVocabulary } from './use-vocabulary';
 
 /** The type icon in a small rounded tile. The label is always available to assistive tech. */
 export function TypeIcon({
@@ -27,13 +28,15 @@ export function TypeIcon({
   size?: 'sm' | 'md';
   className?: string;
 }) {
+  const vocab = useVocabulary();
   const m = TYPE_META[type];
   const Icon = m.icon;
+  const label = vocab.typeLabel(type);
   return (
     <span
       role="img"
-      aria-label={m.label}
-      title={m.label}
+      aria-label={label}
+      title={label}
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded',
         size === 'sm' ? 'size-4' : 'size-5',

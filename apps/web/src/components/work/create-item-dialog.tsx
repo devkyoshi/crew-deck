@@ -21,7 +21,6 @@ import { useMe } from '@/components/shell/me-context';
 import { ApiError } from '@/lib/api';
 import { useCreateItem, errorText } from '@/lib/work-api';
 import {
-  TYPE_META,
   type ItemType,
   type Label as WorkLabel,
   type Person,
@@ -33,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { LabelPicker } from './label-bits';
 import { TypeIcon } from './work-bits';
 import { AssigneePicker, ItemPicker, PrioritySelect, StatusSelect, STORY_POINTS } from './work-pickers';
+import { useVocabulary } from './use-vocabulary';
 
 type Parent = { id: string; key: string; title: string; type: ItemType } | null;
 
@@ -59,6 +59,7 @@ export function CreateItemDialog({
   };
   onCreated?: (item: WorkItem) => void;
 }) {
+  const vocab = useVocabulary();
   const me = useMe();
   const create = useCreateItem(spaceKey);
   const firstTodo = statuses.find((s) => s.category === 'todo') ?? statuses[0];
@@ -148,7 +149,7 @@ export function CreateItemDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Create work item</DialogTitle>
+            <DialogTitle>Create {vocab.noun}</DialogTitle>
             <DialogDescription>It starts in the status you choose and gets the next key in this space.</DialogDescription>
           </DialogHeader>
 
@@ -170,7 +171,7 @@ export function CreateItemDialog({
           )}
 
           <div role="radiogroup" aria-label="Type" className="flex flex-wrap gap-1.5">
-            {TYPES.map((t) => (
+            {TYPES.filter((t) => vocab.allowedTypes.includes(t) || t === type).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -182,7 +183,7 @@ export function CreateItemDialog({
                   type === t && 'border-primary bg-accent ring-primary/30 font-medium ring-1',
                 )}
               >
-                <TypeIcon type={t} /> {TYPE_META[t].label}
+                <TypeIcon type={t} /> {vocab.typeLabel(t)}
               </button>
             ))}
           </div>

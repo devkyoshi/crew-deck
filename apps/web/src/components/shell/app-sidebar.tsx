@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useIsAdmin, useMe } from './me-context';
 import { workTypeLabel } from '@/components/workspace/work-type-picker';
+import { openWorkspace } from '@/lib/workspaces';
 import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
 import { visibleGroups } from './nav';
@@ -57,10 +58,8 @@ function usePersistedOpen(key: string, initial = true) {
 function TenantSwitcher() {
   const { org, orgs } = useMe();
 
-  function switchTo(slug: string) {
-    const { protocol, host } = window.location;
-    window.location.assign(`${protocol}//${slug}.${host.split('.').slice(1).join('.')}/`);
-  }
+  // Opens the other workspace already signed in (no second sign-in).
+  const switchTo = (slug: string) => void openWorkspace(slug);
 
   const label = (
     <>

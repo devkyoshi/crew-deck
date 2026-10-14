@@ -11,8 +11,8 @@ import {
 } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
-import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { findOrgBySlug, listUserOrgs } from '../auth/service.js';
+import { assertOrgActive, makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
+import { findOrgBySlug, listUserOrgs, touchLastLogin } from '../auth/service.js';
 import { withTenantTx } from '../db/client.js';
 import { AppError, forbidden } from '../lib/errors.js';
 import { provisionWorkspace } from '../onboarding/provision.js';
@@ -127,6 +127,30 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         slug: out.slug,
         url: `${origin}/api/v1/auth/sso/complete?ticket=${encodeURIComponent(ticket)}`,
       };
+    },
+  );
+
+  // One sign-in across your workspaces: from inside one workspace, open another you belong to without
+  // signing in again. The session is per workspace address, so a new one is created for the target and
+  // handed over with the same one-time ticket sign-up uses. Anything you are not an active member of
+  // looks like it does not exist.
+  r.post(
+    '/workspaces/:slug/open',
+    { preHandler: requireAuth, schema: { params: z.object({ slug }) } },
+    async (req) => {
+      if (req.impersonatedBy) throw forbidden('Impersonated sessions cannot switch workspaces');
+      const missing = () => new AppError(404, 'not_found', 'Workspace not found');
+      const target = await findOrgBySlug(db, req.params.slug);
+      if (!target) throw missing();
+      const userId = req.user!.id;
+      const membership = await db.global.all.memberships.findOne({ orgId: target.id, userId });
+      if (!membership || membership.status !== 'active') throw missing();
+      assertOrgActive(target);
+      const sid = await sessions.create(target.id, userId);
+      await touchLastLogin(db, target.id, userId);
+      const ticket = await sessions.createTicket(target.id, sid);
+      const origin = config.TENANT_ORIGIN_TEMPLATE.replace('{slug}', target.slug);
+      return { url: `${origin}/api/v1/auth/sso/complete?ticket=${encodeURIComponent(ticket)}` };
     },
   );
 

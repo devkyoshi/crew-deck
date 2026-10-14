@@ -102,6 +102,7 @@ import { ItemDetail } from './item-detail';
 import { ShortcutsOverlay } from './shortcuts-overlay';
 import { UserAvatar } from './work-bits';
 import { WorkItemCard, type Density } from './work-card';
+import { useVocabulary } from './use-vocabulary';
 
 // ---- Per-person view preferences (density, collapsed columns). Storage may be blocked; that is fine. ----
 
@@ -311,6 +312,7 @@ function Cell({
 // ---- The board -----------------------------------------------------------------------------------------
 
 export function BoardView({ spaceKey }: { spaceKey: string }) {
+  const vocab = useVocabulary();
   const me = useMe();
   const router = useRouter();
   const pathname = usePathname();
@@ -737,7 +739,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
       });
       toast.success(`${item.key} created`);
     } catch (e) {
-      toast.error(errorText(e, 'Could not create the item'));
+      toast.error(errorText(e, `Could not create the ${vocab.noun}`));
     }
   }
 
@@ -780,7 +782,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm" aria-live="polite">
-          {filtered ? `${totalShown} of ${totalAll} items` : `${totalAll} ${totalAll === 1 ? 'item' : 'items'} on the board`}
+          {filtered ? `${totalShown} of ${vocab.count(totalAll)}` : `${vocab.count(totalAll)} on the board`}
           {board.isFetching && !board.isPending && (
             <Loader2 className="ml-2 inline size-3 animate-spin" aria-label="Refreshing" />
           )}
@@ -823,16 +825,16 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         <div className="rounded-xl border border-dashed">
           <EmptyState
             icon={Kanban}
-            title="No work items yet"
+            title={`No ${vocab.nounPlural} yet`}
             description={
               perms.createItem
-                ? 'Create the first item and it appears in To Do. Drag it across as the work progresses.'
+                ? `Create the first ${vocab.noun} and it appears in the first column. Drag it across as the work progresses.`
                 : 'Nothing has been added to this board yet.'
             }
             action={
               perms.createItem ? (
                 <Button onClick={() => setCreateOpen(true)}>
-                  <Plus /> Create the first item
+                  <Plus /> Create the first {vocab.noun}
                 </Button>
               ) : undefined
             }
@@ -914,13 +916,13 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
                       id={key}
                       ids={list.map((i) => i.id)}
                       lane="all"
-                      label={`${status.name}, ${col?.total ?? 0} items`}
+                      label={`${status.name}, ${vocab.count(col?.total ?? 0)}`}
                       dragging={!!activeId}
                       className="min-h-16"
                     >
                       {list.length === 0 && (
                         <p className="text-muted-foreground px-2 py-6 text-center text-xs">
-                          {filtered ? 'No matching items' : perms.createItem ? 'No items. Create one below.' : 'No items'}
+                          {filtered ? `No matching ${vocab.nounPlural}` : perms.createItem ? `No ${vocab.nounPlural}. Create one below.` : `No ${vocab.nounPlural}`}
                         </p>
                       )}
                       {renderCards(key)}
@@ -993,7 +995,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
                               id={key}
                               ids={list.map((i) => i.id)}
                               lane={lane.id}
-                              label={`${lane.label}, ${status.name}, ${list.length} items`}
+                              label={`${lane.label}, ${status.name}, ${vocab.count(list.length)}`}
                               dragging={!!activeId}
                               className={cn('bg-muted/50 min-h-20 shrink-0 p-2', density === 'compact' ? 'w-[264px]' : 'w-[288px]')}
                             >

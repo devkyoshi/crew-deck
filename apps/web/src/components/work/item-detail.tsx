@@ -61,6 +61,7 @@ import {
   STORY_POINTS,
   StatusSelect,
 } from './work-pickers';
+import { useVocabulary } from './use-vocabulary';
 
 const dateTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -151,6 +152,7 @@ export function ItemDetail({
   onClose?: () => void;
   onOpenItem?: (key: string) => void;
 }) {
+  const vocab = useVocabulary();
   const qc = useQueryClient();
   const query = useItem(itemRef);
   const item = query.data;
@@ -186,7 +188,7 @@ export function ItemDetail({
     const missing = query.error instanceof ApiError && query.error.status === 404;
     return missing ? (
       <EmptyState
-        title="Work item not found"
+        title={`${vocab.Noun} not found`}
         description="It may have been deleted, or you may not have access to its space."
         action={
           onClose ? (
@@ -197,7 +199,7 @@ export function ItemDetail({
         }
       />
     ) : (
-      <LoadError what="this work item" onRetry={() => query.refetch()} />
+      <LoadError what={`this ${vocab.noun}`} onRetry={() => query.refetch()} />
     );
   }
 
@@ -249,18 +251,20 @@ export function ItemDetail({
             <button
               type="button"
               className="focus-visible:ring-ring rounded p-0.5 outline-none focus-visible:ring-2 disabled:cursor-default"
-              aria-label={`Type: ${TYPE_META[item.type].label}${canEdit ? '. Change type' : ''}`}
+              aria-label={`Type: ${vocab.typeLabel(item.type)}${canEdit ? '. Change type' : ''}`}
             >
               <TypeIcon type={item.type} size="md" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
-            {(Object.keys(TYPE_META) as ItemType[]).map((t) => (
+            {(Object.keys(TYPE_META) as ItemType[])
+              .filter((t) => vocab.allowedTypes.includes(t) || t === item.type)
+              .map((t) => (
               <DropdownMenuItem
                 key={t}
                 onSelect={() => t !== item.type && save({ type: t }, { type: t })}
               >
-                <TypeIcon type={t} /> {TYPE_META[t].label}
+                <TypeIcon type={t} /> {vocab.typeLabel(t)}
                 {t === item.type && <Check className="ml-auto size-4" aria-hidden />}
               </DropdownMenuItem>
             ))}
@@ -516,7 +520,7 @@ export function ItemDetail({
           </dl>
           {!canEdit && (
             <p className="text-muted-foreground bg-muted rounded-md p-2 text-xs">
-              You can view this item but not change it.
+              You can view this {vocab.noun} but not change it.
             </p>
           )}
           {done && <span className="sr-only">This item is done.</span>}

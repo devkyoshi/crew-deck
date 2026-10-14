@@ -59,6 +59,7 @@ import {
   type WorkStatus,
 } from '@/lib/work';
 import { cn } from '@/lib/utils';
+import { useVocabulary } from './use-vocabulary';
 
 const CARD_FIELD_LABELS: Record<BoardSettings['cardFields'][number], string> = {
   assignee: 'Assignee',
@@ -83,6 +84,7 @@ export function BoardSettingsSheet({
   board: BoardData['board'];
   onSaved: () => void;
 }) {
+  const vocab = useVocabulary();
   const [fields, setFields] = useState(board.settings.cardFields);
   const [retention, setRetention] = useState(String(board.settings.doneRetentionDays));
   useEffect(() => {
@@ -147,7 +149,7 @@ export function BoardSettingsSheet({
               Finished work
             </h3>
             <Label htmlFor="bs-retention" className="text-muted-foreground text-xs font-normal">
-              Hide Done items from the board after this many days (they stay searchable)
+              Hide finished {vocab.nounPlural} from the board after this many days (they stay searchable)
             </Label>
             <div className="flex items-center gap-2">
               <Input
@@ -213,6 +215,7 @@ export function BoardSettingsSheet({
 // ---- Status editor -----------------------------------------------------------------------------------------
 
 function StatusEditor({ spaceKey }: { spaceKey: string }) {
+  const vocab = useVocabulary();
   const qc = useQueryClient();
   const query = useStatuses(spaceKey);
   const [order, setOrder] = useState<WorkStatus[]>([]);
@@ -337,13 +340,13 @@ function StatusEditor({ spaceKey }: { spaceKey: string }) {
             <AlertDialogTitle>Delete “{removing?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
               {removing && (removing.itemCount ?? 0) > 0
-                ? `${removing.itemCount} item${removing.itemCount === 1 ? '' : 's'} in this column will move to the status you choose.`
-                : 'No items are in this column.'}
+                ? `${vocab.count(removing.itemCount ?? 0)} in this column will move to the status you choose.`
+                : `No ${vocab.nounPlural} are in this column.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {removing && (removing.itemCount ?? 0) > 0 && (
             <div className="space-y-1.5">
-              <Label htmlFor="replace-with">Move items to</Label>
+              <Label htmlFor="replace-with">Move {vocab.nounPlural} to</Label>
               <Select value={replacement} onValueChange={setReplacement}>
                 <SelectTrigger id="replace-with" className="w-full">
                   <SelectValue />

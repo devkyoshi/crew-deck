@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkTypeBadge } from '@/components/workspace/work-type-picker';
 import { api } from '@/lib/api';
+import { openWorkspace } from '@/lib/workspaces';
 
 interface MyWorkspace {
   id: string;
@@ -65,10 +66,8 @@ export default function MyWorkspacesPage() {
                       <Check className="size-3" aria-hidden /> Current
                     </span>
                   ) : (
-                    <Button asChild size="sm" variant="outline">
-                      <a href={w.url}>
-                        Open <ArrowUpRight />
-                      </a>
+                    <Button size="sm" variant="outline" onClick={() => void openWorkspace(w.slug)}>
+                      Open <ArrowUpRight />
                     </Button>
                   )}
                 </div>
