@@ -326,20 +326,27 @@ export async function platformRoutes(
         createdBy: req.platformAdmin!.email,
       });
       const link = `${tenantOrigin(out.slug)}/accept-invite?token=${encodeURIComponent(out.inviteToken!)}`;
-      await sendMail({
-        to: b.ownerEmail,
-        ...inviteEmail({
-          orgName: b.name,
-          inviterName: 'The Crew Deck team',
-          link,
-          expiresInDays: 7,
-        }),
-      });
+      let emailed = true;
+      try {
+        await sendMail({
+          to: b.ownerEmail,
+          ...inviteEmail({
+            orgName: b.name,
+            inviterName: 'The Crew Deck team',
+            link,
+            expiresInDays: 7,
+          }),
+        });
+      } catch (err) {
+        // The workspace exists; show the link so the owner can still be invited by hand.
+        req.log.error({ err }, 'owner invitation email failed');
+        emailed = false;
+      }
       await audit(req.platformAdmin!, 'platform.workspace_created', out.orgId, {
         slug: out.slug,
         plan: b.plan,
       });
-      const showLink = !emailEnabled(config) && !isProd(config);
+      const showLink = !emailed || (!emailEnabled(config) && !isProd(config));
       return { id: out.orgId, slug: out.slug, ...(showLink ? { inviteLink: link } : {}) };
     },
   );

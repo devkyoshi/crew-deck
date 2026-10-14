@@ -1,23 +1,23 @@
 # Crew Deck: feature catalogue
 
-Every feature in the product, by area. **Status:** Built = in the app today; Planned = Phase 9 (self-serve sign-up, plans, platform admin). **Gate** is the stable key used by the plan system (see [PRICING.md](PRICING.md)); a blank gate means every plan has the feature. The plan definitions in the database use these same keys.
+Every feature in the product, by area. **Status:** Built = in the app today; Planned = not built yet. **Gate** is the stable key used by the plan system (see [PRICING.md](PRICING.md)); a blank gate means every plan has the feature. The plan definitions in the database use these same keys.
 
 ## Workspace and identity
 
-| Feature                                                                                | Status  | Gate          |
-| -------------------------------------------------------------------------------------- | ------- | ------------- |
-| Multi-tenant workspaces on subdomains, data isolated per company (row-level security)  | Built   |               |
-| Sign in with email and password                                                        | Built   |               |
-| Sign in with Google                                                                    | Built   |               |
-| Invite people by email, accept link, join groups on accept                             | Built   | `seats` limit |
-| Domain-restricted invites (only the company email domain)                              | Built   | `domain_lock` |
-| Members directory: search, filter, sort, profiles, job title, timezone, manager        | Built   |               |
-| Roles: owner, admin, member; deactivate and reactivate per workspace; last-owner guard | Built   |               |
-| Command palette (Ctrl+K), light and dark theme, keyboard and screen-reader support     | Built   |               |
-| Audit log: who did what, filters, details                                              | Built   | `audit_days`  |
-| Self-serve company sign-up with email verification                                     | Planned |               |
-| Branding: name, logo, accent colour                                                    | Planned | `branding`    |
-| Plan, trial and usage page; upgrade prompts                                            | Planned |               |
+| Feature                                                                                | Status | Gate                             |
+| -------------------------------------------------------------------------------------- | ------ | -------------------------------- |
+| Multi-tenant workspaces on subdomains, data isolated per company (row-level security)  | Built  |                                  |
+| Sign in with email and password                                                        | Built  |                                  |
+| Sign in with Google                                                                    | Built  |                                  |
+| Invite people by email, accept link, join groups on accept                             | Built  | `seats` limit                    |
+| Domain-restricted invites (only the company email domain)                              | Built  | `domain_lock`                    |
+| Members directory: search, filter, sort, profiles, job title, timezone, manager        | Built  |                                  |
+| Roles: owner, admin, member; deactivate and reactivate per workspace; last-owner guard | Built  |                                  |
+| Command palette (Ctrl+K), light and dark theme, keyboard and screen-reader support     | Built  |                                  |
+| Audit log: who did what, filters, details                                              | Built  | `audit_days`                     |
+| Self-serve company sign-up with email verification                                     | Built  |                                  |
+| Branding: name, logo, accent colour                                                    | Built  | `branding_name`, `branding_full` |
+| Plan, trial and usage page; upgrade prompts                                            | Built  |                                  |
 
 ## Groups and spaces
 
@@ -56,11 +56,11 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 
 ## Platform
 
-| Feature                                                               | Status  | Gate |
-| --------------------------------------------------------------------- | ------- | ---- |
-| Platform admin console: tenants, suspend, plan, trial, usage          | Planned |      |
-| Read-only, audited impersonation                                      | Planned |      |
-| Platform settings (for example block free email providers at sign-up) | Planned |      |
+| Feature                                                               | Status | Gate |
+| --------------------------------------------------------------------- | ------ | ---- |
+| Platform admin console: tenants, suspend, plan, trial, usage          | Built  |      |
+| Read-only, audited impersonation                                      | Built  |      |
+| Platform settings (for example block free email providers at sign-up) | Built  |      |
 
 ## Not built yet
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-14 - Phase 9: Plans, self-serve sign-up and the platform console
+
+- Docs: docs/FEATURES.md (every feature with its plan gate key) and docs/PRICING.md (Free, Team, Business).
+- Migration 0009: plans (seeded), workspace status, plan, trial, limit overrides, branding and domain-lock columns, platform admins, platform settings, sign-up requests, platform audit log; narrow SECURITY DEFINER functions; tenants can only edit their own branding.
+- Plans and limits enforced on the server: seats (including waiting invitations), spaces, sites, CRM records, pipelines, CRM import and export, attendance export, per-space audit log, audit history window, branding, domain-locked invitations. Soft blocks (402) that keep all data.
+- Self-serve sign-up: public pricing and sign-up pages, live address check, emailed verification link, one-transaction workspace creation, 14-day Business trial then Free, free email providers allowed (platform setting can block them).
+- Suspension: refused at the tenant gate (sign-in, invitations, open sessions); a suspended workspace's sign-in page explains why.
+- Platform console at /platform: sign-in, workspaces list and search, create (owner invited by email), suspend and restore, change plan, set trials and custom limits, usage, platform settings, read-only impersonation with audit in both logs.
+- Workspace screens: Plan and billing (usage against limits, plan comparison), Branding and access (name, logo, accent colour with contrast check, domain lock), trial and impersonation banners, locked-feature buttons.
+- Sign-up email failures now say so instead of failing silently; `EMAIL_MODE=log` for browser tests; `db:platform-admin` script for the first platform admin.
+- Tests: plan limits and locks at their boundaries, trials with the clock, sign-up end to end (tokens, expiry, existing accounts, free email, isolation), suspension, platform permissions and impersonation, database-level grants; browser flows for sign-up, suspension, restore, plan change and impersonation; new pages in the accessibility scans.
+
 ## 2026-10-14 - Phase 8: CRM
 
 - Migration 0008: memberships.crm_role, CRM tables (tags, companies, contacts, leads, pipelines, stages, deals, activities, notes, record tags), all with RLS and composite tenant foreign keys; `crm` added to the workspace modules.

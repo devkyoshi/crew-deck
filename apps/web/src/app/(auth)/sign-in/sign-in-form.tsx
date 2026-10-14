@@ -27,6 +27,7 @@ const ERRORS: Record<string, string> = {
   tenant_not_found: 'That workspace was not found.',
   invalid_credentials: 'Invalid email or password.',
   rate_limited: 'Too many attempts. Wait a minute and try again.',
+  workspace_suspended: 'This workspace is suspended. Contact your administrator or support.',
 };
 
 const schema = z.object({
@@ -121,7 +122,14 @@ export function SignInForm({ initialError }: { initialError?: string }) {
           </p>
         )}
 
-        {providers?.tenant && (
+        {providers?.tenant?.suspended && (
+          <Notice variant="error">
+            This workspace is suspended, so nobody can sign in right now. Contact your administrator
+            or support to have it restored.
+          </Notice>
+        )}
+
+        {providers?.tenant && !providers.tenant.suspended && (
           <>
             {providers.google && (
               <Button variant="outline" className="w-full" asChild>

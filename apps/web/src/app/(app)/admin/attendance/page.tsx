@@ -35,6 +35,8 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { TonePill } from '@/components/shared/pastel';
 import { useIsAdmin } from '@/components/shell/me-context';
+import { LockedButton } from '@/components/plans/locked-button';
+import { useHasFeature } from '@/lib/plans';
 import { api, qs, type HistoryRow, type Member, type Page } from '@/lib/api';
 import { addDaysStr, formatHours, shortDate } from '@/lib/format';
 import { LOCATIONS } from '@/lib/locations';
@@ -86,6 +88,7 @@ export default function AttendancePage() {
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canExport = useHasFeature('attendance_export');
   const exportHref = `/api/v1/work-days/export${qs({ from: range.from, to: range.to, userId: userId === ALL ? undefined : userId })}`;
 
   return (
@@ -94,11 +97,15 @@ export default function AttendancePage() {
         title="Attendance"
         description="A status log of who worked where and when. It is a team-visibility tool, not a formal attendance record."
         action={
-          <Button variant="outline" asChild>
-            <a href={exportHref} download>
-              <Download /> Export CSV
-            </a>
-          </Button>
+          canExport ? (
+            <Button variant="outline" asChild>
+              <a href={exportHref} download>
+                <Download /> Export CSV
+              </a>
+            </Button>
+          ) : (
+            <LockedButton>Export CSV</LockedButton>
+          )
         }
       />
 

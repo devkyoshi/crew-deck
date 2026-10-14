@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,6 +56,16 @@ export default function WorkspacesPage() {
             Continue <ArrowRight />
           </Button>
         </form>
+        <p className="text-muted-foreground mt-4 text-center text-sm">
+          New here?{' '}
+          <Link href="/signup" className="text-primary underline underline-offset-4">
+            Create a workspace
+          </Link>{' '}
+          or{' '}
+          <Link href="/pricing" className="text-primary underline underline-offset-4">
+            see pricing
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

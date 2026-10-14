@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 const BASE_DOMAIN = (process.env.BASE_DOMAIN ?? 'localhost').toLowerCase();
 const SESSION_COOKIE = 'cd_session';
 const PUBLIC_PREFIXES = ['/sign-in', '/accept-invite', '/design', '/api'];
+// Pages that belong to the product itself (sign-up, pricing, platform console), served on the bare domain.
+const APEX_PREFIXES = ['/pricing', '/signup', '/platform'];
 
 function tenantSlug(host: string | null) {
   if (!host) return null;
@@ -21,13 +23,19 @@ export function proxy(req: NextRequest) {
 
   if (!slug) {
     if (pathname === '/') return NextResponse.rewrite(new URL('/workspaces', req.url));
-    if (pathname.startsWith('/workspaces') || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
+    if (
+      pathname.startsWith('/workspaces') ||
+      PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
+      APEX_PREFIXES.some((p) => pathname.startsWith(p))
+    ) {
       return NextResponse.next();
     }
     return NextResponse.redirect(new URL('/', req.url));
   }
 
-  if (pathname.startsWith('/workspaces')) return NextResponse.redirect(new URL('/', req.url));
+  if (pathname.startsWith('/workspaces') || APEX_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
   const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isPublic && !req.cookies.get(SESSION_COOKIE)) {
     return NextResponse.redirect(new URL('/sign-in', req.url));

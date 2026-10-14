@@ -29,6 +29,8 @@ import { LEAD_STATUS_LABEL, useCrmAccess, type CrmRecordType } from '@/lib/crm';
 import { CrmGate, useDebounced } from './crm-bits';
 import { ENTITIES } from './entities';
 import { ImportDialog } from './import-dialog';
+import { LockedButton } from '@/components/plans/locked-button';
+import { useHasFeature } from '@/lib/plans';
 import { RecordDialog, toBody, type Values } from './record-dialog';
 
 const PAGE_SIZE = 20;
@@ -44,6 +46,7 @@ export function RecordList({ type, bare = false }: { type: CrmRecordType; bare?:
 function ListInner({ type, bare }: { type: CrmRecordType; bare: boolean }) {
   const def = ENTITIES[type];
   const access = useCrmAccess().data;
+  const canIo = useHasFeature('crm_io');
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
@@ -92,16 +95,19 @@ function ListInner({ type, bare }: { type: CrmRecordType; bare: boolean }) {
   if (type !== 'deal' && (access?.canEdit || access?.canAdmin)) {
     action = (
       <>
-        {access.canAdmin && (
-          <>
-            <ImportDialog type={def.plural as 'companies' | 'contacts' | 'leads'} />
-            <Button variant="outline" asChild>
-              <a href={`/api/v1/crm/export/${def.plural}`} download>
-                <Download className="size-4" aria-hidden /> Export
-              </a>
-            </Button>
-          </>
-        )}
+        {access.canAdmin &&
+          (canIo ? (
+            <>
+              <ImportDialog type={def.plural as 'companies' | 'contacts' | 'leads'} />
+              <Button variant="outline" asChild>
+                <a href={`/api/v1/crm/export/${def.plural}`} download>
+                  <Download className="size-4" aria-hidden /> Export
+                </a>
+              </Button>
+            </>
+          ) : (
+            <LockedButton>Import and export</LockedButton>
+          ))}
         {access.canEdit && create}
       </>
     );

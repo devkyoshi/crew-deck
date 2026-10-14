@@ -153,6 +153,22 @@ A CSV import maps columns to fields, is checked first (dry run), and is rejected
 
 The board uses dnd-kit with a dedicated drag handle button (so cards do not nest interactive elements), the keyboard sensor, and screen reader announcements that name the card and the stage. Every card also has a menu with "Move to stage", which works for anyone who prefers not to drag. Moves are optimistic and roll back with a message if the server refuses.
 
+## ADR-037: Plans are data; limits and features are checked on the server
+
+Plans live in a global `plans` table (limits as numbers, features as keys that match docs/FEATURES.md). A workspace points at a plan; a platform admin can add per-workspace limit overrides (a number replaces the limit, null lifts it). One module (`plans/index.ts`) resolves the effective plan and exposes `assertWithinLimit` and `assertFeature`, which answer 402 `plan_limit` or `feature_locked`. Every route that creates something limited or opens a gated feature calls it; the UI only mirrors it. A workspace with no plan is internal and unlimited (everything that existed before plans). Limits are soft: they stop you adding more, but nothing is ever deleted, hidden or changed by a limit or a downgrade. Seats count active members plus invitations still waiting, so invitations cannot dodge the limit. The audit log hides entries older than the plan's window but keeps them. Prices are display-only; there is no billing.
+
+## ADR-038: Trials end by the clock, not by a job
+
+A sign-up gets a Business trial (14 days by default, a platform setting). `loadPlan` treats a trial whose end time has passed as Free immediately, so nobody keeps paid features because a background job was late. An hourly job (`plans/jobs.ts`) then stores the downgrade and audits it once per workspace; it is safe to run on every instance because only changed rows are returned.
+
+## ADR-039: Self-serve sign-up proves the email first and creates everything in one transaction
+
+`POST /signup` only stores a hashed, 24-hour, single-use token and emails a link; nothing exists until the link is opened. Opening it runs `provisionWorkspace`: consume the token, create the workspace, its settings, the owner and the trial in one transaction, so a failure never burns the token or leaves half a workspace. People with an existing account keep their password. Free email providers (gmail and similar) are allowed by default and cannot lock invitations to their domain; a platform setting can block them at sign-up. Sign-up is rate limited per client and per email address, addresses are checked against reserved names, and the endpoints exist only on the bare domain. The session reaches the new workspace's own address through the existing one-time ticket hand-off.
+
+## ADR-040: The platform console is separate from workspaces, and tenants cannot touch platform data
+
+Platform admins are a separate table with their own session cookie and Redis namespace, reachable only on the bare domain (404 on a workspace address). The application database role has no direct access to `platform_admins`, `platform_settings`, `signup_requests` or `platform_audit_logs`, and cannot update a workspace's status, plan or limits (column-level grants); everything cross-workspace goes through narrow SECURITY DEFINER functions, the same pattern as sign-in. A suspended workspace is refused at the tenant gate, so sign-in, invitations and already-open sessions all stop at once, and its data is kept. Impersonation opens a workspace as its owner for 30 minutes without extension, is read-only (any non-GET request is refused), shows a banner, and is recorded both in that workspace's audit log and in the platform log.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, check-in policy, hosting target.

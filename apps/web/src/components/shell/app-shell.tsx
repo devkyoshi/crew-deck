@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Me } from '@/lib/api';
 import { AppSidebar } from './app-sidebar';
 import { MeProvider } from './me-context';
+import { Branding, StatusBanners } from './status-banners';
 import { Topbar } from './topbar';
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
@@ -17,9 +18,11 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         >
           Skip to content
         </a>
+        <Branding />
         <AppSidebar />
         <SidebarInset>
           <Topbar />
+          <StatusBanners />
           <main id="main" className="flex-1 p-4 sm:p-6 lg:px-8 lg:py-7">
             <div className="mx-auto w-full max-w-6xl">{children}</div>
           </main>

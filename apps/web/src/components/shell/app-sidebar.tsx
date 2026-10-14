@@ -63,9 +63,13 @@ function TenantSwitcher() {
 
   const label = (
     <>
-      <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-        <Layers className="size-3.5" aria-hidden />
-      </span>
+      {org.logoUrl ? (
+        <img src={org.logoUrl} alt="" className="size-7 shrink-0 rounded-md object-cover" />
+      ) : (
+        <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+          <Layers className="size-3.5" aria-hidden />
+        </span>
+      )}
       <span className="grid flex-1 text-left leading-tight">
         <span className="truncate text-[13px] font-semibold">{org.name}</span>
         <span className="text-muted-foreground truncate text-[11px]">{org.slug}</span>

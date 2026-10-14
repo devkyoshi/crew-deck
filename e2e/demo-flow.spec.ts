@@ -65,6 +65,8 @@ test('an admin walks through the whole product without a single error', async ({
     '/admin/spaces',
     '/admin/audit',
     '/admin/crm',
+    '/admin/billing',
+    '/admin/settings/branding',
     '/crm',
     '/crm/leads',
     '/crm/contacts',

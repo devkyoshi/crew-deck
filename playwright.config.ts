@@ -22,6 +22,8 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm --filter @crew-deck/api dev',
+      // No real email in browser tests: sign-up returns its link instead of sending it.
+      env: { EMAIL_MODE: 'log' },
       url: 'http://localhost:4000/api/v1/health',
       reuseExistingServer: !inCI,
       timeout: 90_000,

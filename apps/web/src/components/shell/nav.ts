@@ -1,5 +1,6 @@
 import {
   Building2,
+  CreditCard,
   CalendarCheck,
   CalendarClock,
   Contact,
@@ -88,6 +89,7 @@ export const NAV: NavGroup[] = [
       { title: 'Groups', href: '/admin/groups', icon: UsersRound },
       { title: 'Spaces', href: '/admin/spaces', icon: FolderKanban },
       { title: 'CRM', href: '/admin/crm', icon: Handshake },
+      { title: 'Plan and billing', href: '/admin/billing', icon: CreditCard },
       { title: 'Audit log', href: '/admin/audit', icon: FileClock },
       { title: 'Settings', href: '/admin/settings', icon: Settings },
     ],

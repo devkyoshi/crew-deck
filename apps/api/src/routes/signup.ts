@@ -149,10 +149,20 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
       await db.execute(sql`select signup_request_create(${sha256(token)}, ${b.email}, ${null}::text, ${b.company},
         ${b.slug}, ${new Date(Date.now() + SIGNUP_LINK_HOURS * 3_600_000).toISOString()}::timestamptz)`);
       const link = `${config.WEB_ORIGIN}/signup/verify?token=${encodeURIComponent(token)}`;
-      await sendMail({
-        to: b.email,
-        ...verifySignupEmail({ company: b.company, link, expiresInHours: SIGNUP_LINK_HOURS }),
-      });
+      try {
+        await sendMail({
+          to: b.email,
+          ...verifySignupEmail({ company: b.company, link, expiresInHours: SIGNUP_LINK_HOURS }),
+        });
+      } catch (err) {
+        // The link was not delivered, so say so plainly instead of pretending it was.
+        req.log.error({ err }, 'sign-up email failed');
+        throw new AppError(
+          502,
+          'email_failed',
+          'We could not send the email. Please try again in a moment.',
+        );
+      }
       // Without an email service (local development) the link is returned so you can follow it.
       const showLink = !emailEnabled(config) && !isProd(config);
       return { ok: true, ...(showLink ? { devLink: link } : {}) };

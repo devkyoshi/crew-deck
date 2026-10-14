@@ -1,5 +1,5 @@
 import { buildApp } from './app.js';
-import { loadConfig } from './config.js';
+import { emailEnabled, loadConfig } from './config.js';
 import { createDb } from './db/client.js';
 import { startAutoCloseJobs } from './checkin/jobs.js';
 import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js';
@@ -11,9 +11,9 @@ const config = loadConfig();
 const { db, close } = createDb(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
 const queue = createInviteEmailQueue(redis);
-const sender = config.BREVO_API_KEY
+const sender = emailEnabled(config)
   ? createBrevoSender({
-      apiKey: config.BREVO_API_KEY,
+      apiKey: config.BREVO_API_KEY!,
       fromAddress: config.EMAIL_FROM_ADDRESS,
       fromName: config.EMAIL_FROM_NAME,
     })

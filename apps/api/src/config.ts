@@ -18,6 +18,8 @@ const envSchema = z.object({
   SESSION_TTL_SECONDS: z.coerce.number().default(60 * 60 * 24 * 7),
   /** Brevo transactional email. Without a key, invite links are logged and shown to admins instead. */
   BREVO_API_KEY: z.string().optional(),
+  /** 'log' never sends email, even with a key: messages are logged and links are shown (browser tests). */
+  EMAIL_MODE: z.enum(['auto', 'log']).default('auto'),
   EMAIL_FROM_ADDRESS: z.string().default('no-reply@example.com'),
   EMAIL_FROM_NAME: z.string().default('Crew Deck'),
   INVITE_TTL_DAYS: z.coerce.number().default(7),
@@ -35,6 +37,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return envSchema.parse(env);
 }
 
-export const emailEnabled = (c: Config) => Boolean(c.BREVO_API_KEY);
+export const emailEnabled = (c: Config) => Boolean(c.BREVO_API_KEY) && c.EMAIL_MODE !== 'log';
 export const isProd = (c: Config) => c.NODE_ENV === 'production';
 export const devLoginEnabled = (c: Config) => c.NODE_ENV !== 'production';

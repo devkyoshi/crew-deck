@@ -20,14 +20,31 @@ export interface Me {
     jobTitle: string | null;
     timezone: string;
   };
-  org: { id: string; name: string; slug: string; domain: string };
+  org: {
+    id: string;
+    name: string;
+    slug: string;
+    domain: string;
+    logoUrl: string | null;
+    accentColor: string | null;
+    domainRestricted: boolean;
+  };
+  plan: {
+    key: string | null;
+    name: string;
+    onTrial: boolean;
+    trialEndsAt: string | null;
+    features: string[];
+  };
+  /** Email of the platform admin when this is a read-only impersonated session. */
+  impersonatedBy: string | null;
   orgRole: 'owner' | 'admin' | 'member';
   permissions: string[];
   orgs: { id: string; name: string; slug: string; orgRole: string }[];
 }
 
 export interface Providers {
-  tenant: { name: string; slug: string } | null;
+  tenant: { name: string; slug: string; suspended: boolean } | null;
   password: boolean;
   google: boolean;
   devLogin: boolean;
@@ -44,7 +61,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   const data = await res.json().catch(() => null);
   // The session expired or was ended (for example the person was deactivated): go to sign in.
   if (res.status === 401 && !path.startsWith('/auth/') && typeof window !== 'undefined') {
-    window.location.assign('/sign-in');
+    window.location.assign(path.startsWith('/platform') ? '/platform/sign-in' : '/sign-in');
   }
   if (!res.ok) {
     const err = (data ?? {}) as Partial<ErrorResponse>;

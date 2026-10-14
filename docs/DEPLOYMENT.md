@@ -71,23 +71,26 @@ curl -s localhost:4000/api/v1/health      # {"status":"ok","db":true}
 before the new API starts; running them twice is harmless. To undo the latest migration:
 `docker compose run --rm --entrypoint node_modules/.bin/tsx migrate src/db/migrate.ts down`.
 
-### The first workspace
+### The first platform admin and the first workspace
 
-Self-service workspace creation arrives with Phase 9. Until then, create the first workspace and its owner in SQL
-(replace the values). The owner then signs in with Google using that email, or you can set a
-password hash with the same method the seed script uses.
+Workspaces are created through the product: people sign up at `https://yourdomain.com/signup` (the bare
+domain), or a platform admin creates one at `https://yourdomain.com/platform`. Platform admins are separate
+from workspace accounts. Create the first one on the server, as the schema owner (the password is read from the
+environment and never printed):
 
-```sql
-insert into organizations (name, slug, domain) values ('Acme Inc', 'acme', 'acme.com');
-insert into users (email, name, status) values ('founder@acme.com', 'Founder', 'active');
-insert into memberships (org_id, user_id, org_role)
-  select o.id, u.id, 'owner' from organizations o, users u
-  where o.slug = 'acme' and u.email = 'founder@acme.com';
+```bash
+PLATFORM_ADMIN_EMAIL=you@yourcompany.com PLATFORM_ADMIN_PASSWORD='a long passphrase' \
+  DATABASE_ADMIN_URL=... pnpm --filter @crew-deck/api db:platform-admin
 ```
 
-Run it as the schema owner (`crew_admin`). `domain` is the email domain people must sign in with. The
-development seed and its `dev-password-123` accounts are for local use only; do not run `--profile tools`
-seeding in production.
+Then sign in at `/platform/sign-in`. From the console you can create workspaces (the owner is emailed an
+invitation), change plans, suspend, and change sign-up rules (open or closed sign-ups, blocking free email
+providers, trial length). The development seed and its `dev-password-123` accounts, including the dev platform
+admin `platform@crewdeck.test`, are for local use only; do not run `--profile tools` seeding in production.
+
+The bare domain must serve the web app (`/pricing`, `/signup`, `/platform`) as well as the wildcard
+`*.yourdomain.com` tenants. Sign-up and the console only work on the bare domain; on a workspace address they
+return 404.
 
 ### Reverse proxy and TLS
 
@@ -117,7 +120,9 @@ Only addresses on the workspace's own domain can sign in, and a person must alre
 2. Verify the sender address or domain you will send from. **Brevo rejects mail from unverified senders.**
 3. Set `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` and restart the API.
 
-Without a key the system still works: admins see each invite link and share it themselves.
+Sign-up verification emails go through the same sender. Without a key the system still works: admins see each
+invite link and share it themselves, and the sign-up page shows the verification link on screen (never in
+production). If Brevo rejects a message the sign-up page says so instead of pretending it was sent.
 
 ## Operations
 
@@ -137,6 +142,7 @@ Without a key the system still works: admins see each invite link and share it t
 - [ ] API, Postgres and Redis not reachable from the internet
 - [ ] `TRUST_PROXY=true` behind the proxy
 - [ ] Google redirect URI matches `WEB_ORIGIN`; Brevo sender verified
+- [ ] A platform admin exists and can sign in at `/platform/sign-in`; a test sign-up on the bare domain arrives by email and creates a workspace
 - [ ] First owner can sign in; an invitation email arrives and can be accepted
 - [ ] Backup job running and a restore tested
 - [ ] The dev seed was **not** run (no `@acme.test` accounts exist)

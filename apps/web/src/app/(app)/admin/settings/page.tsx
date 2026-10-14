@@ -35,15 +35,18 @@ export default function SettingsIndexPage() {
             <ArrowRight className="text-muted-foreground size-4" aria-hidden />
           </Card>
         </Link>
-        <Card className="flex-row items-center gap-3 border-dashed p-4 shadow-none">
-          <IconTile tone="violet" icon={Palette} />
-          <div className="min-w-0 flex-1">
-            <div className="font-medium">Branding</div>
-            <div className="text-muted-foreground text-xs">
-              Name, logo and accent colour. Coming with workspace onboarding.
+        <Link href="/admin/settings/branding" className="group focus-visible:outline-none">
+          <Card className="hover:border-primary/40 group-focus-visible:ring-ring/50 flex-row items-center gap-3 p-4 shadow-none transition-colors group-focus-visible:ring-[3px]">
+            <IconTile tone="violet" icon={Palette} />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">Branding and access</div>
+              <div className="text-muted-foreground text-xs">
+                Name, logo, accent colour and who can be invited
+              </div>
             </div>
-          </div>
-        </Card>
+            <ArrowRight className="text-muted-foreground size-4" aria-hidden />
+          </Card>
+        </Link>
       </div>
     </>
   );

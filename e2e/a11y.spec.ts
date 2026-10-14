@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { signInAsMember, signInAsOwner } from './helpers';
+import { PASSWORD, signInAsMember, signInAsOwner } from './helpers';
 
 /**
  * WCAG 2.1 A and AA automated checks on every main screen, in light and dark themes. Automated scans
@@ -42,6 +42,8 @@ const ADMIN_PAGES = [
   '/admin/spaces',
   '/admin/audit',
   '/admin/crm',
+  '/admin/billing',
+  '/admin/settings/branding',
   '/crm',
   '/crm/leads',
   '/crm/contacts',
@@ -71,6 +73,43 @@ test.describe('accessibility: signed-out screens', () => {
     await expect(page.getByText('Find your workspace')).toBeVisible();
     await scan(page, 'workspaces');
   });
+});
+
+test.describe('accessibility: public pages and the platform console', () => {
+  test.setTimeout(180_000);
+  const APEX = 'http://localhost:3000';
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`pricing, sign-up and platform screens (${theme})`, async ({ page }) => {
+      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      for (const [path, ready] of [
+        ['/pricing', 'columnheader'],
+        ['/signup', 'button'],
+        ['/signup/verify?token=not-a-real-token', 'link'],
+        ['/platform/sign-in', 'button'],
+      ] as const) {
+        await page.goto(`${APEX}${path}`);
+        await expect(page.getByRole(ready).first()).toBeVisible();
+        await expect(page.locator('[role="status"][aria-label^="Loading"]')).toHaveCount(0, {
+          timeout: 10_000,
+        });
+        await scan(page, `${path} (${theme})`);
+      }
+      await page.getByLabel('Email').fill('platform@crewdeck.test');
+      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
+      await scan(page, `/platform (${theme})`);
+      await page.getByRole('link', { name: 'Settings' }).click();
+      await expect(page.getByRole('heading', { name: 'Platform settings' })).toBeVisible();
+      await scan(page, `/platform/settings (${theme})`);
+      await page.goto(`${APEX}/platform`);
+      await page.getByRole('link', { name: 'Acme Inc' }).click();
+      await expect(page.getByRole('heading', { name: 'Acme Inc', level: 1 })).toBeVisible();
+      await expect(page.locator('[role="status"][aria-label^="Loading"]')).toHaveCount(0);
+      await scan(page, `/platform/tenants (${theme})`);
+    });
+  }
 });
 
 test.describe('accessibility: signed-in screens', () => {
