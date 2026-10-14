@@ -56,7 +56,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'animate-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-10 text-center',
+        'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-10 text-center',
         'in-data-[slot=card]:rounded-none in-data-[slot=card]:border-0 in-data-[slot=card]:py-6',
         'in-[td]:rounded-none in-[td]:border-0 in-[td]:py-6',
       )}

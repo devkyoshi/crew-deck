@@ -6,6 +6,7 @@ import { devLoginEnabled } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { randomToken } from '../lib/crypto.js';
 import {
+  assertOrgActive,
   clearSessionCookie,
   makeRequireTenant,
   setSessionCookie,
@@ -65,10 +66,10 @@ export async function authRoutes(
 
   // Which sign-in methods the UI should offer for this host.
   r.get('/providers', async (req) => {
-    let tenant: { name: string; slug: string } | null = null;
+    let tenant: { name: string; slug: string; suspended: boolean } | null = null;
     if (req.tenantSlug) {
       const org = await findOrgBySlug(db, req.tenantSlug);
-      if (org) tenant = { name: org.name, slug: org.slug };
+      if (org) tenant = { name: org.name, slug: org.slug, suspended: org.status === 'suspended' };
     }
     return { tenant, password: true, google: google !== null, devLogin: devLoginEnabled(config) };
   });
@@ -172,6 +173,7 @@ export async function authRoutes(
   async function orgById(id: string): Promise<Org> {
     const rows = await db.execute<Org>(sql`select * from auth_org_by_id(${id})`);
     if (!rows[0]) throw new AppError(404, 'tenant_not_found', 'Workspace not found');
+    assertOrgActive(rows[0]);
     return rows[0];
   }
 
@@ -186,10 +188,17 @@ export async function authRoutes(
       const slug = req.tenantSlug ?? req.query.tenant;
       const org = slug ? await findOrgBySlug(db, slug) : null;
       if (!org) throw new AppError(404, 'tenant_not_found', 'Workspace not found');
+      assertOrgActive(org);
       const state = randomToken();
       const nonce = randomToken();
       await sessions.saveState(state, { slug: org.slug, nonce });
-      return reply.redirect(google.authUrl({ state, nonce, domainHint: org.domain }));
+      return reply.redirect(
+        google.authUrl({
+          state,
+          nonce,
+          domainHint: org.domain_restricted ? org.domain : undefined,
+        }),
+      );
     },
   );
 
@@ -215,6 +224,7 @@ export async function authRoutes(
 
       const org = await findOrgBySlug(db, saved.slug);
       if (!org) return fail('tenant_not_found');
+      if (org.status === 'suspended') return fail('workspace_suspended');
 
       let profile;
       try {
@@ -224,7 +234,8 @@ export async function authRoutes(
         return fail('sso_failed');
       }
       if (!profile.emailVerified) return fail('email_not_verified');
-      if (!emailMatchesOrg(profile.email, org)) return fail('domain_not_allowed');
+      if (org.domain_restricted && !emailMatchesOrg(profile.email, org))
+        return fail('domain_not_allowed');
 
       let userId: string;
       const existing = await lookupUserByEmail(db, org.id, profile.email);

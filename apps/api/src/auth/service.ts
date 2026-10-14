@@ -6,6 +6,7 @@ import { withTenant, type Db } from '../db/client.js';
 import { groupMembers, groups, invitations, memberships, users } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import { sha256 } from '../lib/crypto.js';
+import { hasFeature, loadPlan } from '../plans/index.js';
 import { hashPassword } from './password.js';
 
 export type Org = {
@@ -13,6 +14,11 @@ export type Org = {
   name: string;
   slug: string;
   domain: string;
+  status: 'active' | 'suspended';
+  suspended_reason: string | null;
+  logo_url: string | null;
+  accent_color: string | null;
+  domain_restricted: boolean;
 };
 
 export interface AuthUser {
@@ -146,12 +152,18 @@ export async function acceptInvitation(
   invitation: { id: string; email: string; role: OrgRole; groupIds?: string[] },
   profile: AcceptProfile,
 ): Promise<string> {
-  if (!emailMatchesOrg(invitation.email, org)) {
-    throw new AppError(403, 'domain_not_allowed', 'This email is not on the workspace domain');
-  }
   const passwordHash = profile.password ? await hashPassword(profile.password) : null;
 
   return withTenant(db, org.id, async (tx) => {
+    // Free workspaces accept anyone; paid ones can lock invitations to the company domain.
+    const plan = await loadPlan(tx, org.id);
+    if (
+      org.domain_restricted &&
+      hasFeature(plan, 'domain_lock') &&
+      !emailMatchesOrg(invitation.email, org)
+    ) {
+      throw new AppError(403, 'domain_not_allowed', 'This email is not on the workspace domain');
+    }
     // Atomic claim so one token cannot be accepted twice concurrently.
     const claimed = await tx
       .update(invitations)

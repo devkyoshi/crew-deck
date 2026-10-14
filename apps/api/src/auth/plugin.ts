@@ -27,6 +27,8 @@ declare module 'fastify' {
     /** Set by requireAuth. */
     user?: AuthUser;
     sessionId?: string;
+    /** Email of the platform admin when this is an impersonated, read-only session. */
+    impersonatedBy?: string;
   }
 }
 
@@ -51,6 +53,17 @@ export function clearSessionCookie(reply: FastifyReply, _config: Config) {
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
+/** A suspended workspace cannot be used at all: no sign-in, no invitations, and live sessions stop. */
+export function assertOrgActive(org: Org) {
+  if (org.status === 'suspended') {
+    throw new AppError(
+      403,
+      'workspace_suspended',
+      'This workspace is suspended. Contact your administrator or support.',
+    );
+  }
+}
+
 /** Resolves the tenant from the host. A request with no resolvable tenant is rejected. */
 export function makeRequireTenant({ db }: AuthDeps) {
   return async (req: FastifyRequest) => {
@@ -58,6 +71,7 @@ export function makeRequireTenant({ db }: AuthDeps) {
     if (!req.tenantSlug) throw new AppError(400, 'tenant_required', 'No workspace in this request');
     const org = await findOrgBySlug(db, req.tenantSlug);
     if (!org) throw new AppError(404, 'tenant_not_found', 'Workspace not found');
+    assertOrgActive(org);
     req.org = org;
   };
 }
@@ -74,6 +88,13 @@ export function makeRequireAuth(deps: AuthDeps) {
     if (!user || user.status !== 'active') {
       await deps.sessions.destroy(req.org!.id, sid);
       throw new AppError(401, 'unauthenticated', 'Sign in required');
+    }
+    if (session.impersonatedBy) {
+      // A platform admin looking around can read everything and change nothing.
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        throw new AppError(403, 'impersonation_read_only', 'Impersonated sessions are read-only');
+      }
+      req.impersonatedBy = session.impersonatedBy;
     }
     req.user = user;
     req.sessionId = sid;

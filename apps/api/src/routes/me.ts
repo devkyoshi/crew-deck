@@ -6,7 +6,8 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
 import { loadAuthUser } from '../auth/service.js';
 import { withTenant } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { organizations, users } from '../db/schema.js';
+import { loadPlan } from '../plans/index.js';
 import { ADMIN_ACTIONS, can } from '../permissions/can.js';
 
 export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
@@ -23,6 +24,17 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
       org_role: string;
     }>(sql`select * from auth_user_orgs(${user.id})`);
     const actor = { userId: user.id, orgId: org.id, orgRole: user.orgRole };
+    const { plan, branding } = await withTenant(deps.db, org.id, async (tx) => {
+      const [o] = await tx.select().from(organizations).where(eq(organizations.id, org.id));
+      return {
+        plan: await loadPlan(tx, org.id),
+        branding: {
+          logoUrl: o?.logoUrl ?? null,
+          accentColor: o?.accentColor ?? null,
+          domainRestricted: o?.domainRestricted ?? true,
+        },
+      };
+    });
     return {
       user: {
         id: user.id,
@@ -32,7 +44,15 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
         jobTitle: user.jobTitle,
         timezone: user.timezone,
       },
-      org: { id: org.id, name: org.name, slug: org.slug, domain: org.domain },
+      org: { id: org.id, name: org.name, slug: org.slug, domain: org.domain, ...branding },
+      plan: {
+        key: plan.key,
+        name: plan.name,
+        onTrial: plan.onTrial,
+        trialEndsAt: plan.trialEndsAt,
+        features: plan.features,
+      },
+      impersonatedBy: req.impersonatedBy ?? null,
       orgRole: user.orgRole,
       // Mirrors can() for the UI. The server still enforces every action itself.
       permissions: ADMIN_ACTIONS.filter((a) => can(actor, a)),

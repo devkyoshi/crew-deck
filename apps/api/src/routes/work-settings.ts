@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
+import { assertWithinLimit, countSites, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { loadSettings } from '../checkin/service.js';
@@ -119,6 +120,11 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     if (!can(actor, 'settings.manage')) throw forbidden();
     try {
       return await withTenant(deps.db, actor.orgId, async (tx) => {
+        assertWithinLimit(
+          await loadPlan(tx, actor.orgId),
+          'sites',
+          await countSites(tx, actor.orgId),
+        );
         const [row] = await tx
           .insert(sites)
           .values({ orgId: actor.orgId, name: req.body.name, address: req.body.address || null })

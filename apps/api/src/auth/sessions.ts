@@ -19,17 +19,32 @@ export class SessionStore {
     return orgKey(orgId, 'sess', sha256(sid));
   }
 
-  async create(orgId: string, userId: string) {
+  /**
+   * `impersonatedBy` marks a platform admin's read-only visit: it has its own short lifetime that is
+   * never extended by activity.
+   */
+  async create(
+    orgId: string,
+    userId: string,
+    opts: { impersonatedBy?: string; ttl?: number } = {},
+  ) {
     const sid = randomToken();
-    await this.redis.set(this.key(orgId, sid), JSON.stringify({ userId }), 'EX', this.ttl);
+    const value = opts.impersonatedBy
+      ? { userId, impersonatedBy: opts.impersonatedBy }
+      : { userId };
+    await this.redis.set(this.key(orgId, sid), JSON.stringify(value), 'EX', opts.ttl ?? this.ttl);
     return sid;
   }
 
-  async get(orgId: string, sid: string): Promise<{ userId: string } | null> {
+  async get(
+    orgId: string,
+    sid: string,
+  ): Promise<{ userId: string; impersonatedBy?: string } | null> {
     const raw = await this.redis.get(this.key(orgId, sid));
     if (!raw) return null;
-    await this.redis.expire(this.key(orgId, sid), this.ttl);
-    return JSON.parse(raw);
+    const session = JSON.parse(raw) as { userId: string; impersonatedBy?: string };
+    if (!session.impersonatedBy) await this.redis.expire(this.key(orgId, sid), this.ttl);
+    return session;
   }
 
   async destroy(orgId: string, sid: string) {

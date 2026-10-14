@@ -8,6 +8,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { loadSettings } from '../checkin/service.js';
 import {
   assertActiveMember,
+  crmCapacity,
   crmGuard,
   currencyCode,
   email,
@@ -302,6 +303,7 @@ export async function crmRecordRoutes(app: FastifyInstance, deps: AuthDeps) {
       try {
         return await withTenant(deps.db, actor.orgId, async (tx) => {
           await crmGuard(tx, actor, 'edit');
+          await crmCapacity(tx, actor.orgId);
           const b = req.body;
           await assertActiveMember(tx, actor.orgId, b.ownerId);
           const [row] = await tx
@@ -585,6 +587,7 @@ export async function crmRecordRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
+        await crmCapacity(tx, actor.orgId);
         const b = req.body;
         await assertCompany(tx, actor.orgId, b.companyId);
         await assertActiveMember(tx, actor.orgId, b.ownerId);
@@ -807,6 +810,7 @@ export async function crmRecordRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'edit');
+      await crmCapacity(tx, actor.orgId);
       const b = req.body;
       await assertActiveMember(tx, actor.orgId, b.ownerId);
       const [row] = await tx
@@ -964,6 +968,13 @@ export async function crmRecordRoutes(app: FastifyInstance, deps: AuthDeps) {
         return await withTenant(deps.db, actor.orgId, async (tx) => {
           await crmGuard(tx, actor, 'edit');
           const b = req.body;
+          await crmCapacity(
+            tx,
+            actor.orgId,
+            (b.company.mode === 'new' ? 1 : 0) +
+              (b.contact.mode === 'new' ? 1 : 0) +
+              (b.deal ? 1 : 0),
+          );
           const [lead] = await tx
             .select()
             .from(crmLeads)

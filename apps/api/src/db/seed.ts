@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../auth/password.js';
 import { sha256 } from '../lib/crypto.js';
 import { createDb } from './client.js';
+import { sql } from 'drizzle-orm';
 import { invitations, memberships, organizations, users } from './schema.js';
 
 /** Dev-only fixtures. Skipped when NODE_ENV=production. */
@@ -84,6 +85,17 @@ export async function seed(adminUrl: string) {
           .onConflictDoNothing();
       }
       console.log(`seeded ${t.slug}`);
+    }
+    // A platform admin for the console at /platform (development only; production uses create-platform-admin).
+    if (dev) {
+      await db.execute(
+        sql`insert into platform_admins (email, name, password_hash) values ('platform@crewdeck.test', 'Platform Admin', ${passwordHash}) on conflict (email) do update set password_hash = excluded.password_hash`,
+      );
+      // The demo workspace shows the Business plan so every feature is visible.
+      await db.execute(
+        sql`update organizations set plan_key = 'business' where slug = 'acme' and plan_key is null`,
+      );
+      console.log('seeded platform admin');
     }
   } finally {
     await close();

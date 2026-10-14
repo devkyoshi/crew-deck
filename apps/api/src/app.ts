@@ -29,6 +29,9 @@ import { crmIoRoutes } from './routes/crm-io.js';
 import { spaceRoutes } from './routes/spaces.js';
 import { workSettingsRoutes } from './routes/work-settings.js';
 import { memberRoutes } from './routes/members.js';
+import { planRoutes } from './routes/plan.js';
+import { platformRoutes } from './routes/platform.js';
+import { signupRoutes, type SendMail } from './routes/signup.js';
 import type { EnqueueInviteEmail } from './email/queue.js';
 
 export interface AppDeps {
@@ -39,9 +42,11 @@ export interface AppDeps {
   google?: GoogleClient | null;
   /** Queues an invite email (BullMQ in the server, a fake in tests). */
   enqueueInviteEmail?: EnqueueInviteEmail;
+  /** Sends a one-off email (sign-up verification). Logs in development, Brevo in production. */
+  sendMail?: SendMail;
 }
 
-export function buildApp({ db, redis, config, google, enqueueInviteEmail }: AppDeps) {
+export function buildApp({ db, redis, config, google, enqueueInviteEmail, sendMail }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
     logger: {
@@ -100,6 +105,18 @@ export function buildApp({ db, redis, config, google, enqueueInviteEmail }: AppD
   app.register(crmActivityRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(crmIoRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(auditRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(platformRoutes, {
+    prefix: '/api/v1',
+    ...authDeps,
+    redis,
+    sendMail: sendMail ?? (async () => {}),
+  });
+  app.register(planRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(signupRoutes, {
+    prefix: '/api/v1',
+    ...authDeps,
+    sendMail: sendMail ?? (async () => {}),
+  });
 
   return app;
 }

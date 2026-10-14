@@ -16,6 +16,19 @@ export const organizations = pgTable('organizations', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   domain: text('domain').notNull(),
+  status: text('status', { enum: ['active', 'suspended'] })
+    .notNull()
+    .default('active'),
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+  suspendedReason: text('suspended_reason'),
+  planKey: text('plan_key'),
+  onTrial: boolean('on_trial').notNull().default(false),
+  trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+  limitOverrides: jsonb('limit_overrides').notNull().default({}),
+  createdVia: text('created_via').notNull().default('admin'),
+  logoUrl: text('logo_url'),
+  accentColor: text('accent_color'),
+  domainRestricted: boolean('domain_restricted').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

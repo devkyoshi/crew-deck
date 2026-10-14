@@ -5,22 +5,34 @@ import { startAutoCloseJobs } from './checkin/jobs.js';
 import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js';
 import { createBrevoSender, createLogSender } from './email/sender.js';
 import { createRedis } from './lib/redis.js';
+import { startTrialExpiry } from './plans/jobs.js';
 
 const config = loadConfig();
 const { db, close } = createDb(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
 const queue = createInviteEmailQueue(redis);
-const app = buildApp({ db, redis, config, enqueueInviteEmail: queue });
-
 const sender = config.BREVO_API_KEY
   ? createBrevoSender({
       apiKey: config.BREVO_API_KEY,
       fromAddress: config.EMAIL_FROM_ADDRESS,
       fromName: config.EMAIL_FROM_NAME,
     })
-  : createLogSender((m) => app.log.info(m));
+  : createLogSender((m) => console.log(m));
+const app = buildApp({
+  db,
+  redis,
+  config,
+  enqueueInviteEmail: queue,
+  sendMail: (m) => sender.send(m),
+});
+
 const worker = startInviteEmailWorker(redis, sender, (m) => app.log.error(m));
 const autoClose = await startAutoCloseJobs(redis, db, {
+  info: (m) => app.log.info(m),
+  error: (m) => app.log.error(m),
+});
+
+const trials = startTrialExpiry(db, {
   info: (m) => app.log.info(m),
   error: (m) => app.log.error(m),
 });
@@ -29,6 +41,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     await worker.close();
     await autoClose.close();
+    await trials.close();
     await queue.close();
     await app.close();
     redis.disconnect();

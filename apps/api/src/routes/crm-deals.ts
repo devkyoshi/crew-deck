@@ -7,6 +7,7 @@ import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import {
   assertActiveMember,
+  crmCapacity,
   crmGuard,
   currencyCode,
   DEFAULT_STAGES,
@@ -27,6 +28,7 @@ import {
   users,
 } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
+import { assertWithinLimit, countPipelines, loadPlan } from '../plans/index.js';
 import { offsetOf, pageQuery } from '../lib/pagination.js';
 import type { Actor } from '../permissions/can.js';
 
@@ -93,6 +95,11 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
         await ensureDefaultPipeline(tx, actor.orgId);
+        assertWithinLimit(
+          await loadPlan(tx, actor.orgId),
+          'pipelines',
+          await countPipelines(tx, actor.orgId),
+        );
         const [p] = await tx
           .insert(crmPipelines)
           .values({ orgId: actor.orgId, name: req.body.name })
@@ -634,6 +641,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'edit');
+      await crmCapacity(tx, actor.orgId);
       const b = req.body;
       await assertLinks(tx, actor.orgId, b);
       await assertActiveMember(tx, actor.orgId, b.ownerId);

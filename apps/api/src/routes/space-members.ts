@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { listAudit, writeAudit } from '../audit/service.js';
+import { assertFeature, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant, type Tx } from '../db/client.js';
@@ -370,6 +371,8 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
         if (!can(actor, 'audit.viewSpace', spaceCtx(space))) throw forbidden();
+        const plan = await loadPlan(tx, actor.orgId);
+        assertFeature(plan, 'space_audit', 'The per-space audit log');
         return listAudit(tx, {
           ...req.query,
           orgId: actor.orgId,

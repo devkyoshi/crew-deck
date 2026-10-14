@@ -15,6 +15,7 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
 import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
 import { can } from '../permissions/can.js';
+import { assertWithinLimit, countSeats, hasFeature, loadPlan } from '../plans/index.js';
 
 const DAY_MS = 24 * 3600 * 1000;
 const email = z.string().trim().toLowerCase().email().max(254);
@@ -118,6 +119,9 @@ export async function invitationRoutes(
 
       const results = await withTenant(db, actor.orgId, async (tx) => {
         const out: InviteResult[] = [];
+        const plan = await loadPlan(tx, actor.orgId);
+        const restricted = org.domain_restricted && hasFeature(plan, 'domain_lock');
+        let seatsUsed = await countSeats(tx, actor.orgId);
         const groupIds = [...new Set(req.body.groupIds)];
         if (groupIds.length) {
           const found = await tx
@@ -129,7 +133,7 @@ export async function invitationRoutes(
           }
         }
         for (const addr of emails) {
-          if (!emailMatchesOrg(addr, org)) {
+          if (restricted && !emailMatchesOrg(addr, org)) {
             out.push({ email: addr, status: 'invalid_domain' });
             continue;
           }
@@ -150,6 +154,8 @@ export async function invitationRoutes(
             out.push({ email: addr, status: 'already_invited', invitationId: pending[0].id });
             continue;
           }
+          assertWithinLimit(plan, 'seats', seatsUsed);
+          seatsUsed++;
           const token = randomToken();
           const [row] = await tx
             .insert(invitations)

@@ -15,6 +15,7 @@ import {
 } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
+import { assertFeature, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { loadSettings, zoneFor, type WorkSettings } from '../checkin/service.js';
@@ -692,6 +693,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'attendance.export')) throw forbidden();
       const csv = await withTenant(deps.db, actor.orgId, async (tx) => {
+        assertFeature(await loadPlan(tx, actor.orgId), 'attendance_export', 'Attendance export');
         const out = await historyRows(tx, actor, { scope: 'all', ...req.query });
         const head = [
           'Date',

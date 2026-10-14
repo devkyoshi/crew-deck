@@ -58,6 +58,12 @@ export function makeApp(
     google?: GoogleClient | null;
     rateLimit?: number;
     enqueue?: (job: CapturedInvite) => Promise<void> | void;
+    sendMail?: (m: {
+      to: string;
+      subject: string;
+      html: string;
+      text: string;
+    }) => Promise<void> | void;
     env?: Record<string, string>;
   } = {},
 ) {
@@ -77,6 +83,9 @@ export function makeApp(
     google: opts.google ?? null,
     enqueueInviteEmail: async (job) => {
       await opts.enqueue?.(job);
+    },
+    sendMail: async (m) => {
+      await opts.sendMail?.(m);
     },
   });
   return {

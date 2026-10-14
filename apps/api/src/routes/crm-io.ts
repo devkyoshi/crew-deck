@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { BOM, crmGuard, csvCell } from '../crm/helpers.js';
+import { BOM, crmCapacity, crmGuard, csvCell } from '../crm/helpers.js';
+import { assertFeature, loadPlan } from '../plans/index.js';
 import { withTenant } from '../db/client.js';
 import { crmCompanies, crmContacts, crmLeads, memberships, users } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
@@ -159,6 +160,7 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
 
       const result = await withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
+        assertFeature(await loadPlan(tx, actor.orgId), 'crm_io', 'CSV import');
 
         // Owners by email (active members only).
         const owners = await tx
@@ -224,6 +226,7 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
         };
         if (failures.length || req.body.dryRun) return { ...summary, created: 0, applied: false };
 
+        await crmCapacity(tx, actor.orgId, clean.length);
         const owner = (v: Record<string, string | null>) => v.ownerId ?? actor.userId;
         const batch = <T>(items: T[], size = 500) =>
           Array.from({ length: Math.ceil(items.length / size) }, (_, k) =>
@@ -300,6 +303,7 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
       const type = req.params.type;
       const csv = await withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
+        assertFeature(await loadPlan(tx, actor.orgId), 'crm_io', 'CSV export');
         const owner = sql<string | null>`coalesce(${users.name}, ${users.email})`;
         let header: string[];
         let rows: unknown[][];

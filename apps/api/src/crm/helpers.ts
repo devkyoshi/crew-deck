@@ -12,6 +12,7 @@ import {
   type CrmRecordType,
 } from '../db/schema.js';
 import { AppError, forbidden } from '../lib/errors.js';
+import { assertWithinLimit, countCrmRecords, loadPlan } from '../plans/index.js';
 import { can, type Action, type Actor } from '../permissions/can.js';
 
 export const TAG_COLORS = ['blue', 'orange', 'pink', 'green', 'violet', 'amber'] as const;
@@ -197,4 +198,15 @@ export async function ownerLabel(tx: Tx, userId: string | null) {
     .from(users)
     .where(eq(users.id, userId));
   return u ? (u.name ?? u.email) : null;
+}
+
+/** Creating `adding` more CRM records must fit the plan's record limit. */
+export async function crmCapacity(tx: Tx, orgId: string, adding = 1) {
+  if (adding <= 0) return;
+  assertWithinLimit(
+    await loadPlan(tx, orgId),
+    'crm_records',
+    await countCrmRecords(tx, orgId),
+    adding,
+  );
 }
