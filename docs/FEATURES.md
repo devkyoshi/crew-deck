@@ -69,7 +69,8 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Work items, hierarchy, statuses, Kanban board with inline create, side panel, board settings (W1) | Built | `work_items` |
 | Drag and drop between columns, keyboard and touch (W2)               | Built   |                    |
 | Filters in the URL, swimlanes, labels, bulk actions, shortcuts (W2)  | Built   |                    |
-| Rich text, comments, mentions, attachments, links, activity (W3)     | Planned | `max_attachment_mb`, `storage_mb` |
+| Rich text, comments, mentions, attachments, links, activity (W3)     | Built   | `max_attachment_mb`, `storage_mb` |
+| Watchers, duplicate an item, move an item to another space (W3)      | Built   | `work_items`       |
 | List view, epics, search, My work, saved filters (W4)                | Planned | `shared_filters`   |
 | Notifications: in-app, email, preferences (W5)                       | Planned |                    |
 | Backlog and sprints (Scrum) (W6)                                     | Planned | `scrum_sprints`    |

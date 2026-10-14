@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-14 - Work item depth: rich text, comments, files, links and history (W3)
+
+- Descriptions and comments use a rich text editor (headings, lists, checklists, quotes, code, links) with
+  @mentions of people who can open the space. Descriptions save by themselves.
+- Comments: edit your own, delete your own (space admins can delete any); deleted comments leave a marker.
+- Attachments: drag and drop or choose files, with progress and image previews. Plan limits per file and for
+  total storage apply. Files are served through short-lived links that only work in their own workspace.
+- Linked items: blocks / is blocked by, relates to, duplicates, also across spaces.
+- Activity tab: every change to an item in plain words, newest first. Watchers tab and a watch toggle; the
+  reporter, the assignee, commenters and anyone mentioned watch automatically.
+- Duplicate an item (with its subtasks) and move an item to another space.
+- Shortcuts in an open item: M comment, A assignee, L labels.
+- New settings: `STORAGE_DRIVER`, `STORAGE_DIR`, `STORAGE_SIGNING_SECRET` (required in production).
+- Tests: 461 API tests (29 new), browser tests for the item flow with an accessibility scan, and duplicate and
+  move. ADR-056.
+
 ## 2026-10-14 - Templates fully real: the team's own words, a first space, one-click switching
 
 - Each kind of work now speaks its own language on the board, the item panel, filters and bulk actions:

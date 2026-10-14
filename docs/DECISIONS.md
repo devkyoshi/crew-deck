@@ -284,3 +284,27 @@ usage implies) and the columns new spaces start with. Usage options that are not
   sign-up already uses. Workspaces you are not in look like they do not exist; impersonated sessions cannot
   switch.
 
+## ADR-056: Work item depth on MongoDB (W3)
+
+- **Collections, not migrations.** Comments, links, watchers, activity and attachments are tenant collections
+  scoped by the repository layer like everything else. `activity_events` is append-only (the repository
+  refuses updates and deletes, like the audit log). Watchers have a composite key (item, user) and are added
+  with upserts, because a duplicate-key error inside a MongoDB transaction aborts the whole transaction.
+- **Rich text is rebuilt, never trusted.** The browser sends Tiptap JSON; `sanitizeDoc` rebuilds it from an
+  allow-list of nodes, marks and attributes, keeps only http, https and mailto links, and caps size and depth.
+  Mentions must name people who can open the space. Plain `description` still works for older clients.
+- **Activity stores snapshots.** Each event keeps display values (a status name, a person's name), so later
+  renames do not rewrite history. Field changes are found by comparing the item before and after a change.
+- **Links may cross spaces** inside a workspace. Both ends must be visible to create one; lists leave out ends
+  the viewer cannot open; either end can remove a link if the caller can change that end.
+- **Files.** A `StorageDriver` interface with a local-disk driver. Keys are made of ids only; the cleaned name
+  lives in the database, so names cannot steer paths. Links last 15 minutes and are signed with
+  `STORAGE_SIGNING_SECRET` over the attachment id, the workspace id and the expiry; the workspace comes from the
+  address the link is opened on, so a link never works in another workspace. Only real PNG, JPEG, GIF and WebP
+  (judged by their first bytes) show inline; everything else downloads as `application/octet-stream`, and
+  programs and scripts are refused. Plan limits `max_attachment_mb` and `storage_mb` are enforced while the
+  upload streams.
+- **Transfer** gives the item (and its subtasks) new keys in the target space, maps statuses by name and then by
+  kind, keeps labels with the same name, drops assignees who cannot open the target, and keeps comments, links,
+  attachments and history. A subtask cannot move alone.
+

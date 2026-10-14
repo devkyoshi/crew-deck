@@ -48,6 +48,8 @@ Set these for the `api` service (compose reads them from the environment or a `.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`               | From Google Cloud (see below)                                                                |
 | `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` | From Brevo (see below)                                                                       |
 | `AUTH_RATE_LIMIT_MAX`                                    | Leave at the default (10)                                                                    |
+| `STORAGE_DRIVER`, `STORAGE_DIR`                          | `local` and `/data/files` (set in compose; the `files` volume is mounted there)               |
+| `STORAGE_SIGNING_SECRET`                                 | Required. 32+ random characters (`openssl rand -base64 48`); signs file links. The API refuses to start without it |
 
 Turn on MongoDB authentication and give the API its own user (the dev compose file runs without auth). The `web` image bakes in
 `API_INTERNAL_URL` at build time (`http://api:4000` in compose).
@@ -129,6 +131,8 @@ production). If Brevo rejects a message the sign-up page says so instead of pret
 
 - **Backups.** MongoDB is the system of record: `docker compose exec mongo mongodump --archive --gzip --db crewdeck > backup.archive.gz`
   nightly, copied off the VM, and restore-tested (`mongorestore --archive --gzip`). Redis does not need backing up.
+  Attachments live in the `files` volume (`/data/files` in the API container): back it up with the database,
+  for example `docker run --rm -v crew-deck_files:/f -v $PWD:/b alpine tar czf /b/files.tgz -C /f .`
 - **Logs.** The API logs structured JSON to stdout (`docker compose logs api`). Authorization and cookie headers are redacted.
 - **Health.** `GET /api/v1/health` checks the database. Compose uses it as the API health check.
 - **Capacity.** Measured on one process with 5,000 people and 1,500 spaces in one workspace: list pages
@@ -145,5 +149,6 @@ production). If Brevo rejects a message the sign-up page says so instead of pret
 - [ ] Google redirect URI matches `WEB_ORIGIN`; Brevo sender verified
 - [ ] A platform admin exists and can sign in at `/platform/sign-in`; a test sign-up on the bare domain arrives by email and creates a workspace
 - [ ] First owner can sign in; an invitation email arrives and can be accepted
-- [ ] Backup job running and a restore tested
+- [ ] `STORAGE_SIGNING_SECRET` set; an attachment uploads and opens in the browser
+- [ ] Backup job running (database and the `files` volume) and a restore tested
 - [ ] The dev seed was **not** run (no `@acme.test` accounts exist)
