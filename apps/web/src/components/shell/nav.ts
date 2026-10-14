@@ -13,6 +13,7 @@ import {
   FolderKanban,
   Home,
   LayoutGrid,
+  ListTodo,
   Settings,
   Users,
   UsersRound,
@@ -47,6 +48,7 @@ export const NAV: NavGroup[] = [
     label: 'Workspace',
     items: [
       { title: 'Home', href: '/', icon: Home },
+      { title: 'My work', href: '/my-work', icon: ListTodo },
       { title: 'My day', href: '/my-day', icon: CalendarCheck, needsCheckin: true },
       { title: 'Team', href: '/team', icon: TeamIcon, needsCheckin: true },
       { title: 'People', href: '/people', icon: Users },

@@ -98,6 +98,8 @@ import { BoardColumn, ColumnCreateRow, ColumnHeader, ColumnSkeleton } from './bo
 import { BulkBar } from './bulk-bar';
 import { CreateItemDialog } from './create-item-dialog';
 import { FilterBar } from './filter-bar';
+import { SavedFilters } from './saved-filters';
+import { useSpace } from '@/components/spaces/space-context';
 import { ItemDetail } from './item-detail';
 import { ShortcutsOverlay } from './shortcuts-overlay';
 import { UserAvatar } from './work-bits';
@@ -313,6 +315,7 @@ function Cell({
 
 export function BoardView({ spaceKey }: { spaceKey: string }) {
   const vocab = useVocabulary();
+  const space = useSpace();
   const me = useMe();
   const router = useRouter();
   const pathname = usePathname();
@@ -778,7 +781,17 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
 
   return (
     <div className="space-y-4">
-      <FilterBar space={spaceKey} filters={filters} onChange={setFilters} searchRef={searchRef} />
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <FilterBar space={spaceKey} filters={filters} onChange={setFilters} searchRef={searchRef} />
+        </div>
+        <SavedFilters
+          spaceKey={spaceKey}
+          spaceId={space.id}
+          current={filterStr}
+          onApply={(q) => setFilters(parseFilters(new URLSearchParams(q)))}
+        />
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground text-sm" aria-live="polite">

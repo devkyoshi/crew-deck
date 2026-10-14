@@ -309,6 +309,8 @@ export interface WorkItemDoc {
   rank: string;
   /** Embedded label ids (replaces the old work_item_labels join table). */
   labelIds: string[];
+  /** The description as plain text, for the search index (see work/search-text.ts). */
+  searchText?: string;
   resolvedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -520,5 +522,19 @@ export interface AttachmentDoc {
   image: string | null;
   size: number;
   storageKey: string;
+  createdAt: Date;
+}
+
+/** A board or list filter someone saved (personal, or shared with everyone who can open the space). */
+export interface SavedFilterDoc {
+  id: string;
+  orgId: string;
+  ownerId: string;
+  /** The space it belongs to, or null for a filter usable anywhere (My work). */
+  spaceId: string | null;
+  name: string;
+  /** The filter part of the URL, as the board and list read it. */
+  query: string;
+  isShared: boolean;
   createdAt: Date;
 }

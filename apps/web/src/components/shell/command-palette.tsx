@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Moon, Search, Sun } from 'lucide-react';
+import { LogOut, Moon, Search, SearchCheck, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,10 +18,19 @@ import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
 import { visibleGroups } from './nav';
 import { useSignOut } from './user-menu';
+import { TypeIcon, StatusChip } from '@/components/work/work-bits';
+import { useSearch } from '@/lib/work-find-api';
 
-/** Navigation-only palette (Ctrl/Cmd+K). Record search arrives with the modules that own the records. */
+/** Ctrl/Cmd+K: jump to work items by key or words, to pages, and run a few actions. */
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [dq, setDq] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDq(q.trim()), 200);
+    return () => clearTimeout(t);
+  }, [q]);
+  const found = useSearch(dq, { limit: 8, enabled: open });
   const router = useRouter();
   const isAdmin = useIsAdmin();
   const checkinOn = useToday().data?.enabled !== false;
@@ -64,9 +73,29 @@ export function CommandPalette() {
         title="Jump to"
         description="Search for a page or action"
       >
-        <CommandInput placeholder="Jump to…" />
+        <CommandInput placeholder="Search work or jump to…" value={q} onValueChange={setQ} />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
+          {dq && (found.data?.items.length ?? 0) > 0 && (
+            <CommandGroup heading="Work">
+              {found.data!.items.map((i) => (
+                <CommandItem
+                  key={i.id}
+                  // cmdk filters by its own matching; the server already did, so keep every result.
+                  value={`${q} ${i.key} ${i.title}`}
+                  onSelect={() => run(() => router.push(`/spaces/${i.spaceKey}/items/${i.key}`))}
+                >
+                  <TypeIcon type={i.type} />
+                  <span className="text-muted-foreground w-20 shrink-0 tabular-nums">{i.key}</span>
+                  <span className="min-w-0 flex-1 truncate">{i.title}</span>
+                  <StatusChip name={i.status.name} category={i.status.category} className="hidden sm:inline-flex" />
+                </CommandItem>
+              ))}
+              <CommandItem value={`${q} search all results`} onSelect={() => run(() => router.push(`/search?q=${encodeURIComponent(dq)}`))}>
+                <SearchCheck /> See all results for “{dq}”
+              </CommandItem>
+            </CommandGroup>
+          )}
           {visibleGroups(isAdmin, checkinOn, crmVisible).map((g) => (
             <CommandGroup key={g.id} heading={g.label}>
               {g.items.map((item) => (

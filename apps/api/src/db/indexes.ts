@@ -1,4 +1,5 @@
 import type { Db as MongoDb, IndexDescription } from 'mongodb';
+import { backfillSearchText } from '../work/search-text.js';
 
 type Ix = [name: string, spec: IndexDescription['key'], opts?: Partial<IndexDescription>];
 
@@ -111,6 +112,13 @@ const INDEXES: Record<string, Ix[]> = {
     ['assignee', { orgId: 1, assigneeId: 1 }],
     ['parent', { parentId: 1 }],
     ['labels', { labelIds: 1 }],
+    [
+      'search',
+      { title: 'text', searchText: 'text' },
+      { weights: { title: 5, searchText: 1 }, default_language: 'english' },
+    ],
+    ['org_assignee_due', { orgId: 1, assigneeId: 1, resolvedAt: 1 }],
+    ['org_reporter', { orgId: 1, reporterId: 1 }],
   ],
   labels: [
     ['id', { id: 1 }, U],
@@ -179,6 +187,11 @@ const INDEXES: Record<string, Ix[]> = {
     ['item', { itemId: 1, createdAt: 1 }],
     ['org', { orgId: 1 }],
   ],
+  saved_filters: [
+    ['id', { id: 1 }, U],
+    ['owner', { orgId: 1, ownerId: 1 }],
+    ['shared', { orgId: 1, isShared: 1, spaceId: 1 }],
+  ],
 };
 
 export async function ensureIndexes(handle: MongoDb) {
@@ -187,4 +200,5 @@ export async function ensureIndexes(handle: MongoDb) {
       list.map(([name, key, opts]) => ({ name, key, ...opts })),
     );
   }
+  await backfillSearchText(handle);
 }

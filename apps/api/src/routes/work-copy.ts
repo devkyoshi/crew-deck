@@ -72,6 +72,7 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
             parentId: src.parentId,
             title: src.title,
             description: src.description,
+            searchText: src.searchText ?? '',
             statusId: src.statusId,
             priority: src.priority,
             assigneeId: src.assigneeId,

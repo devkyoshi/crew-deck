@@ -31,6 +31,7 @@ export type Action =
   | 'comment.deleteAny'
   | 'attachment.add'
   | 'attachment.delete'
+  | 'filter.share'
   | 'status.manage'
   | 'board.manage'
   | 'label.create'
@@ -142,6 +143,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'label.create':
     case 'comment.create':
     case 'attachment.add':
+    case 'filter.share':
       return adminLike || spaceAdmin || resource.spaceRole === 'member';
 
     // People edit only their own comments, and only while they can still comment.

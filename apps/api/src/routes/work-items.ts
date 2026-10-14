@@ -13,6 +13,7 @@ import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
 import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import { textToDoc } from '../work/doc.js';
 import { mentionsIn, sanitizeDoc } from '../work/rich-text.js';
+import { searchTextOf } from '../work/search-text.js';
 import {
   assertAssignable,
   assertMentionable,
@@ -237,6 +238,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           parentId: b.parentId ?? null,
           title: b.title,
           description: rich ? rich.doc : textToDoc(b.description),
+          searchText: searchTextOf(rich ? rich.doc : textToDoc(b.description)),
           statusId,
           priority: b.priority,
           assigneeId: b.assigneeId ?? null,
@@ -329,6 +331,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (b.title !== undefined) set.title = b.title;
         if (b.description !== undefined) set.description = textToDoc(b.description);
         if (rich) set.description = rich.doc;
+        if (set.description !== undefined) set.searchText = searchTextOf(set.description);
         if (b.type !== undefined) set.type = b.type;
         if (b.parentId !== undefined) set.parentId = b.parentId;
         if (b.priority !== undefined) set.priority = b.priority;

@@ -58,6 +58,7 @@ const TENANT = {
   watchers: 'watchers',
   activityEvents: 'activity_events',
   attachments: 'attachments',
+  savedFilters: 'saved_filters',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -109,6 +110,7 @@ export interface TenantDocs {
   watchers: T.WatcherDoc;
   activityEvents: T.ActivityEventDoc;
   attachments: T.AttachmentDoc;
+  savedFilters: T.SavedFilterDoc;
 }
 
 export interface GlobalDocs {
@@ -582,6 +584,7 @@ export class TenantDb {
   readonly watchers!: TenantRepos['watchers'];
   readonly activityEvents!: TenantRepos['activityEvents'];
   readonly attachments!: TenantRepos['attachments'];
+  readonly savedFilters!: TenantRepos['savedFilters'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;
