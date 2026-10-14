@@ -328,3 +328,121 @@ describe('rich descriptions', () => {
     expect(plain.json().descriptionDoc.content).toHaveLength(2);
   });
 });
+
+describe('duplicate', () => {
+  it('copies the fields, labels and subtasks under a new key, and notes it on both items', async () => {
+    const label = (await send('POST', `/spaces/${space.id}/labels`, c.owner!, { name: `dup-${seq++}`, color: 'red' })).json();
+    const story = await mkItem(space, c.member!, {
+      type: 'story',
+      title: 'Wire the site',
+      priority: 'high',
+      assigneeId: u.other!.id,
+      labelIds: [label.id],
+      description: 'All floors',
+    });
+    await mkItem(space, c.member!, { type: 'subtask', parentId: story.id, title: 'Floor 1' });
+    await mkItem(space, c.member!, { type: 'subtask', parentId: story.id, title: 'Floor 2' });
+
+    const res = await send('POST', `/items/${story.id}/duplicate`, c.member!, {});
+    expect(res.statusCode, res.body).toBe(200);
+    const copy = res.json();
+    expect(copy.key).not.toBe(story.key);
+    expect(copy).toMatchObject({ title: 'Wire the site (copy)', priority: 'high', description: 'All floors', type: 'story' });
+    expect(copy.assignee.id).toBe(u.other!.id);
+    expect(copy.reporter.id).toBe(u.member!.id);
+    expect(copy.labels.map((l: Json) => l.id)).toEqual([label.id]);
+    expect(copy.subtasksCopied).toBe(2);
+    const kids = (await send('GET', `/items/${copy.id}/subtasks`, c.member!)).json().items;
+    expect(kids.map((k: Json) => k.title)).toEqual(['Floor 1', 'Floor 2']);
+
+    expect((await activity(story))[0]).toMatchObject({ kind: 'duplicated', newValue: { to: { key: copy.key } } });
+    expect((await activity(copy))[0]).toMatchObject({ kind: 'duplicated', newValue: { from: { key: story.key } } });
+
+    const bare = await send('POST', `/items/${story.id}/duplicate`, c.member!, { title: 'Just this', includeSubtasks: false });
+    expect(bare.json()).toMatchObject({ title: 'Just this', subtasksCopied: 0 });
+  });
+
+  it('is refused for viewers and invisible to outsiders', async () => {
+    const item = await mkItem(space, c.member!);
+    expect((await send('POST', `/items/${item.id}/duplicate`, c.viewer!, {})).statusCode).toBe(403);
+    expect((await send('POST', `/items/${item.id}/duplicate`, c.outsider!, {})).statusCode).toBe(404);
+  });
+});
+
+describe('transfer', () => {
+  it('moves an item and its subtasks to another space with new keys, keeping history, comments and links', async () => {
+    const target = await mkSpace({ members: [{ type: 'user', id: u.member!.id, role: 'member' }] });
+    // A label with the same name in the target is kept; one that only exists here is dropped.
+    const keep = `keep-${seq++}`;
+    const kept = (await send('POST', `/spaces/${space.id}/labels`, c.owner!, { name: keep, color: 'red' })).json();
+    const dropped = (await send('POST', `/spaces/${space.id}/labels`, c.owner!, { name: `drop-${seq++}`, color: 'blue' })).json();
+    const there = (await send('POST', `/spaces/${target.id}/labels`, c.owner!, { name: keep, color: 'green' })).json();
+    const statuses = (await send('GET', `/spaces/${space.id}/statuses`, c.owner!)).json().items as Json[];
+    const review = statuses.find((s) => s.name === 'In Review')!;
+
+    const item = await mkItem(space, c.member!, {
+      labelIds: [kept.id, dropped.id],
+      statusId: review.id,
+      assigneeId: u.viewer!.id,
+    });
+    const sub = await mkItem(space, c.member!, { type: 'subtask', parentId: item.id, title: 'Part' });
+    const other = await mkItem(space, c.member!);
+    await send('POST', `/items/${item.id}/comments`, c.member!, { body: doc(text('Before the move')) });
+    await send('POST', `/items/${item.id}/links`, c.member!, { target: other.id, linkType: 'relates_to' });
+
+    const res = await send('POST', `/items/${item.id}/transfer`, c.member!, { spaceId: target.id });
+    expect(res.statusCode, res.body).toBe(200);
+    const moved = res.json();
+    expect(moved.key).toBe(`${target.key}-1`);
+    expect(moved.previousKey).toBe(item.key);
+    expect(moved.subtasksMoved).toBe(1);
+    expect(moved.status.name).toBe('In Review');
+    expect(moved.labels.map((l: Json) => l.id)).toEqual([there.id]);
+    // The target space is open, so the assignee can still open it and stays.
+    expect(moved.assignee.id).toBe(u.viewer!.id);
+
+    const subNow = (await send('GET', `/items/${sub.id}`, c.member!)).json();
+    expect(subNow.key).toBe(`${target.key}-2`);
+    expect(subNow.parent.key).toBe(moved.key);
+    expect((await send('GET', `/items/${item.key}`, c.member!)).statusCode).toBe(404);
+    expect((await send('GET', `/items/${moved.id}/comments`, c.member!)).json().items).toHaveLength(1);
+    expect((await send('GET', `/items/${moved.id}/links`, c.member!)).json().items).toHaveLength(1);
+    const events = await activity(moved, c.member!);
+    expect(events[0]).toMatchObject({ kind: 'transferred', oldValue: { key: item.key }, newValue: { key: moved.key } });
+    expect(events.some((e) => e.kind === 'created')).toBe(true);
+  });
+
+  it('drops an assignee who cannot open the new space, and moved epics leave their children behind', async () => {
+    const target = await mkSpace({ visibility: 'private', members: [{ type: 'user', id: u.member!.id, role: 'member' }] });
+    const epic = await mkItem(space, c.member!, { type: 'epic', title: 'Big', assigneeId: u.other!.id });
+    const child = await mkItem(space, c.member!, { type: 'story', parentId: epic.id });
+    const res = await send('POST', `/items/${epic.id}/transfer`, c.member!, { spaceId: target.id });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().assignee).toBeNull();
+    expect(res.json().subtasksMoved).toBe(0);
+    const left = (await send('GET', `/items/${child.id}`, c.member!)).json();
+    expect(left.spaceId).toBe(space.id);
+    expect(left.parent).toBeNull();
+  });
+
+  it('needs the right to remove from here and add there, and refuses subtasks and the same space', async () => {
+    const readOnly = await mkSpace({ members: [{ type: 'user', id: u.member!.id, role: 'viewer' }] });
+    const writable = await mkSpace({
+      members: [
+        { type: 'user', id: u.member!.id, role: 'member' },
+        { type: 'user', id: u.other!.id, role: 'member' },
+      ],
+    });
+    const mine = await mkItem(space, c.member!);
+    const theirs = await mkItem(space, c.other!);
+    const sub = await mkItem(space, c.member!, { type: 'subtask', parentId: mine.id });
+
+    expect((await send('POST', `/items/${mine.id}/transfer`, c.member!, { spaceId: readOnly.id })).statusCode).toBe(403);
+    expect((await send('POST', `/items/${theirs.id}/transfer`, c.member!, { spaceId: writable.id })).statusCode).toBe(403);
+    expect((await send('POST', `/items/${mine.id}/transfer`, c.viewer!, { spaceId: writable.id })).statusCode).toBe(403);
+    expect((await send('POST', `/items/${sub.id}/transfer`, c.member!, { spaceId: writable.id })).statusCode).toBe(422);
+    expect((await send('POST', `/items/${mine.id}/transfer`, c.member!, { spaceId: space.id })).statusCode).toBe(422);
+    const gx = await mkSpace({}, c.globex!, 'globex');
+    expect((await send('POST', `/items/${mine.id}/transfer`, c.member!, { spaceId: gx.id })).statusCode).toBe(422);
+  });
+});
