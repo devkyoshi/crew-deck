@@ -1,15 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { listAudit, writeAudit } from '../audit/service.js';
 import { assertFeature, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { groups, memberships, spaceMembers } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
-import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
+import { offsetOf, pageQuery } from '../lib/pagination.js';
 import { can, type Actor, type SpaceRole } from '../permissions/can.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
 
@@ -43,28 +41,34 @@ const lastAdmin = () =>
  * How many admins would remain if `excludeRowId` stopped being one. A group row only counts if
  * the group has at least one active person, and a person row only counts while they are active.
  */
-async function otherAdmins(tx: Tx, orgId: string, spaceId: string, excludeRowId: string) {
-  const rows = await tx.execute<{ n: number }>(sql`
-    select count(*)::int as n from space_members sm
-    where sm.space_id = ${spaceId} and sm.org_id = ${orgId}
-      and sm.space_role = 'admin' and sm.id <> ${excludeRowId}
-      and (
-        (sm.principal_type = 'user' and exists (
-          select 1 from memberships m
-          where m.org_id = ${orgId} and m.user_id = sm.principal_id and m.status = 'active'))
-        or (sm.principal_type = 'group' and exists (
-          select 1 from group_members gm
-          join memberships m on m.org_id = gm.org_id and m.user_id = gm.user_id and m.status = 'active'
-          where gm.group_id = sm.principal_id and gm.org_id = ${orgId}))
-      )`);
-  return rows[0]?.n ?? 0;
+async function otherAdmins(t: TenantDb, spaceId: string, excludeRowId: string) {
+  const rows = await t.spaceMembers.find({
+    spaceId,
+    spaceRole: 'admin',
+    id: { $ne: excludeRowId },
+  });
+  if (rows.length === 0) return 0;
+  const active = new Set(
+    (await t.memberships.find({ status: 'active' }, { projection: { userId: 1 } })).map(
+      (m) => m.userId,
+    ),
+  );
+  const groupIds = rows.filter((r) => r.principalType === 'group').map((r) => r.principalId);
+  const groupsWithPeople = new Set<string>();
+  if (groupIds.length) {
+    const links = await t.groupMembers.find({ groupId: { $in: groupIds } });
+    for (const l of links) if (active.has(l.userId)) groupsWithPeople.add(l.groupId);
+  }
+  return rows.filter((r) =>
+    r.principalType === 'user' ? active.has(r.principalId) : groupsWithPeople.has(r.principalId),
+  ).length;
 }
 
 export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
-  const loadEditable = async (tx: Tx, actor: Actor, id: string) => {
+  const loadEditable = async (tx: TenantDb, actor: Actor, id: string) => {
     const space = await resolveSpace(tx, actor, id);
     if (!can(actor, 'space.manageMembers', spaceCtx(space))) throw forbidden();
     if (space.status === 'archived') {
@@ -88,50 +92,80 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         // Anyone who can see the space can see who is in it (404 otherwise).
         const space = await resolveSpace(tx, actor, req.params.id);
-        const search: SQL = q.q
-          ? sql`and (lower(coalesce(t.name, '')) like lower(${likePattern(q.q)}) or lower(coalesce(t.email, '')) like lower(${likePattern(q.q)}))`
-          : sql``;
-        const rows = await tx.execute<Row>(sql`
-          select * from (
-            select sm.id, 'user'::text as type, u.id as principal_id, u.name, u.email,
-                   u.avatar_url, u.job_title, sm.space_role as role,
-                   (select sm2.space_role from space_members sm2
-                      join group_members gm on gm.group_id = sm2.principal_id and gm.org_id = sm2.org_id
-                     where sm2.space_id = sm.space_id and sm2.org_id = sm.org_id
-                       and sm2.principal_type = 'group' and gm.user_id = u.id
-                     order by case sm2.space_role when 'admin' then 3 when 'member' then 2 else 1 end desc
-                     limit 1) as group_role,
-                   null::int as member_count,
-                   (m.status = 'deactivated') as deactivated, sm.created_at
-            from space_members sm
-            join users u on u.id = sm.principal_id
-            join memberships m on m.user_id = u.id and m.org_id = sm.org_id
-            where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId} and sm.principal_type = 'user'
-            union all
-            select sm.id, 'group'::text, g.id, g.name, null, null, null, sm.space_role,
-                   null::text,
-                   (select count(*)::int from group_members gm where gm.group_id = g.id),
-                   false, sm.created_at
-            from space_members sm
-            join groups g on g.id = sm.principal_id
-            where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId} and sm.principal_type = 'group'
-          ) t
-          where true ${search}
-          order by (t.type = 'group'), lower(coalesce(t.name, t.email)), t.id
-          limit ${q.pageSize} offset ${offsetOf(q)}`);
-        const totals = await tx.execute<{ n: number }>(sql`
-          select (
-            (select count(*) from space_members sm join users u on u.id = sm.principal_id
-              where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId} and sm.principal_type = 'user'
-                ${q.q ? sql`and (lower(coalesce(u.name,'')) like lower(${likePattern(q.q)}) or lower(u.email) like lower(${likePattern(q.q)}))` : sql``})
-            +
-            (select count(*) from space_members sm join groups g on g.id = sm.principal_id
-              where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId} and sm.principal_type = 'group'
-                ${q.q ? sql`and lower(g.name) like lower(${likePattern(q.q)})` : sql``})
-          )::int as n`);
+        const entries = await tx.spaceMembers.find({ spaceId: space.id });
+        const userEntries = entries.filter((e) => e.principalType === 'user');
+        const groupEntries = entries.filter((e) => e.principalType === 'group');
+
+        const people = await tx.users(userEntries.map((e) => e.principalId));
+        const ms = await tx.memberships.find({ userId: { $in: userEntries.map((e) => e.principalId) } });
+        const deactivated = new Set(ms.filter((m) => m.status === 'deactivated').map((m) => m.userId));
+        const gs = groupEntries.length
+          ? await tx.groups.find({ id: { $in: groupEntries.map((e) => e.principalId) } })
+          : [];
+        const groupById = new Map(gs.map((g) => [g.id, g]));
+        const links = groupEntries.length
+          ? await tx.groupMembers.find({ groupId: { $in: groupEntries.map((e) => e.principalId) } })
+          : [];
+        const memberCount = new Map<string, number>();
+        for (const l of links) memberCount.set(l.groupId, (memberCount.get(l.groupId) ?? 0) + 1);
+        // Highest role a person inherits through any group that has access to this space.
+        const groupRoleOf = new Map<string, SpaceRole>();
+        for (const l of links) {
+          const gRole = groupEntries.find((e) => e.principalId === l.groupId)!.spaceRole;
+          const cur = groupRoleOf.get(l.userId);
+          if (!cur || RANK[gRole] > RANK[cur]) groupRoleOf.set(l.userId, gRole);
+        }
+
+        const rows: Row[] = [];
+        for (const e of userEntries) {
+          const u = people.get(e.principalId);
+          if (!u) continue;
+          rows.push({
+            id: e.id,
+            type: 'user',
+            principal_id: u.id,
+            name: u.name,
+            email: u.email,
+            avatar_url: u.avatarUrl,
+            job_title: u.jobTitle,
+            role: e.spaceRole,
+            group_role: groupRoleOf.get(u.id) ?? null,
+            member_count: null,
+            deactivated: deactivated.has(u.id),
+          });
+        }
+        for (const e of groupEntries) {
+          const g = groupById.get(e.principalId);
+          if (!g) continue;
+          rows.push({
+            id: e.id,
+            type: 'group',
+            principal_id: g.id,
+            name: g.name,
+            email: null,
+            avatar_url: null,
+            job_title: null,
+            role: e.spaceRole,
+            group_role: null,
+            member_count: memberCount.get(g.id) ?? 0,
+            deactivated: false,
+          });
+        }
+
+        const needle = q.q?.toLowerCase();
+        const filtered = needle
+          ? rows.filter((m) => [m.name, m.email].some((v) => v?.toLowerCase().includes(needle)))
+          : rows;
+        filtered.sort(
+          (a, b) =>
+            Number(a.type === 'group') - Number(b.type === 'group') ||
+            (a.name ?? a.email ?? '').toLowerCase().localeCompare((b.name ?? b.email ?? '').toLowerCase()) ||
+            a.id.localeCompare(b.id),
+        );
+        const page = filtered.slice(offsetOf(q), offsetOf(q) + q.pageSize);
 
         return {
-          items: rows.map((m) => ({
+          items: page.map((m) => ({
             id: m.id,
             type: m.type,
             principalId: m.principal_id,
@@ -149,7 +183,7 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
             memberCount: m.member_count,
             deactivated: m.deactivated,
           })),
-          total: totals[0]?.n ?? 0,
+          total: filtered.length,
           page: q.page,
           pageSize: q.pageSize,
         };
@@ -179,7 +213,7 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const space = await loadEditable(tx, actor, req.params.id);
         const wanted = new Map<string, { type: 'user' | 'group'; id: string; role: SpaceRole }>();
         for (const m of req.body.members) wanted.set(`${m.type}:${m.id}`, m);
@@ -188,17 +222,8 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
         const userIds = list.filter((m) => m.type === 'user').map((m) => m.id);
         const groupIds = list.filter((m) => m.type === 'group').map((m) => m.id);
         if (userIds.length) {
-          const ok = await tx
-            .select({ id: memberships.userId })
-            .from(memberships)
-            .where(
-              and(
-                eq(memberships.orgId, actor.orgId),
-                eq(memberships.status, 'active'),
-                inArray(memberships.userId, userIds),
-              ),
-            );
-          if (ok.length !== userIds.length) {
+          const ok = await tx.memberships.count({ status: 'active', userId: { $in: userIds } });
+          if (ok !== userIds.length) {
             throw new AppError(
               400,
               'invalid_members',
@@ -207,20 +232,14 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
           }
         }
         if (groupIds.length) {
-          const ok = await tx
-            .select({ id: groups.id })
-            .from(groups)
-            .where(and(eq(groups.orgId, actor.orgId), inArray(groups.id, groupIds)));
-          if (ok.length !== groupIds.length) {
+          const ok = await tx.groups.count({ id: { $in: groupIds } });
+          if (ok !== groupIds.length) {
             throw new AppError(400, 'invalid_members', 'One of the selected groups does not exist');
           }
         }
 
-        const existing = await tx
-          .select({ type: spaceMembers.principalType, id: spaceMembers.principalId })
-          .from(spaceMembers)
-          .where(and(eq(spaceMembers.spaceId, space.id), eq(spaceMembers.orgId, actor.orgId)));
-        const have = new Set(existing.map((e) => `${e.type}:${e.id}`));
+        const existing = await tx.spaceMembers.find({ spaceId: space.id });
+        const have = new Set(existing.map((e) => `${e.principalType}:${e.principalId}`));
 
         const results: { type: string; id: string; status: 'added' | 'already_member' }[] = [];
         for (const m of list) {
@@ -228,23 +247,19 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
             results.push({ type: m.type, id: m.id, status: 'already_member' });
             continue;
           }
-          const [row] = await tx
-            .insert(spaceMembers)
-            .values({
-              spaceId: space.id,
-              orgId: actor.orgId,
-              principalType: m.type,
-              principalId: m.id,
-              spaceRole: m.role,
-            })
-            .returning({ id: spaceMembers.id });
+          const row = await tx.spaceMembers.insert({
+            spaceId: space.id,
+            principalType: m.type,
+            principalId: m.id,
+            spaceRole: m.role,
+          });
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'space.member_added',
             targetType: 'space',
             targetId: space.id,
-            after: { principalType: m.type, principalId: m.id, role: m.role, memberRowId: row!.id },
+            after: { principalType: m.type, principalId: m.id, role: m.role, memberRowId: row.id },
           });
           results.push({ type: m.type, id: m.id, status: 'added' });
         }
@@ -261,31 +276,16 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const space = await loadEditable(tx, actor, req.params.id);
-        const [row] = await tx
-          .select()
-          .from(spaceMembers)
-          .where(
-            and(
-              eq(spaceMembers.id, req.params.memberId),
-              eq(spaceMembers.spaceId, space.id),
-              eq(spaceMembers.orgId, actor.orgId),
-            ),
-          );
+        const row = await tx.spaceMembers.findOne({ id: req.params.memberId, spaceId: space.id });
         if (!row) throw notFound('Member');
         if (row.spaceRole === req.body.role) return { id: row.id, role: row.spaceRole };
 
-        if (
-          row.spaceRole === 'admin' &&
-          (await otherAdmins(tx, actor.orgId, space.id, row.id)) === 0
-        ) {
+        if (row.spaceRole === 'admin' && (await otherAdmins(tx, space.id, row.id)) === 0) {
           throw lastAdmin();
         }
-        await tx
-          .update(spaceMembers)
-          .set({ spaceRole: req.body.role })
-          .where(and(eq(spaceMembers.id, row.id), eq(spaceMembers.orgId, actor.orgId)));
+        await tx.spaceMembers.updateOne({ id: row.id }, { spaceRole: req.body.role });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -313,28 +313,14 @@ export async function spaceMemberRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: memberParam } },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         const space = await loadEditable(tx, actor, req.params.id);
-        const [row] = await tx
-          .select()
-          .from(spaceMembers)
-          .where(
-            and(
-              eq(spaceMembers.id, req.params.memberId),
-              eq(spaceMembers.spaceId, space.id),
-              eq(spaceMembers.orgId, actor.orgId),
-            ),
-          );
+        const row = await tx.spaceMembers.findOne({ id: req.params.memberId, spaceId: space.id });
         if (!row) throw notFound('Member');
-        if (
-          row.spaceRole === 'admin' &&
-          (await otherAdmins(tx, actor.orgId, space.id, row.id)) === 0
-        ) {
+        if (row.spaceRole === 'admin' && (await otherAdmins(tx, space.id, row.id)) === 0) {
           throw lastAdmin();
         }
-        await tx
-          .delete(spaceMembers)
-          .where(and(eq(spaceMembers.id, row.id), eq(spaceMembers.orgId, actor.orgId)));
+        await tx.spaceMembers.deleteOne({ id: row.id });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,

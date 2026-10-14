@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 import { buildApp } from '../src/app.js';
 import { hashPassword } from '../src/auth/password.js';
 import type { GoogleClient, GoogleProfile } from '../src/auth/google.js';
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/client.js';
-import { invitations, memberships, organizations, users } from '../src/db/schema.js';
 import { randomToken, sha256 } from '../src/lib/crypto.js';
 import { createRedis } from '../src/lib/redis.js';
 
@@ -18,19 +16,21 @@ const hashOnce = (password: string) => {
   return hashes.get(password)!;
 };
 
+/** A database handle on the test database. Tenant code goes through `db.tenant(orgId)`. */
 export function appDb() {
-  return createDb(process.env.DATABASE_URL!);
+  return createDb(process.env.MONGODB_URI!, process.env.MONGODB_DB!);
 }
 
+/** Same connection; tests reach across tenants with `db.global`, which production request code never does. */
 export function adminDb() {
-  return createDb(process.env.DATABASE_ADMIN_URL!);
+  return appDb();
 }
 
-/** Looks up demo tenant ids on the admin connection (bypasses RLS). */
+/** Looks up demo tenant ids (across tenants, so it uses the global scope). */
 export async function tenantIds() {
   const admin = adminDb();
   try {
-    const rows = await admin.db.select().from(organizations);
+    const rows = await admin.db.global.organizations.find({});
     const id = (slug: string) => rows.find((r) => r.slug === slug)!.id;
     return { acme: id('acme'), globex: id('globex') };
   } finally {
@@ -65,6 +65,7 @@ export function makeApp(
       text: string;
     }) => Promise<void> | void;
     env?: Record<string, string>;
+    enqueueRebalance?: (job: { orgId: string; spaceId: string; statusId: string }) => Promise<void> | void;
   } = {},
 ) {
   const config = loadConfig({
@@ -87,6 +88,9 @@ export function makeApp(
     sendMail: async (m) => {
       await opts.sendMail?.(m);
     },
+    enqueueRebalance: async (job) => {
+      await opts.enqueueRebalance?.(job);
+    },
   });
   return {
     app,
@@ -102,7 +106,7 @@ export function makeApp(
 
 export const hostFor = (slug: string) => `${slug}.localhost:3000`;
 
-/** Creates (or resets) a user with a password and a membership, using the admin connection. */
+/** Creates (or resets) a user with a password and a membership. */
 export async function ensureUser(opts: {
   orgId: string;
   email: string;
@@ -113,27 +117,29 @@ export async function ensureUser(opts: {
   const admin = adminDb();
   try {
     const passwordHash = await hashOnce(opts.password ?? PASSWORD);
-    const [user] = await admin.db
-      .insert(users)
-      .values({
-        email: opts.email,
-        name: opts.email.split('@')[0],
+    const email = opts.email.toLowerCase();
+    let user = await admin.db.global.users.findOne({ email });
+    if (user) {
+      await admin.db.global.users.updateOne(
+        { id: user.id },
+        { status: opts.status ?? 'active', passwordHash },
+      );
+      user = (await admin.db.global.users.get(user.id))!;
+    } else {
+      user = await admin.db.global.users.insert({
+        email,
+        name: email.split('@')[0],
         status: opts.status ?? 'active',
         passwordHash,
-      })
-      .onConflictDoUpdate({
-        target: users.email,
-        set: { status: opts.status ?? 'active', passwordHash },
-      })
-      .returning();
-    await admin.db
-      .insert(memberships)
-      .values({ orgId: opts.orgId, userId: user!.id, orgRole: opts.role ?? 'member' })
-      .onConflictDoUpdate({
-        target: [memberships.orgId, memberships.userId],
-        set: { orgRole: opts.role ?? 'member' },
       });
-    return user!;
+    }
+    const t = admin.db.global.forOrg(opts.orgId);
+    if (await t.memberships.exists({ userId: user.id })) {
+      await t.memberships.updateOne({ userId: user.id }, { orgRole: opts.role ?? 'member' });
+    } else {
+      await t.memberships.insert({ userId: user.id, orgRole: opts.role ?? 'member' });
+    }
+    return user;
   } finally {
     await admin.close();
   }
@@ -142,7 +148,7 @@ export async function ensureUser(opts: {
 export async function setUserStatus(userId: string, status: 'active' | 'deactivated') {
   const admin = adminDb();
   try {
-    await admin.db.update(users).set({ status }).where(eq(users.id, userId));
+    await admin.db.global.users.updateOne({ id: userId }, { status });
   } finally {
     await admin.close();
   }
@@ -159,8 +165,7 @@ export async function createInvitation(opts: {
   try {
     const token = randomToken();
     const email = opts.email ?? `invitee-${randomUUID().slice(0, 8)}@acme.test`;
-    await admin.db.insert(invitations).values({
-      orgId: opts.orgId,
+    await admin.db.global.forOrg(opts.orgId).invitations.insert({
       email,
       orgRole: opts.role ?? 'member',
       tokenHash: sha256(token),
@@ -197,7 +202,7 @@ export function caller(app: ReturnType<typeof makeApp>['app']) {
     });
 }
 
-/** Creates a user (admin connection), signs them in by password, and returns the session cookie. */
+/** Signs a user in by password and returns the session cookie. */
 export async function signInAs(
   app: ReturnType<typeof makeApp>['app'],
   slug: string,
@@ -222,12 +227,13 @@ export async function createOrg(slugPrefix: string) {
   const slug = `${slugPrefix}-${randomUUID().slice(0, 6)}`;
   const admin = adminDb();
   try {
-    const [org] = await admin.db
-      .insert(organizations)
-      .values({ name: slug, slug, domain: `${slug}.test` })
-      .returning();
-    const owner = await ensureUser({ orgId: org!.id, email: `owner@${slug}.test`, role: 'owner' });
-    return { org: org!, slug, owner };
+    const org = await admin.db.global.organizations.insert({
+      name: slug,
+      slug,
+      domain: `${slug}.test`,
+    });
+    const owner = await ensureUser({ orgId: org.id, email: `owner@${slug}.test`, role: 'owner' });
+    return { org, slug, owner };
   } finally {
     await admin.close();
   }

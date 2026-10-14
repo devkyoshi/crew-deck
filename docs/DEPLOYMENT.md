@@ -8,7 +8,7 @@ single-VM recipe with Docker Compose. Everything here was exercised against the 
 
 ```
 Browser ──https──▶ reverse proxy ──▶ web (Next.js :3000) ──/api──▶ api (Fastify :4000)
-                                                                      ├─▶ Postgres 17
+                                                                      ├─▶ MongoDB 7 (replica set)
                                                                       └─▶ Redis 7
 ```
 
@@ -16,8 +16,9 @@ Browser ──https──▶ reverse proxy ──▶ web (Next.js :3000) ──/
   is how the API knows which workspace a request belongs to.
 - **api** is stateless. Sessions, the invite-email queue and the automatic check-out jobs live in Redis. The
   workers run inside the API process; running several API instances is safe (jobs are de-duplicated).
-- **Postgres** holds all data. Row-level security enforces tenant isolation, so the API **must** connect
-  as the restricted role (`crew_app`), never as the schema owner.
+- **MongoDB** holds all data. It must run as a **replica set** (a single node is fine), because the API
+  uses multi-document transactions. Tenant isolation is enforced by the API's repository layer (every
+  query carries the workspace id), so give the API a database user limited to its own database.
 - **Redis** holds sessions and queued jobs. Losing it signs everyone out and drops unsent emails, but loses no business data.
 
 Keep the API on a private network. Only the reverse proxy should be public.
@@ -37,8 +38,8 @@ Set these for the `api` service (compose reads them from the environment or a `.
 | Variable                                                 | Production value                                                                             |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `NODE_ENV`                                               | `production` (set by the image). Disables the dev-only login, makes cookies `Secure`         |
-| `DATABASE_URL`                                           | `postgres://crew_app:<password>@postgres:5432/<db>` (restricted role)                        |
-| `DATABASE_ADMIN_URL`                                     | Schema owner, used only by the one-off `migrate` service                                     |
+| `MONGODB_URI`                                            | `mongodb://<user>:<password>@mongo:27017/?replicaSet=rs0` (or `directConnection=true` for one node) |
+| `MONGODB_DB`                                             | Database name, for example `crewdeck`                                                         |
 | `REDIS_URL`                                              | `redis://redis:6379`                                                                         |
 | `BASE_DOMAIN`                                            | `yourdomain.com`                                                                             |
 | `WEB_ORIGIN`                                             | `https://yourdomain.com` (Google redirects here)                                             |
@@ -48,7 +49,7 @@ Set these for the `api` service (compose reads them from the environment or a `.
 | `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` | From Brevo (see below)                                                                       |
 | `AUTH_RATE_LIMIT_MAX`                                    | Leave at the default (10)                                                                    |
 
-Change every default password (`POSTGRES_PASSWORD`, `APP_ROLE_PASSWORD`). The `web` image bakes in
+Turn on MongoDB authentication and give the API its own user (the dev compose file runs without auth). The `web` image bakes in
 `API_INTERNAL_URL` at build time (`http://api:4000` in compose).
 
 ## First deploy (single VM)
@@ -59,17 +60,17 @@ cp .env.example .env            # then edit it: passwords, domain, Google, Brevo
 docker compose --profile full up -d --build
 ```
 
-`--profile full` starts Postgres, Redis, a one-off **migrate** service that applies the SQL migrations
-(the API waits for it), the API and the web app. Check it:
+`--profile full` starts MongoDB, Redis, a one-off **migrate** service that creates the indexes and the
+plan catalogue (the API waits for it), the API and the web app. Check it:
 
 ```bash
 docker compose ps                         # api shows "healthy"
 curl -s localhost:4000/api/v1/health      # {"status":"ok","db":true}
 ```
 
-**On every update:** `git pull && docker compose --profile full up -d --build`. Migrations run automatically
-before the new API starts; running them twice is harmless. To undo the latest migration:
-`docker compose run --rm --entrypoint node_modules/.bin/tsx migrate src/db/migrate.ts down`.
+**On every update:** `git pull && docker compose --profile full up -d --build`. Index creation runs
+automatically before the new API starts (and again at API startup); running it twice is harmless. There are
+no schema migrations to roll back: documents carry their own fields, and new fields get defaults in code.
 
 ### The first platform admin and the first workspace
 
@@ -80,12 +81,12 @@ environment and never printed):
 
 ```bash
 PLATFORM_ADMIN_EMAIL=you@yourcompany.com PLATFORM_ADMIN_PASSWORD='a long passphrase' \
-  DATABASE_ADMIN_URL=... pnpm --filter @crew-deck/api db:platform-admin
+  MONGODB_URI=... pnpm --filter @crew-deck/api db:platform-admin
 ```
 
 Then sign in at `/platform/sign-in`. From the console you can create workspaces (the owner is emailed an
 invitation), change plans, suspend, and change sign-up rules (open or closed sign-ups, blocking free email
-providers, trial length). The development seed and its `dev-password-123` accounts, including the dev platform
+providers, trial length). The development seed and its `dev@1234` accounts, including the dev platform
 admin `platform@crewdeck.test`, are for local use only; do not run `--profile tools` seeding in production.
 
 The bare domain must serve the web app (`/pricing`, `/signup`, `/platform`) as well as the wildcard
@@ -104,7 +105,7 @@ Anything that terminates TLS and forwards the original `Host` works. Caddy examp
 ```
 
 nginx needs `proxy_set_header Host $host;` and `X-Forwarded-For`/`X-Forwarded-Proto`, and `listen 443 ssl`
-with the wildcard certificate. Publish only ports 80 and 443; bind the API (4000), Postgres and Redis to localhost or a private network.
+with the wildcard certificate. Publish only ports 80 and 443; bind the API (4000), MongoDB and Redis to localhost or a private network.
 
 ## Google sign-in
 
@@ -126,8 +127,8 @@ production). If Brevo rejects a message the sign-up page says so instead of pret
 
 ## Operations
 
-- **Backups.** Postgres is the system of record: `docker compose exec postgres pg_dump -U crew_admin crewdeck | gzip > backup.sql.gz`
-  nightly, copied off the VM, and restore-tested. Redis does not need backing up.
+- **Backups.** MongoDB is the system of record: `docker compose exec mongo mongodump --archive --gzip --db crewdeck > backup.archive.gz`
+  nightly, copied off the VM, and restore-tested (`mongorestore --archive --gzip`). Redis does not need backing up.
 - **Logs.** The API logs structured JSON to stdout (`docker compose logs api`). Authorization and cookie headers are redacted.
 - **Health.** `GET /api/v1/health` checks the database. Compose uses it as the API health check.
 - **Capacity.** Measured on one process with 5,000 people and 1,500 spaces in one workspace: list pages
@@ -139,7 +140,7 @@ production). If Brevo rejects a message the sign-up page says so instead of pret
 
 - [ ] Wildcard DNS and wildcard TLS certificate working; `https://acme.yourdomain.com/sign-in` loads
 - [ ] `NODE_ENV=production`, default passwords changed, `.env` not committed
-- [ ] API, Postgres and Redis not reachable from the internet
+- [ ] API, MongoDB and Redis not reachable from the internet
 - [ ] `TRUST_PROXY=true` behind the proxy
 - [ ] Google redirect URI matches `WEB_ORIGIN`; Brevo sender verified
 - [ ] A platform admin exists and can sign in at `/platform/sign-in`; a test sign-up on the bare domain arrives by email and creates a workspace

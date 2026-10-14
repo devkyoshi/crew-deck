@@ -1,12 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
-import { loadAuthUser } from '../auth/service.js';
+import { listUserOrgs, loadAuthUser } from '../auth/service.js';
 import { withTenant } from '../db/client.js';
-import { organizations, users } from '../db/schema.js';
 import { loadPlan } from '../plans/index.js';
 import { ADMIN_ACTIONS, can } from '../permissions/can.js';
 
@@ -17,17 +15,14 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
   async function profile(req: Parameters<typeof requireAuth>[0]) {
     const user = req.user!;
     const org = req.org!;
-    const orgs = await deps.db.execute<{
-      id: string;
-      name: string;
-      slug: string;
-      org_role: string;
-    }>(sql`select * from auth_user_orgs(${user.id})`);
+    const orgs = await listUserOrgs(deps.db, user.id);
     const actor = { userId: user.id, orgId: org.id, orgRole: user.orgRole };
-    const { plan, branding } = await withTenant(deps.db, org.id, async (tx) => {
-      const [o] = await tx.select().from(organizations).where(eq(organizations.id, org.id));
+    const { plan, branding, modules } = await withTenant(deps.db, org.id, async (t) => {
+      const o = await t.organization();
+      const settings = await t.tenantSettings.findOne({});
       return {
-        plan: await loadPlan(tx, org.id),
+        plan: await loadPlan(t, org.id),
+        modules: settings?.enabledModules ?? ['members', 'spaces', 'checkin'],
         branding: {
           logoUrl: o?.logoUrl ?? null,
           accentColor: o?.accentColor ?? null,
@@ -44,7 +39,16 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
         jobTitle: user.jobTitle,
         timezone: user.timezone,
       },
-      org: { id: org.id, name: org.name, slug: org.slug, domain: org.domain, ...branding },
+      org: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        domain: org.domain,
+        workType: org.work_type,
+        usage: org.usage,
+        modules,
+        ...branding,
+      },
       plan: {
         key: plan.key,
         name: plan.name,
@@ -56,7 +60,7 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
       orgRole: user.orgRole,
       // Mirrors can() for the UI. The server still enforces every action itself.
       permissions: ADMIN_ACTIONS.filter((a) => can(actor, a)),
-      orgs: orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, orgRole: o.org_role })),
+      orgs,
     };
   }
 
@@ -81,9 +85,7 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const user = req.user!;
       if (Object.keys(req.body).length > 0) {
-        await withTenant(deps.db, req.org!.id, (tx) =>
-          tx.update(users).set(req.body).where(eq(users.id, user.id)),
-        );
+        await withTenant(deps.db, req.org!.id, (t) => t.updateUser(user.id, req.body));
         req.user = (await loadAuthUser(deps.db, req.org!.id, user.id)) ?? user;
       }
       return profile(req);

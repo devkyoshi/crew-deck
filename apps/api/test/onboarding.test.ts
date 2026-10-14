@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { getPlatformSettings } from '../src/onboarding/settings.js';
 import { hashPassword } from '../src/auth/password.js';
 import { sha256 } from '../src/lib/crypto.js';
 import {
@@ -16,7 +16,6 @@ import {
   signInAs,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, memberships, organizations, tenantSettings, users } from '../src/db/schema.js';
 
 type Mail = { to: string; subject: string; html: string; text: string };
 const mails: Mail[] = [];
@@ -78,9 +77,11 @@ let platformCookie: string;
 async function platformAdmin(email = `root-${randomUUID().slice(0, 6)}@crewdeck.test`) {
   const db = adminDb();
   try {
-    await db.db.execute(
-      sql`insert into platform_admins (email, name, password_hash) values (${email}, 'Root', ${await hashPassword(PASSWORD)})`,
-    );
+    await db.db.global.platformAdmins.insert({
+      email,
+      name: 'Root',
+      passwordHash: await hashPassword(PASSWORD),
+    });
   } finally {
     await db.close();
   }
@@ -96,7 +97,11 @@ async function platformAdmin(email = `root-${randomUUID().slice(0, 6)}@crewdeck.
 async function setPlatformSettings(block: boolean, signups = true, trialDays = 14) {
   const db = adminDb();
   try {
-    await db.db.execute(sql`select platform_settings_set(${block}, ${signups}, ${trialDays})`);
+    await getPlatformSettings(db.db);
+    await db.db.global.platformSettings.updateOne(
+      { id: 'singleton' },
+      { blockFreeEmailDomains: block, signupsEnabled: signups, trialDays, updatedAt: new Date() },
+    );
   } finally {
     await db.close();
   }
@@ -153,9 +158,7 @@ describe('self-serve sign-up', () => {
     expect(j(await bare({ method: 'GET', url: `/signup/check?slug=${s}` })).available).toBe(true);
     const db = adminDb();
     try {
-      expect(
-        await db.db.select().from(organizations).where(eq(organizations.slug, s)),
-      ).toHaveLength(0);
+      expect(await db.db.global.organizations.find({ slug: s })).toHaveLength(0);
     } finally {
       await db.close();
     }
@@ -209,17 +212,15 @@ describe('self-serve sign-up', () => {
 
     const db = adminDb();
     try {
-      const [org] = await db.db.select().from(organizations).where(eq(organizations.slug, s));
+      const org = await db.db.global.organizations.findOne({ slug: s });
       expect(org).toMatchObject({
         createdVia: 'signup',
         planKey: 'business',
         onTrial: true,
         domain: 'brand-new.test',
       });
-      expect(
-        await db.db.select().from(tenantSettings).where(eq(tenantSettings.orgId, org!.id)),
-      ).toHaveLength(1);
-      const logs = await db.db.select().from(auditLogs).where(eq(auditLogs.orgId, org!.id));
+      expect(await db.db.global.all.tenantSettings.find({ orgId: org!.id })).toHaveLength(1);
+      const logs = await db.db.global.all.auditLogs.find({ orgId: org!.id });
       expect(logs.map((l) => l.action)).toContain('workspace.created');
     } finally {
       await db.close();
@@ -242,8 +243,9 @@ describe('self-serve sign-up', () => {
     const expired = tokenFrom(j(res).devLink);
     const db = adminDb();
     try {
-      await db.db.execute(
-        sql`update signup_requests set expires_at = now() - interval '1 minute' where token_hash = ${sha256(expired)}`,
+      await db.db.global.signupRequests.updateOne(
+        { tokenHash: sha256(expired) },
+        { expiresAt: new Date(Date.now() - 60_000) },
       );
     } finally {
       await db.close();
@@ -363,7 +365,7 @@ describe('self-serve sign-up', () => {
     const token = tokenFrom(j(res).devLink);
     const db = adminDb();
     try {
-      await db.db.insert(organizations).values({ name: 'Squatter', slug: s, domain: 'squat.test' });
+      await db.db.global.organizations.insert({ name: 'Squatter', slug: s, domain: 'squat.test' });
     } finally {
       await db.close();
     }
@@ -376,10 +378,8 @@ describe('self-serve sign-up', () => {
     expect(j(verified).code).toBe('slug_taken');
     const check = adminDb();
     try {
-      const [row] = await check.db.execute<{ used_at: Date | null }>(
-        sql`select used_at from signup_requests where token_hash = ${sha256(token)}`,
-      );
-      expect(row!.used_at).toBeNull();
+      const row = await check.db.global.signupRequests.findOne({ tokenHash: sha256(token) });
+      expect(row!.usedAt).toBeNull();
     } finally {
       await check.close();
     }
@@ -611,7 +611,7 @@ describe('platform console', () => {
     // Both actions are in the workspace's own log and in the platform log.
     const db = adminDb();
     try {
-      const logs = await db.db.select().from(auditLogs).where(eq(auditLogs.orgId, o.org.id));
+      const logs = await db.db.global.all.auditLogs.find({ orgId: o.org.id });
       expect(logs.map((l) => l.action)).toEqual(
         expect.arrayContaining(['platform.workspace_suspended', 'platform.workspace_unsuspended']),
       );
@@ -639,9 +639,7 @@ describe('platform console', () => {
     const db = adminDb();
     try {
       // Same person in a second, healthy workspace.
-      await db.db
-        .insert(memberships)
-        .values({ orgId: other.org.id, userId: o.owner.id, orgRole: 'member' });
+      await db.db.tenant(other.org.id).memberships.insert({ userId: o.owner.id, orgRole: 'member' });
     } finally {
       await db.close();
     }
@@ -716,11 +714,11 @@ describe('platform console', () => {
     }
     const db = adminDb();
     try {
-      const logs = await db.db.select().from(auditLogs).where(eq(auditLogs.orgId, o.org.id));
+      const logs = await db.db.global.all.auditLogs.find({ orgId: o.org.id });
       const started = logs.find((l) => l.action === 'platform.impersonation_started');
       expect(started?.after).toMatchObject({ platformAdmin: adminEmail, readOnly: true });
       expect(started?.actorId).toBeNull();
-      const [u] = await db.db.select().from(users).where(eq(users.id, o.owner.id));
+      const u = await db.db.global.users.get(o.owner.id);
       expect(u!.name).not.toBe('Changed');
     } finally {
       await db.close();

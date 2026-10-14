@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowRight, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
+import { SplitHeading } from '@/components/auth/auth-split-layout';
 import { Notice } from '@/components/shared/notice';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
@@ -39,34 +40,43 @@ export default function PlatformSignInPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="items-center text-center">
-        <CardTitle className="text-xl">Platform sign in</CardTitle>
-        <CardDescription>For Crew Deck administrators only.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="space-y-3" noValidate>
-          {error && <Notice variant="error">{error}</Notice>}
-          <Field label="Email" htmlFor="platform-email" shakeKey={shakeKey}>
-            <Input
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Field>
-          <Field label="Password" htmlFor="platform-password" shakeKey={shakeKey}>
-            <PasswordInput
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <>
+      <SplitHeading
+        icon={
+          <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-xl">
+            <ShieldAlert className="size-6" aria-hidden />
+          </span>
+        }
+        title="Platform sign in"
+        lead="For Crew Deck administrators only."
+      />
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        {error && <Notice variant="error">{error}</Notice>}
+        <Field label="Email" htmlFor="platform-email" shakeKey={shakeKey}>
+          <Input
+            id="platform-email"
+            type="email"
+            autoComplete="username"
+            placeholder="admin@crewdeck.internal"
+            className="h-11 rounded-lg"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field label="Password" htmlFor="platform-password" shakeKey={shakeKey}>
+          <PasswordInput
+            id="platform-password"
+            autoComplete="current-password"
+            placeholder="••••••••••••"
+            className="h-11 rounded-lg"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        <Button type="submit" className="h-11 w-full rounded-lg font-medium" loading={busy}>
+          {busy ? 'Signing in…' : 'Sign In'} {!busy && <ArrowRight />}
+        </Button>
+      </form>
+    </>
   );
 }

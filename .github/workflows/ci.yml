@@ -9,8 +9,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DATABASE_URL: postgres://crew_app:crew_app_dev@localhost:5432/crewdeck
-  DATABASE_ADMIN_URL: postgres://crew_admin:crew_admin_dev@localhost:5432/crewdeck
+  MONGODB_URI: mongodb://localhost:27017/?directConnection=true
+  MONGODB_DB: crewdeck
   REDIS_URL: redis://localhost:6379
 
 jobs:
@@ -19,16 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: crew_admin
-          POSTGRES_PASSWORD: crew_admin_dev
-          POSTGRES_DB: crewdeck
-        ports: ['5432:5432']
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
         options: >-
-          --health-cmd "pg_isready -U crew_admin -d crewdeck" --health-interval 3s
-          --health-timeout 3s --health-retries 20
+          --health-cmd "mongosh --quiet --eval \"try{rs.status().ok}catch(e){rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok}\""
+          --health-interval 3s --health-timeout 10s --health-retries 30
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -42,12 +38,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Create restricted app role
-        run: |
-          PGPASSWORD=crew_admin_dev psql -h localhost -U crew_admin -d crewdeck \
-            -v ON_ERROR_STOP=1 -c "CREATE ROLE crew_app LOGIN PASSWORD 'crew_app_dev' NOSUPERUSER NOBYPASSRLS" \
-            -c "GRANT USAGE ON SCHEMA public TO crew_app" \
-            -c "ALTER DEFAULT PRIVILEGES FOR ROLE crew_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crew_app"
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -58,16 +48,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: crew_admin
-          POSTGRES_PASSWORD: crew_admin_dev
-          POSTGRES_DB: crewdeck
-        ports: ['5432:5432']
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
         options: >-
-          --health-cmd "pg_isready -U crew_admin -d crewdeck" --health-interval 3s
-          --health-timeout 3s --health-retries 20
+          --health-cmd "mongosh --quiet --eval \"try{rs.status().ok}catch(e){rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok}\""
+          --health-interval 3s --health-timeout 10s --health-retries 30
       redis:
         image: redis:7-alpine
         ports: ['6379:6379']
@@ -87,12 +73,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Environment file for the dev servers
         run: cp .env.example .env
-      - name: Create restricted app role
-        run: |
-          PGPASSWORD=crew_admin_dev psql -h localhost -U crew_admin -d crewdeck \
-            -v ON_ERROR_STOP=1 -c "CREATE ROLE crew_app LOGIN PASSWORD 'crew_app_dev' NOSUPERUSER NOBYPASSRLS" \
-            -c "GRANT USAGE ON SCHEMA public TO crew_app" \
-            -c "ALTER DEFAULT PRIVILEGES FOR ROLE crew_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crew_app"
       - name: Migrate and seed (base tenants plus demo workspace)
         run: |
           pnpm db:migrate

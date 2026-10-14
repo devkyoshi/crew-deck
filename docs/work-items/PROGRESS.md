@@ -1,7 +1,7 @@
 # Work Items and Kanban: progress
 
-**Last updated:** 2026-10-14 (planning documents written; no code started)
-**Current phase:** W1, waiting for plan approval from the owner
+**Last updated:** 2026-10-14 (W2 built; awaiting owner review)
+**Current phase:** W2, in Review. Next step: owner tries drag and drop, filters, swimlanes and bulk actions, then W3 (work item depth) can start with a plan
 **Foundation prerequisite (Phases 0 to 5 of `docs/BRIEF.md`):** complete. Phases 0 to 9 are all shipped (HEAD at the time of writing: `0a311bb`).
 
 ## How to use this file
@@ -15,8 +15,8 @@
 
 | Phase | Title | Status | Started | Finished | Commit | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Statuses, items and a read-only board | Not started | | | | Migrations `0011`, `0012`. Needs owner approval of `/design` components before full screens |
-| W2 | Drag and drop and board power features | Not started | | | | Adds `fractional-indexing`, `@tanstack/react-virtual` |
+| W1 | Statuses, items and a read-only board | Review | 2026-10-14 | | | Built and tested: migrations 0011/0012, API, `can()` actions, plan gate, board, item panel and page, board settings, create-space board type, demo seed, 395 API tests, browser and accessibility tests. Deviations: see log |
+| W2 | Drag and drop and board power features | Review | 2026-10-14 | | | Built and tested: move, bulk, labels, filters, swimlanes, WIP warnings, rebalance job, shortcuts, 420 API tests plus browser and accessibility tests. See log for deviations |
 | W3 | Work item depth | Not started | | | | Adds Tiptap and the storage adapter (local disk). Ops Memory update needed |
 | W4 | Search, list view and epics | Not started | | | | Search access filtering must be in SQL |
 | W5 | Notifications | Not started | | | | Uses existing queued email sender (Brevo), not SendGrid |
@@ -27,8 +27,8 @@
 
 | Item | Phase | Status |
 | --- | --- | --- |
-| Plan JSON update migration (`0011_plan_work_items`) | W1 | Not started |
-| `work_items` limit enforced on create | W1 | Not started |
+| Plan JSON update migration (`0011_plan_work_items`) | W1 | Done |
+| `work_items` limit enforced on create | W1 | Done (API). Upgrade notice in UI pending |
 | `scrum_sprints` gate (create Scrum space, start sprint) | W6 (UI lock shown from W1) | Not started |
 | `max_attachment_mb` and `storage_mb` enforcement | W3 | Not started |
 | `shared_filters` gate | W4 | Not started |
@@ -51,4 +51,7 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 
 ## Log (newest first)
 
+- 2026-10-14: W2 built and set to Review. API: `POST /items/:id/move` (camelCase body: `statusId`, `afterItemId` or `beforeItemId`, `assigneeId`, `priority`, `epicId`; `If-Match`), `POST /items/bulk`, labels routes, filter query on the board and its column route, `wipCount` (unfiltered) and `filtered` on the board response, rebalance job (`work/jobs.ts`, queue `work-rank-rebalance`), `can()` `label.create` and `label.manage`. Web: DnD in `board-view.tsx` (drag overlay portalled to body, custom keyboard coordinates, collision logic that resolves a column to its nearest card), `filter-bar.tsx`, `bulk-bar.tsx`, `label-bits.tsx`, `shortcuts-overlay.tsx`, swimlane and card-field settings. Changes from the plan: bodies are camelCase like the rest of the API; swimlane lanes are built from the cards loaded (first 50 per column), and the board says so when more exist; saved filters stay in W4; a collapsed column is not available while swimlanes are on. Not done: virtualised columns (50 per page plus Show more is used; 500 items load in about 2 seconds and drag smoothly in the browser test), live updates (W7). Edits of items now also take the space lock (a short wait when many people edit at once).
+- 2026-10-14: W1 finished and set to Review. Web: Board tab, board with inline create and `C` shortcut, item side panel and full page, status editor in board settings, board type step in the create-space wizard, billing and pricing rows for work items, demo items on ENG and OPS. Browser test `e2e/work-items.spec.ts` (flow plus axe scan in light and dark). Fixes found by the scan: priority label contrast, unnamed category selects. Changes from the plan: the side panel and board settings are sheets (not routes); the card menu has Open, Move to, Copy link, Delete (drag and drop is W2); description is plain text until W3; `GET /spaces/:id/assignees` was added for the assignee picker; deleting a story or task deletes its subtasks, deleting an epic keeps its stories. Not done in W1: filter bar, swimlanes, labels UI, drag (all W2). Unrelated e2e failures seen: signed-out a11y specs and the admin CRM walk in demo-flow (CRM module is off for acme in the dev database), both outside work items.
+- 2026-10-14: W1 backend built: migrations 0011 and 0012 (round trip verified), `can()` item/status/board actions with `isReporter`, routes `statuses.ts`, `board.ts`, `work-items.ts`, `src/work/`, plan keys and `work_items` usage, `boardType` on space create (Scrum answers 402 on Free, otherwise 422 not available yet), `fractional-indexing` added. Tests: `test/work-items.test.ts` (49), matrix rows, RLS rows. Web: `lib/work.ts`, `components/work/*`, `/design` section "Work management". Awaiting design approval.
 - 2026-10-14: Brief split into phases W1 to W7. Created `docs/work-items/` (README, PHASES, PROGRESS, CHECKLIST, PRICING-GATES, UI-SPEC, DECISIONS-PENDING). Added ADR-041 to ADR-049 to `docs/DECISIONS.md`, planned-feature rows to `docs/FEATURES.md`, and a planned-limits note to `docs/PRICING.md`. No code written.

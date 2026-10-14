@@ -11,8 +11,6 @@ import {
   uniqueEmail,
   PASSWORD,
 } from './helpers.js';
-import { auditLogs } from '../src/db/schema.js';
-import { and, eq } from 'drizzle-orm';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -25,16 +23,7 @@ let ownerC: string, adminC: string, memberC: string, globexC: string;
 async function auditFor(orgId: string, action: string, targetId: string) {
   const a = adminDb();
   try {
-    return await a.db
-      .select()
-      .from(auditLogs)
-      .where(
-        and(
-          eq(auditLogs.orgId, orgId),
-          eq(auditLogs.action, action),
-          eq(auditLogs.targetId, targetId),
-        ),
-      );
+    return await a.db.global.all.auditLogs.find({ orgId, action, targetId });
   } finally {
     await a.close();
   }

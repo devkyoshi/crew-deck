@@ -1,8 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
 import { caller, ensureUser, makeApp, signInAs, tenantIds, uniqueEmail, appDb } from './helpers.js';
-import { withTenant } from '../src/db/client.js';
-import { auditLogs } from '../src/db/schema.js';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -118,29 +115,22 @@ describe('GET /audit-logs', () => {
   });
 });
 
-describe('audit_logs table protections', () => {
-  it('is append-only for the application role', async () => {
+describe('audit log protections', () => {
+  it('is append-only through the tenant scope', async () => {
     const app = appDb();
     try {
-      await expect(
-        withTenant(app.db, ids.acme, (tx) => tx.update(auditLogs).set({ action: 'tampered' })),
-      ).rejects.toThrow();
-      await expect(withTenant(app.db, ids.acme, (tx) => tx.delete(auditLogs))).rejects.toThrow();
+      const tenant = app.db.tenant(ids.acme);
+      await expect(tenant.auditLogs.updateMany({}, { action: 'tampered' })).rejects.toThrow();
+      await expect(tenant.auditLogs.deleteMany({})).rejects.toThrow();
     } finally {
       await app.close();
     }
   });
 
-  it('is hidden by row-level security without a tenant context, and across tenants', async () => {
+  it('is hidden across tenants, even with an explicit filter', async () => {
     const app = appDb();
     try {
-      expect(await app.db.select().from(auditLogs)).toHaveLength(0);
-      const rows = await withTenant(app.db, ids.globex, (tx) =>
-        tx
-          .select()
-          .from(auditLogs)
-          .where(sql`${auditLogs.orgId} = ${ids.acme}`),
-      );
+      const rows = await app.db.tenant(ids.globex).auditLogs.find({ orgId: ids.acme });
       expect(rows).toHaveLength(0);
     } finally {
       await app.close();

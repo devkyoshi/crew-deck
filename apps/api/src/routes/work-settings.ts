@@ -1,14 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { assertWithinLimit, countSites, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { loadSettings } from '../checkin/service.js';
-import { withTenant } from '../db/client.js';
-import { holidays, sites, tenantSettings, workDays } from '../db/schema.js';
+import { withTenant, withTenantTx } from '../db/client.js';
 import { AppError, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { isRealDate, isValidTimezone } from '../lib/time.js';
 import { can } from '../permissions/can.js';
@@ -36,6 +34,12 @@ const settingsBody = z
     message: 'Must be after the start time',
   });
 
+const siteShape = (s: { id: string; name: string; address: string | null }) => ({
+  id: s.id,
+  name: s.name,
+  address: s.address,
+});
+
 export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -45,11 +49,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => ({
       settings: await loadSettings(tx, actor.orgId),
-      sites: await tx
-        .select({ id: sites.id, name: sites.name, address: sites.address })
-        .from(sites)
-        .where(eq(sites.orgId, actor.orgId))
-        .orderBy(asc(sql`lower(${sites.name})`)),
+      sites: (await tx.sites.find({}, { sort: { nameLower: 1 } })).map(siteShape),
     }));
   });
 
@@ -60,7 +60,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
       const b = req.body;
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const before = await loadSettings(tx, actor.orgId);
         // Keep the other modules as they are; this form only controls check-in.
         const modules = [
@@ -69,20 +69,19 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
           ...(b.checkinEnabled ? ['checkin'] : []),
           ...(before.crmEnabled ? ['crm'] : []),
         ];
-        const values = {
-          timezone: b.timezone,
-          workDays: b.workDays,
-          workStart: b.workStart,
-          workEnd: b.workEnd,
-          autoCloseTime: b.autoCloseTime,
-          requireNote: b.requireNote,
-          enabledModules: modules,
-          updatedAt: new Date(),
-        };
-        await tx
-          .insert(tenantSettings)
-          .values({ orgId: actor.orgId, ...values })
-          .onConflictDoUpdate({ target: tenantSettings.orgId, set: values });
+        await tx.tenantSettings.upsert(
+          {},
+          {
+            timezone: b.timezone,
+            workDays: b.workDays,
+            workStart: b.workStart,
+            workEnd: b.workEnd,
+            autoCloseTime: b.autoCloseTime,
+            requireNote: b.requireNote,
+            enabledModules: modules,
+            updatedAt: new Date(),
+          },
+        );
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -107,11 +106,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.get('/sites', { preHandler: requireAuth }, async (req) => {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => ({
-      items: await tx
-        .select({ id: sites.id, name: sites.name, address: sites.address })
-        .from(sites)
-        .where(eq(sites.orgId, actor.orgId))
-        .orderBy(asc(sql`lower(${sites.name})`)),
+      items: (await tx.sites.find({}, { sort: { nameLower: 1 } })).map(siteShape),
     }));
   });
 
@@ -119,25 +114,25 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     if (!can(actor, 'settings.manage')) throw forbidden();
     try {
-      return await withTenant(deps.db, actor.orgId, async (tx) => {
+      return await withTenantTx(deps.db, actor.orgId, async (tx) => {
         assertWithinLimit(
           await loadPlan(tx, actor.orgId),
           'sites',
           await countSites(tx, actor.orgId),
         );
-        const [row] = await tx
-          .insert(sites)
-          .values({ orgId: actor.orgId, name: req.body.name, address: req.body.address || null })
-          .returning({ id: sites.id, name: sites.name, address: sites.address });
+        const row = await tx.sites.insert({
+          name: req.body.name,
+          address: req.body.address || null,
+        });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'site.created',
           targetType: 'site',
-          targetId: row!.id,
-          after: { name: row!.name },
+          targetId: row.id,
+          after: { name: row.name },
         });
-        return row!;
+        return siteShape(row);
       });
     } catch (e) {
       if (isUniqueViolation(e)) throw siteTaken();
@@ -152,11 +147,8 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
-          const [before] = await tx
-            .select()
-            .from(sites)
-            .where(and(eq(sites.id, req.params.id), eq(sites.orgId, actor.orgId)));
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
+          const before = await tx.sites.get(req.params.id);
           if (!before) throw notFound('Site');
           const patch = {
             ...(req.body.name !== undefined ? { name: req.body.name } : {}),
@@ -164,11 +156,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
           };
           if (Object.keys(patch).length === 0)
             throw new AppError(400, 'validation_error', 'Nothing to update');
-          const [row] = await tx
-            .update(sites)
-            .set(patch)
-            .where(and(eq(sites.id, before.id), eq(sites.orgId, actor.orgId)))
-            .returning({ id: sites.id, name: sites.name, address: sites.address });
+          const row = await tx.sites.findOneAndUpdate({ id: before.id }, patch);
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -178,7 +166,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
             before: { name: before.name, address: before.address },
             after: patch,
           });
-          return row!;
+          return siteShape(row!);
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw siteTaken();
@@ -190,25 +178,17 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.delete('/sites/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     if (!can(actor, 'settings.manage')) throw forbidden();
-    await withTenant(deps.db, actor.orgId, async (tx) => {
-      const [site] = await tx
-        .select()
-        .from(sites)
-        .where(and(eq(sites.id, req.params.id), eq(sites.orgId, actor.orgId)));
+    await withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const site = await tx.sites.get(req.params.id);
       if (!site) throw notFound('Site');
-      const used = await tx
-        .select({ id: workDays.id })
-        .from(workDays)
-        .where(and(eq(workDays.siteId, site.id), eq(workDays.orgId, actor.orgId)))
-        .limit(1);
-      if (used.length) {
+      if (await tx.workDays.exists({ siteId: site.id })) {
         throw new AppError(
           409,
           'site_in_use',
           'People have checked in at this site, so it cannot be deleted',
         );
       }
-      await tx.delete(sites).where(and(eq(sites.id, site.id), eq(sites.orgId, actor.orgId)));
+      await tx.sites.deleteOne({ id: site.id });
       await writeAudit(tx, {
         orgId: actor.orgId,
         actorId: actor.userId,
@@ -227,6 +207,11 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     new AppError(409, 'date_taken', 'There is already a holiday on that date', {
       date: 'There is already a holiday on that date',
     });
+  const holidayShape = (h: { id: string; date: string; name: string }) => ({
+    id: h.id,
+    date: h.date,
+    name: h.name,
+  });
 
   r.get(
     '/holidays',
@@ -240,17 +225,12 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const year = req.query.year;
       return withTenant(deps.db, actor.orgId, async (tx) => ({
-        items: await tx
-          .select({ id: holidays.id, date: holidays.date, name: holidays.name })
-          .from(holidays)
-          .where(
-            and(
-              eq(holidays.orgId, actor.orgId),
-              year ? gte(holidays.date, `${year}-01-01`) : undefined,
-              year ? lt(holidays.date, `${year + 1}-01-01`) : undefined,
-            ),
+        items: (
+          await tx.holidays.find(
+            year ? { date: { $gte: `${year}-01-01`, $lt: `${year + 1}-01-01` } } : {},
+            { sort: { date: 1 } },
           )
-          .orderBy(asc(holidays.date)),
+        ).map(holidayShape),
       }));
     },
   );
@@ -259,20 +239,17 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     if (!can(actor, 'settings.manage')) throw forbidden();
     try {
-      return await withTenant(deps.db, actor.orgId, async (tx) => {
-        const [row] = await tx
-          .insert(holidays)
-          .values({ orgId: actor.orgId, date: req.body.date, name: req.body.name })
-          .returning({ id: holidays.id, date: holidays.date, name: holidays.name });
+      return await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        const row = await tx.holidays.insert({ date: req.body.date, name: req.body.name });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'holiday.created',
           targetType: 'holiday',
-          targetId: row!.id,
-          after: { date: row!.date, name: row!.name },
+          targetId: row.id,
+          after: { date: row.date, name: row.name },
         });
-        return row!;
+        return holidayShape(row);
       });
     } catch (e) {
       if (isUniqueViolation(e)) throw dateTaken();
@@ -287,19 +264,12 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
-          const [before] = await tx
-            .select()
-            .from(holidays)
-            .where(and(eq(holidays.id, req.params.id), eq(holidays.orgId, actor.orgId)));
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
+          const before = await tx.holidays.get(req.params.id);
           if (!before) throw notFound('Holiday');
           if (Object.keys(req.body).length === 0)
             throw new AppError(400, 'validation_error', 'Nothing to update');
-          const [row] = await tx
-            .update(holidays)
-            .set(req.body)
-            .where(and(eq(holidays.id, before.id), eq(holidays.orgId, actor.orgId)))
-            .returning({ id: holidays.id, date: holidays.date, name: holidays.name });
+          const row = await tx.holidays.findOneAndUpdate({ id: before.id }, req.body);
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -309,7 +279,7 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
             before: { date: before.date, name: before.name },
             after: req.body,
           });
-          return row!;
+          return holidayShape(row!);
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw dateTaken();
@@ -324,15 +294,10 @@ export async function workSettingsRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
-      await withTenant(deps.db, actor.orgId, async (tx) => {
-        const [row] = await tx
-          .select()
-          .from(holidays)
-          .where(and(eq(holidays.id, req.params.id), eq(holidays.orgId, actor.orgId)));
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        const row = await tx.holidays.get(req.params.id);
         if (!row) throw notFound('Holiday');
-        await tx
-          .delete(holidays)
-          .where(and(eq(holidays.id, row.id), eq(holidays.orgId, actor.orgId)));
+        await tx.holidays.deleteOne({ id: row.id });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,

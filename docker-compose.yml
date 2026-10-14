@@ -1,21 +1,19 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-crew_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crew_admin_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-crewdeck}
-      APP_ROLE_PASSWORD: ${APP_ROLE_PASSWORD:-crew_app_dev}
+  # Single-node replica set: MongoDB transactions require one. Connect with directConnection=true.
+  mongo:
+    image: mongo:7
+    command: ['--replSet', 'rs0', '--bind_ip_all', '--port', '27017']
     ports:
-      - '${POSTGRES_PORT:-5433}:5432'
+      - '${MONGO_PORT:-27018}:27017'
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./infra/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+      - mongodata:/data/db
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-crew_admin} -d ${POSTGRES_DB:-crewdeck}']
+      test: >
+        mongosh --port 27017 --quiet --eval
+        "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }"
       interval: 3s
-      timeout: 3s
-      retries: 20
+      timeout: 10s
+      retries: 30
 
   redis:
     image: redis:7-alpine
@@ -37,7 +35,8 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgres://crew_app:${APP_ROLE_PASSWORD:-crew_app_dev}@postgres:5432/${POSTGRES_DB:-crewdeck}
+      MONGODB_URI: mongodb://mongo:27017/?directConnection=true
+      MONGODB_DB: ${MONGODB_DB:-crewdeck}
       REDIS_URL: redis://redis:6379
       API_PORT: 4000
       LOG_LEVEL: info
@@ -52,7 +51,7 @@ services:
     ports:
       - '4000:4000'
     depends_on:
-      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -67,18 +66,19 @@ services:
       timeout: 3s
       retries: 20
 
-  # One-off: applies pending SQL migrations as the schema owner. Safe to run on every deploy.
+  # One-off: creates the MongoDB indexes. Idempotent and safe to run on every deploy.
   migrate:
     profiles: [full, tools]
     image: crew-deck-api
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ['node_modules/.bin/tsx', 'src/db/migrate.ts', 'up']
+    command: ['node_modules/.bin/tsx', 'src/db/migrate.ts']
     environment:
-      DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-crew_admin}:${POSTGRES_PASSWORD:-crew_admin_dev}@postgres:5432/${POSTGRES_DB:-crewdeck}
+      MONGODB_URI: mongodb://mongo:27017/?directConnection=true
+      MONGODB_DB: ${MONGODB_DB:-crewdeck}
     depends_on:
-      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
     restart: 'no'
 
   # One-off, development only: base tenants plus the demo workspace content. Run with
@@ -95,7 +95,8 @@ services:
       ]
     environment:
       NODE_ENV: development
-      DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-crew_admin}:${POSTGRES_PASSWORD:-crew_admin_dev}@postgres:5432/${POSTGRES_DB:-crewdeck}
+      MONGODB_URI: mongodb://mongo:27017/?directConnection=true
+      MONGODB_DB: ${MONGODB_DB:-crewdeck}
     depends_on:
       migrate: { condition: service_completed_successfully }
     restart: 'no'
@@ -115,5 +116,5 @@ services:
       api: { condition: service_healthy }
 
 volumes:
-  pgdata:
+  mongodata:
   redisdata:

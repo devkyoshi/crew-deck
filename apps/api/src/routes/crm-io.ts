@@ -1,14 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { BOM, crmCapacity, crmGuard, csvCell } from '../crm/helpers.js';
+import { BOM, crmCapacity, crmGuard, csvCell, ownerNames } from '../crm/helpers.js';
 import { assertFeature, loadPlan } from '../plans/index.js';
-import { withTenant } from '../db/client.js';
-import { crmCompanies, crmContacts, crmLeads, memberships, users } from '../db/schema.js';
+import { CI, withTenant, withTenantTx } from '../db/client.js';
 import { AppError } from '../lib/errors.js';
 
 export const MAX_IMPORT_ROWS = 5000;
@@ -158,22 +156,19 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
 
       type Failure = { row: number; field: string; message: string };
 
-      const result = await withTenant(deps.db, actor.orgId, async (tx) => {
+      const result = await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
         assertFeature(await loadPlan(tx, actor.orgId), 'crm_io', 'CSV import');
 
         // Owners by email (active members only).
-        const owners = await tx
-          .select({ id: users.id, email: users.email })
-          .from(memberships)
-          .innerJoin(users, eq(users.id, memberships.userId))
-          .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.status, 'active')));
-        const ownerByEmail = new Map(owners.map((o) => [o.email.toLowerCase(), o.id]));
+        const activeMembers = await tx.memberships.find({ status: 'active' });
+        const people = await tx.users(activeMembers.map((m) => m.userId));
+        const ownerByEmail = new Map([...people.values()].map((u) => [u.email.toLowerCase(), u.id]));
 
-        const existingCompanies = await tx
-          .select({ id: crmCompanies.id, name: crmCompanies.name })
-          .from(crmCompanies)
-          .where(and(eq(crmCompanies.orgId, actor.orgId), isNull(crmCompanies.deletedAt)));
+        const existingCompanies = await tx.crmCompanies.find(
+          { deletedAt: null },
+          { projection: { id: 1, name: 1 } },
+        );
         const companyByName = new Map(existingCompanies.map((c) => [c.name.toLowerCase(), c.id]));
 
         const failures: Failure[] = [];
@@ -234,9 +229,8 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
           );
         if (type === 'companies') {
           for (const part of batch(clean)) {
-            await tx.insert(crmCompanies).values(
+            await tx.crmCompanies.insert(
               part.map((v) => ({
-                orgId: actor.orgId,
                 name: v.name!,
                 website: v.website,
                 industry: v.industry,
@@ -248,9 +242,8 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
           }
         } else if (type === 'contacts') {
           for (const part of batch(clean)) {
-            await tx.insert(crmContacts).values(
+            await tx.crmContacts.insert(
               part.map((v) => ({
-                orgId: actor.orgId,
                 name: v.name!,
                 email: v.email?.toLowerCase() ?? null,
                 phone: v.phone,
@@ -263,9 +256,8 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
           }
         } else {
           for (const part of batch(clean)) {
-            await tx.insert(crmLeads).values(
+            await tx.crmLeads.insert(
               part.map((v) => ({
-                orgId: actor.orgId,
                 name: v.name!,
                 email: v.email?.toLowerCase() ?? null,
                 companyName: v.companyName,
@@ -304,62 +296,41 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
       const csv = await withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
         assertFeature(await loadPlan(tx, actor.orgId), 'crm_io', 'CSV export');
-        const owner = sql<string | null>`coalesce(${users.name}, ${users.email})`;
         let header: string[];
         let rows: unknown[][];
         if (type === 'companies') {
           header = ['Name', 'Website', 'Industry', 'Size', 'Owner', 'Created'];
-          const data = await tx
-            .select({
-              name: crmCompanies.name,
-              website: crmCompanies.website,
-              industry: crmCompanies.industry,
-              size: crmCompanies.size,
-              owner,
-              createdAt: crmCompanies.createdAt,
-            })
-            .from(crmCompanies)
-            .leftJoin(users, eq(users.id, crmCompanies.ownerId))
-            .where(and(eq(crmCompanies.orgId, actor.orgId), isNull(crmCompanies.deletedAt)))
-            .orderBy(asc(sql`lower(${crmCompanies.name})`), asc(crmCompanies.id));
+          const data = await tx.crmCompanies.find(
+            { deletedAt: null },
+            { sort: { nameLower: 1, id: 1 } },
+          );
+          const owners = await ownerNames(tx, data.map((d) => d.ownerId));
           rows = data.map((d) => [
             d.name,
             d.website,
             d.industry,
             d.size,
-            d.owner,
+            d.ownerId ? (owners.get(d.ownerId) ?? null) : null,
             d.createdAt.toISOString(),
           ]);
         } else if (type === 'contacts') {
           header = ['Name', 'Email', 'Phone', 'Job title', 'Company', 'Owner', 'Created'];
-          const data = await tx
-            .select({
-              name: crmContacts.name,
-              email: crmContacts.email,
-              phone: crmContacts.phone,
-              jobTitle: crmContacts.jobTitle,
-              company: crmCompanies.name,
-              owner,
-              createdAt: crmContacts.createdAt,
-            })
-            .from(crmContacts)
-            .leftJoin(
-              crmCompanies,
-              and(
-                eq(crmCompanies.id, crmContacts.companyId),
-                eq(crmCompanies.orgId, crmContacts.orgId),
-              ),
-            )
-            .leftJoin(users, eq(users.id, crmContacts.ownerId))
-            .where(and(eq(crmContacts.orgId, actor.orgId), isNull(crmContacts.deletedAt)))
-            .orderBy(asc(sql`lower(${crmContacts.name})`), asc(crmContacts.id));
+          const data = await tx.crmContacts.find(
+            { deletedAt: null },
+            { sort: { name: 1, id: 1 }, collation: CI },
+          );
+          const owners = await ownerNames(tx, data.map((d) => d.ownerId));
+          const companies = await tx.crmCompanies.find({
+            id: { $in: [...new Set(data.map((d) => d.companyId).filter((x): x is string => !!x))] },
+          });
+          const companyName = new Map(companies.map((c) => [c.id, c.name]));
           rows = data.map((d) => [
             d.name,
             d.email,
             d.phone,
             d.jobTitle,
-            d.company,
-            d.owner,
+            d.companyId ? (companyName.get(d.companyId) ?? null) : null,
+            d.ownerId ? (owners.get(d.ownerId) ?? null) : null,
             d.createdAt.toISOString(),
           ]);
         } else {
@@ -373,28 +344,18 @@ export async function crmIoRoutes(app: FastifyInstance, deps: AuthDeps) {
             'Converted',
             'Created',
           ];
-          const data = await tx
-            .select({
-              name: crmLeads.name,
-              email: crmLeads.email,
-              companyName: crmLeads.companyName,
-              source: crmLeads.source,
-              status: crmLeads.status,
-              owner,
-              convertedAt: crmLeads.convertedAt,
-              createdAt: crmLeads.createdAt,
-            })
-            .from(crmLeads)
-            .leftJoin(users, eq(users.id, crmLeads.ownerId))
-            .where(and(eq(crmLeads.orgId, actor.orgId), isNull(crmLeads.deletedAt)))
-            .orderBy(asc(sql`lower(${crmLeads.name})`), asc(crmLeads.id));
+          const data = await tx.crmLeads.find(
+            { deletedAt: null },
+            { sort: { name: 1, id: 1 }, collation: CI },
+          );
+          const owners = await ownerNames(tx, data.map((d) => d.ownerId));
           rows = data.map((d) => [
             d.name,
             d.email,
             d.companyName,
             d.source,
             d.status,
-            d.owner,
+            d.ownerId ? (owners.get(d.ownerId) ?? null) : null,
             d.convertedAt?.toISOString() ?? '',
             d.createdAt.toISOString(),
           ]);

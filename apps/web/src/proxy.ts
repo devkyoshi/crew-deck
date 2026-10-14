@@ -4,7 +4,7 @@ const BASE_DOMAIN = (process.env.BASE_DOMAIN ?? 'localhost').toLowerCase();
 const SESSION_COOKIE = 'cd_session';
 const PUBLIC_PREFIXES = ['/sign-in', '/accept-invite', '/design', '/api'];
 // Pages that belong to the product itself (sign-up, pricing, platform console), served on the bare domain.
-const APEX_PREFIXES = ['/pricing', '/signup', '/platform'];
+const APEX_PREFIXES = ['/pricing', '/signup', '/platform', '/landing'];
 
 function tenantSlug(host: string | null) {
   if (!host) return null;
@@ -22,7 +22,12 @@ export function proxy(req: NextRequest) {
   const slug = tenantSlug(req.headers.get('host'));
 
   if (!slug) {
-    if (pathname === '/') return NextResponse.rewrite(new URL('/workspaces', req.url));
+    if (pathname === '/') return NextResponse.rewrite(new URL('/landing', req.url));
+    if (pathname === '/signup' && !req.nextUrl.searchParams.get('step')) {
+      const u = new URL(req.url);
+      u.searchParams.set('step', 'you');
+      return NextResponse.redirect(u);
+    }
     if (
       pathname.startsWith('/workspaces') ||
       PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||

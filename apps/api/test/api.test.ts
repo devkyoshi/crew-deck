@@ -1,8 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { withTenant } from '../src/db/client.js';
-import { memberships } from '../src/db/schema.js';
 import { forbidden } from '../src/lib/errors.js';
 import { appDb, makeApp, tenantIds } from './helpers.js';
 
@@ -18,9 +15,7 @@ app.get(
   { schema: { params: z.object({ id: z.string().uuid() }) } },
   async (req, reply) => {
     const orgId = req.headers['x-org-id'] as string;
-    const [row] = await withTenant(appConn.db, orgId, (tx) =>
-      tx.select().from(memberships).where(eq(memberships.id, req.params.id)),
-    );
+    const row = await appConn.db.tenant(orgId).memberships.get(req.params.id);
     if (!row) return reply.status(404).send({ code: 'not_found', message: 'Not found' });
     return row;
   },
@@ -65,7 +60,7 @@ describe('health and errors', () => {
 
 describe('cross-tenant access through the API', () => {
   it('tenant A can read its own membership but tenant B cannot', async () => {
-    const own = await withTenant(appConn.db, ids.acme, (tx) => tx.select().from(memberships));
+    const own = await appConn.db.tenant(ids.acme).memberships.find({});
     const target = own[0]!;
 
     const asA = await app.inject({

@@ -1,16 +1,4 @@
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
-import type { Tx } from '../db/client.js';
-import {
-  crmCompanies,
-  crmContacts,
-  crmDeals,
-  crmLeads,
-  crmPipelines,
-  invitations,
-  memberships,
-  sites,
-  spaces,
-} from '../db/schema.js';
+import type { TenantDb } from '../db/client.js';
 import { AppError } from '../lib/errors.js';
 
 /** Numeric limits. A missing key means unlimited. Keys match docs/PRICING.md. */
@@ -22,6 +10,8 @@ export const LIMIT_KEYS = [
   'storage_mb',
   'audit_days',
   'sites',
+  'work_items',
+  'max_attachment_mb',
 ] as const;
 export type LimitKey = (typeof LIMIT_KEYS)[number];
 
@@ -33,6 +23,9 @@ export const FEATURE_KEYS = [
   'space_audit',
   'branding_name',
   'branding_full',
+  'scrum_sprints',
+  'shared_filters',
+  'burndown_reports',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -46,26 +39,19 @@ export interface EffectivePlan {
   features: FeatureKey[];
 }
 
-type PlanRow = {
-  plan_key: string | null;
-  on_trial: boolean;
-  trial_ends_at: Date | null;
-  limit_overrides: Record<string, number | null>;
-  plan_name: string | null;
-  limits: Record<string, number> | null;
-  features: string[] | null;
-};
-
 const ALL_FEATURES = [...FEATURE_KEYS];
 
 /**
- * The plan a workspace is on right now. A trial that has ended counts as Free even before the daily
+ * The plan a workspace is on right now. A trial that has ended counts as Free even before the hourly
  * job has recorded the change, so nobody keeps paid features by timing.
  */
-export async function loadPlan(tx: Tx, orgId: string, now = new Date()): Promise<EffectivePlan> {
-  const rows = await tx.execute<PlanRow>(sql`select * from plan_for_org(${orgId})`);
-  const row = rows[0];
-  if (!row || row.plan_key === null) {
+export async function loadPlan(
+  t: TenantDb,
+  _orgId?: string,
+  now = new Date(),
+): Promise<EffectivePlan> {
+  const org = await t.organization();
+  if (!org || org.planKey === null) {
     return {
       key: null,
       name: 'Internal',
@@ -75,35 +61,29 @@ export async function loadPlan(tx: Tx, orgId: string, now = new Date()): Promise
       features: ALL_FEATURES,
     };
   }
-  let { plan_name: name, limits, features } = row;
-  let key = row.plan_key;
-  const ended = row.on_trial && row.trial_ends_at !== null && new Date(row.trial_ends_at) <= now;
+  let plan = await t.planByKey(org.planKey);
+  let key = org.planKey;
+  const ended = org.onTrial && org.trialEndsAt !== null && org.trialEndsAt <= now;
   if (ended) {
-    const free = await tx.execute<{
-      name: string;
-      limits: Record<string, number>;
-      features: string[];
-    }>(sql`select name, limits, features from plans where key = 'free'`);
+    plan = await t.planByKey('free');
     key = 'free';
-    name = free[0]?.name ?? 'Free';
-    limits = free[0]?.limits ?? {};
-    features = free[0]?.features ?? [];
   }
+  const limits = plan?.limits ?? {};
   const merged: Partial<Record<LimitKey, number>> = {};
   for (const k of LIMIT_KEYS) {
-    const base = limits?.[k];
-    const override = ended ? undefined : row.limit_overrides?.[k];
+    const base = limits[k];
+    const override = ended ? undefined : (org.limitOverrides as Record<string, number | null>)?.[k];
     // An override of null lifts the limit; a number replaces it.
     const v = override === undefined ? base : override;
     if (typeof v === 'number') merged[k] = v;
   }
   return {
     key,
-    name: name ?? key,
-    onTrial: row.on_trial && !ended,
-    trialEndsAt: row.trial_ends_at ? new Date(row.trial_ends_at) : null,
+    name: plan?.name ?? key,
+    onTrial: org.onTrial && !ended,
+    trialEndsAt: org.trialEndsAt,
     limits: merged,
-    features: (features ?? []).filter((f): f is FeatureKey =>
+    features: (plan?.features ?? []).filter((f): f is FeatureKey =>
       (FEATURE_KEYS as readonly string[]).includes(f),
     ),
   };
@@ -135,6 +115,8 @@ const LIMIT_WORDS: Record<LimitKey, string> = {
   storage_mb: 'MB of storage',
   audit_days: 'days of audit history',
   sites: 'sites',
+  work_items: 'work items',
+  max_attachment_mb: 'MB per attachment',
 };
 
 /** Throws when adding `adding` more would pass the plan's limit. Existing data is never touched. */
@@ -151,78 +133,48 @@ export function assertWithinLimit(plan: EffectivePlan, key: LimitKey, current: n
 
 // ---- Usage ---------------------------------------------------------------------------------------------
 
-const count = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
-
 /** Active members plus invitations still waiting, so invitations cannot dodge the seat limit. */
-export async function countSeats(tx: Tx, orgId: string) {
-  const members = await count(
-    tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(memberships)
-      .where(and(eq(memberships.orgId, orgId), eq(memberships.status, 'active'))),
-  );
-  const pending = await count(
-    tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(invitations)
-      .where(
-        and(
-          eq(invitations.orgId, orgId),
-          isNull(invitations.acceptedAt),
-          isNull(invitations.revokedAt),
-          gt(invitations.expiresAt, new Date()),
-        ),
-      ),
-  );
+export async function countSeats(t: TenantDb, _orgId?: string) {
+  const members = await t.memberships.count({ status: 'active' });
+  const pending = await t.invitations.count({
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
   return members + pending;
 }
 
-export const countSpaces = (tx: Tx, orgId: string) =>
-  count(
-    tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(spaces)
-      .where(and(eq(spaces.orgId, orgId), isNull(spaces.deletedAt))),
-  );
+export const countSpaces = (t: TenantDb, _orgId?: string) => t.spaces.count({ deletedAt: null });
 
-export async function countCrmRecords(tx: Tx, orgId: string) {
-  let total = 0;
-  for (const t of [crmCompanies, crmContacts, crmLeads, crmDeals]) {
-    total += await count(
-      tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(t)
-        .where(and(eq(t.orgId, orgId), isNull(t.deletedAt))),
-    );
-  }
-  return total;
+export async function countCrmRecords(t: TenantDb, _orgId?: string) {
+  const live = { deletedAt: null };
+  const counts = await Promise.all([
+    t.crmCompanies.count(live),
+    t.crmContacts.count(live),
+    t.crmLeads.count(live),
+    t.crmDeals.count(live),
+  ]);
+  return counts.reduce((a, b) => a + b, 0);
 }
 
-export const countPipelines = (tx: Tx, orgId: string) =>
-  count(
-    tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(crmPipelines)
-      .where(eq(crmPipelines.orgId, orgId)),
-  );
+export const countPipelines = (t: TenantDb, _orgId?: string) => t.crmPipelines.count();
 
-export const countSites = (tx: Tx, orgId: string) =>
-  count(
-    tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(sites)
-      .where(eq(sites.orgId, orgId)),
-  );
+export const countSites = (t: TenantDb, _orgId?: string) => t.sites.count();
+
+/** Work items that are not deleted, across every space. Deleted items never count toward the limit. */
+export const countWorkItems = (t: TenantDb, _orgId?: string) =>
+  t.workItems.count({ deletedAt: null });
 
 export type Usage = Partial<Record<LimitKey, number>>;
 
-export async function loadUsage(tx: Tx, orgId: string): Promise<Usage> {
+export async function loadUsage(tx: TenantDb, orgId: string): Promise<Usage> {
   return {
     seats: await countSeats(tx, orgId),
     spaces: await countSpaces(tx, orgId),
     crm_records: await countCrmRecords(tx, orgId),
     pipelines: await countPipelines(tx, orgId),
     sites: await countSites(tx, orgId),
+    work_items: await countWorkItems(tx, orgId),
     // No file storage exists yet; the limit is wired in so it is ready when uploads arrive.
     storage_mb: 0,
   };

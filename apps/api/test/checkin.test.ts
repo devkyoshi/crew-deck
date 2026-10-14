@@ -1,6 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
 import {
   adminDb,
   appDb,
@@ -13,7 +11,6 @@ import {
   uniqueEmail,
 } from './helpers.js';
 import { autoCloseOrg } from '../src/checkin/service.js';
-import { auditLogs, users, workDayEdits, workDays } from '../src/db/schema.js';
 import { addDays, localDate, zonedTimeToUtc } from '../src/lib/time.js';
 
 const t = makeApp();
@@ -33,7 +30,7 @@ async function person(opts: { tz?: string; role?: 'member' | 'admin' } = {}): Pr
   });
   const db = adminDb();
   try {
-    await db.db.update(users).set({ timezone: tz }).where(eq(users.id, u.id));
+    await db.db.global.users.updateOne({ id: u.id }, { timezone: tz });
   } finally {
     await db.close();
   }
@@ -54,12 +51,7 @@ const hh = (d: string, time: string, tz = 'UTC') => zonedTimeToUtc(d, time, tz).
 async function dayRow(userId: string, date: string) {
   const db = adminDb();
   try {
-    return (
-      await db.db
-        .select()
-        .from(workDays)
-        .where(and(eq(workDays.userId, userId), eq(workDays.date, date)))
-    )[0];
+    return (await db.db.global.all.workDays.findOne({ userId, date })) ?? undefined;
   } finally {
     await db.close();
   }
@@ -68,10 +60,7 @@ async function dayRow(userId: string, date: string) {
 async function auditFor(action: string, targetId: string) {
   const db = adminDb();
   try {
-    return await db.db
-      .select()
-      .from(auditLogs)
-      .where(and(eq(auditLogs.action, action), eq(auditLogs.targetId, targetId)));
+    return await db.db.global.all.auditLogs.find({ action, targetId });
   } finally {
     await db.close();
   }
@@ -177,7 +166,7 @@ describe('checking in and out', () => {
     const yesterday = addDays(todayIn('UTC'), -1);
     const db = adminDb();
     try {
-      await db.db.insert(workDays).values({
+      await db.db.global.all.workDays.insert({
         orgId,
         userId: p.id,
         date: yesterday,
@@ -537,7 +526,7 @@ describe('history, scopes and permissions', () => {
     const p = await person();
     const db = adminDb();
     try {
-      await db.db.insert(workDays).values(
+      await db.db.global.all.workDays.insert(
         Array.from({ length: 12 }, (_, i) => ({
           orgId,
           userId: p.id,
@@ -568,18 +557,15 @@ describe('corrections', () => {
     const date = addDays(todayIn(p.tz), -daysAgo);
     const db = adminDb();
     try {
-      const [row] = await db.db
-        .insert(workDays)
-        .values({
+      const row = await db.db.global.all.workDays.insert({
           orgId,
           userId: p.id,
           date,
           locationType: 'remote',
           checkinAt: new Date(hh(date, '09:00', p.tz)),
           checkoutAt: new Date(hh(date, '17:00', p.tz)),
-        })
-        .returning();
-      return row!;
+      });
+      return row;
     } finally {
       await db.close();
     }
@@ -706,17 +692,15 @@ describe('corrections', () => {
     const app = appDb();
     try {
       await expect(
-        app.db.execute(sql`update work_day_edits set reason = 'tampered'`),
-      ).rejects.toThrow();
-      await expect(app.db.execute(sql`delete from work_day_edits`)).rejects.toThrow();
+        app.db.tenant(orgId).workDayEdits.updateMany({}, { reason: 'tampered' }),
+      ).rejects.toThrow(/append-only/);
+      await expect(app.db.tenant(orgId).workDayEdits.deleteMany({})).rejects.toThrow(/append-only/);
     } finally {
       await app.close();
     }
     const db = adminDb();
     try {
-      expect(
-        await db.db.select().from(workDayEdits).where(eq(workDayEdits.workDayId, day.id)),
-      ).toHaveLength(1);
+      expect(await db.db.global.all.workDayEdits.find({ workDayId: day.id })).toHaveLength(1);
     } finally {
       await db.close();
     }
@@ -730,9 +714,7 @@ describe('automatic check-out', () => {
     const checkin = new Date(zonedTimeToUtc(date, '09:00', 'Asia/Colombo'));
     const db = adminDb();
     try {
-      await db.db
-        .insert(workDays)
-        .values({ orgId, userId: colombo.id, date, locationType: 'remote', checkinAt: checkin });
+      await db.db.global.all.workDays.insert({ orgId, userId: colombo.id, date, locationType: 'remote', checkinAt: checkin });
     } finally {
       await db.close();
     }
@@ -788,7 +770,7 @@ describe('automatic check-out', () => {
     const yesterday = addDays(todayIn('UTC'), -1);
     const db = adminDb();
     try {
-      await db.db.insert(workDays).values([
+      await db.db.global.all.workDays.insert([
         {
           orgId: org.org.id,
           userId: a.id,
@@ -816,7 +798,7 @@ describe('automatic check-out', () => {
     }
     const rows = adminDb();
     try {
-      const all = await rows.db.select().from(workDays).where(eq(workDays.orgId, org.org.id));
+      const all = await rows.db.global.all.workDays.find({ orgId: org.org.id });
       const ra = all.find((r) => r.userId === a.id)!;
       const rl = all.find((r) => r.userId === late.id)!;
       expect(ra.checkoutAt?.toISOString()).toBe(
@@ -838,7 +820,7 @@ describe('automatic check-out', () => {
     const yesterday = addDays(todayIn('UTC'), -1);
     const db = adminDb();
     try {
-      await db.db.insert(workDays).values({
+      await db.db.global.all.workDays.insert({
         orgId: other.org.id,
         userId: p.id,
         date: yesterday,
@@ -1098,32 +1080,15 @@ describe('who someone reports to', () => {
   });
 });
 
-describe('database guarantees', () => {
-  it('rejects impossible rows: checkout before check-in, duplicate days, cross-tenant sites', async () => {
+describe('integrity (unique index; the rest is validated by the API)', () => {
+  it('allows one row per person per day', async () => {
     const p = await person();
     const date = addDays(todayIn('UTC'), -9);
     const db = adminDb();
     try {
-      const base = { orgId, userId: p.id, date };
-      await expect(
-        db.db.insert(workDays).values({
-          ...base,
-          checkinAt: new Date('2026-01-02T10:00:00Z'),
-          checkoutAt: new Date('2026-01-02T09:00:00Z'),
-        }),
-      ).rejects.toThrow();
-      await expect(
-        db.db.insert(workDays).values({ ...base, checkoutAt: new Date() }),
-      ).rejects.toThrow(); // checkout without check-in
-      await db.db.insert(workDays).values(base);
-      await expect(db.db.insert(workDays).values(base)).rejects.toThrow(); // one row per person per day
-      const ids = await tenantIds();
-      const [otherSite] = await db.db.execute<{ id: string }>(
-        sql`insert into sites (org_id, name) values (${ids.globex}, ${'S' + Math.random()}) returning id`,
-      );
-      await expect(
-        db.db.insert(workDays).values({ ...base, date: addDays(date, 1), siteId: otherSite!.id }),
-      ).rejects.toThrow(); // a site from another workspace
+      const days = db.db.tenant(orgId).workDays;
+      await days.insert({ userId: p.id, date });
+      await expect(days.insert({ userId: p.id, date })).rejects.toMatchObject({ code: 11000 });
     } finally {
       await db.close();
     }

@@ -14,3 +14,45 @@ export const errorResponseSchema = z.object({
   fields: z.record(z.string(), z.string()).optional(),
 });
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+
+// ---- Work items (docs/work-items) ----------------------------------------------------------------
+
+export const ITEM_TYPES = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
+export type ItemType = (typeof ITEM_TYPES)[number];
+
+export const PRIORITIES = ['highest', 'high', 'medium', 'low', 'lowest'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const STATUS_CATEGORIES = ['todo', 'in_progress', 'done'] as const;
+export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
+
+export const BOARD_TYPES = ['kanban', 'scrum'] as const;
+export type BoardType = (typeof BOARD_TYPES)[number];
+
+/** Fixed palette for status and label colours (never free hex), so contrast is always checked. */
+export const STATUS_COLORS = [
+  'slate',
+  'blue',
+  'sky',
+  'teal',
+  'green',
+  'amber',
+  'orange',
+  'red',
+  'pink',
+  'violet',
+] as const;
+export type StatusColor = (typeof STATUS_COLORS)[number];
+
+export const MAX_STATUSES = 12;
+
+/** Which child types each item type may have. Depth is capped at three levels. */
+export const ALLOWED_CHILDREN: Record<ItemType, readonly ItemType[]> = {
+  epic: ['story', 'task', 'bug'],
+  story: ['subtask'],
+  task: ['subtask'],
+  bug: ['subtask'],
+  subtask: [],
+};
+
+export * from './workspace';

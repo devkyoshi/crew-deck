@@ -1,29 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { assertFeature, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { loadSettings, zoneFor, type WorkSettings } from '../checkin/service.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { holidays, memberships, sites, users, workDayEdits, workDays } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
+import type { WorkDayDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { offsetOf, pageQuery } from '../lib/pagination.js';
-import { addDays, isRealDate, isoWeekday, localDate, weekOf } from '../lib/time.js';
+import { addDays, isRealDate, isoWeekday, isValidTimezone, localDate, weekOf } from '../lib/time.js';
 import { can, type Actor } from '../permissions/can.js';
 import { resolveSpace } from './spaces.js';
 
@@ -37,7 +24,7 @@ const MAX_RANGE_DAYS = 366;
 // Excel needs a byte-order mark to read a CSV as UTF-8.
 const BOM = String.fromCharCode(0xfeff);
 
-type WorkDay = typeof workDays.$inferSelect;
+type WorkDay = WorkDayDoc;
 
 const disabled = () =>
   new AppError(404, 'module_disabled', 'Check-in is switched off for this workspace');
@@ -62,17 +49,16 @@ function csvCell(v: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+const personName = (u: { name: string | null; email: string }) => (u.name ?? u.email).toLowerCase();
+
 export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
-  async function context(tx: Tx, actor: Actor) {
+  async function context(tx: TenantDb, actor: Actor) {
     const settings = await loadSettings(tx, actor.orgId);
-    const [me] = await tx
-      .select({ tz: users.timezone })
-      .from(users)
-      .where(eq(users.id, actor.userId));
-    const tz = zoneFor(me?.tz, settings);
+    const me = (await tx.users([actor.userId])).get(actor.userId);
+    const tz = zoneFor(me?.timezone, settings);
     const now = new Date();
     return { settings, tz, now, today: localDate(now, tz) };
   }
@@ -81,13 +67,16 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     if (!s.checkinEnabled) throw disabled();
   };
 
-  async function siteList(tx: Tx, orgId: string) {
-    return tx
-      .select({ id: sites.id, name: sites.name })
-      .from(sites)
-      .where(eq(sites.orgId, orgId))
-      .orderBy(asc(sql`lower(${sites.name})`));
+  async function siteList(tx: TenantDb) {
+    return (await tx.sites.find({}, { sort: { nameLower: 1 } })).map((s) => ({
+      id: s.id,
+      name: s.name,
+    }));
   }
+
+  /** The person's open (checked in, not out) day, latest first. */
+  const openDay = (tx: TenantDb, userId: string) =>
+    tx.workDays.findOne({ userId, checkinAt: { $ne: null }, checkoutAt: null }, { sort: { date: -1 } });
 
   const presentDay = (d: WorkDay, siteName: string | null, tz: string) => ({
     id: d.id,
@@ -105,38 +94,14 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     hours: hours(d.checkinAt, d.checkoutAt),
   });
 
-  async function buildToday(tx: Tx, actor: Actor) {
+  async function buildToday(tx: TenantDb, actor: Actor) {
     const { settings, tz, now, today } = await context(tx, actor);
-    const siteRows = await siteList(tx, actor.orgId);
+    const siteRows = await siteList(tx);
     const siteName = (id: string | null) => siteRows.find((s) => s.id === id)?.name ?? null;
 
-    const [open] = await tx
-      .select()
-      .from(workDays)
-      .where(
-        and(
-          eq(workDays.orgId, actor.orgId),
-          eq(workDays.userId, actor.userId),
-          isNotNull(workDays.checkinAt),
-          isNull(workDays.checkoutAt),
-        ),
-      )
-      .orderBy(desc(workDays.date))
-      .limit(1);
-    const [todayRow] = await tx
-      .select()
-      .from(workDays)
-      .where(
-        and(
-          eq(workDays.orgId, actor.orgId),
-          eq(workDays.userId, actor.userId),
-          eq(workDays.date, today),
-        ),
-      );
-    const [holiday] = await tx
-      .select({ name: holidays.name })
-      .from(holidays)
-      .where(and(eq(holidays.orgId, actor.orgId), eq(holidays.date, today)));
+    const open = await openDay(tx, actor.userId);
+    const todayRow = await tx.workDays.findOne({ userId: actor.userId, date: today });
+    const holiday = await tx.holidays.findOne({ date: today });
 
     const day = open ?? todayRow ?? null;
     let status: 'checked_in' | 'checked_out' | 'leave' | 'holiday' | 'not_in' = 'not_in';
@@ -183,32 +148,14 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { settings, now, today } = await context(tx, actor);
         requireModule(settings);
-        const [open] = await tx
-          .select({ id: workDays.id })
-          .from(workDays)
-          .where(
-            and(
-              eq(workDays.orgId, actor.orgId),
-              eq(workDays.userId, actor.userId),
-              isNotNull(workDays.checkinAt),
-              isNull(workDays.checkoutAt),
-            ),
-          );
-        if (open) throw new AppError(409, 'already_checked_in', 'You are already checked in');
+        if (await openDay(tx, actor.userId)) {
+          throw new AppError(409, 'already_checked_in', 'You are already checked in');
+        }
 
-        const [existing] = await tx
-          .select()
-          .from(workDays)
-          .where(
-            and(
-              eq(workDays.orgId, actor.orgId),
-              eq(workDays.userId, actor.userId),
-              eq(workDays.date, today),
-            ),
-          );
+        const existing = await tx.workDays.findOne({ userId: actor.userId, date: today });
         if (existing?.checkinAt) {
           throw new AppError(
             409,
@@ -218,7 +165,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
         }
 
         const b = req.body;
-        const siteRows = await siteList(tx, actor.orgId);
+        const siteRows = await siteList(tx);
         let siteId: string | null = null;
         if (b.locationType === 'onsite' && siteRows.length > 0) {
           if (!b.siteId) {
@@ -243,14 +190,9 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
           updatedAt: now,
         };
         if (existing) {
-          await tx
-            .update(workDays)
-            .set(values)
-            .where(and(eq(workDays.id, existing.id), eq(workDays.orgId, actor.orgId)));
+          await tx.workDays.updateOne({ id: existing.id }, values);
         } else {
-          await tx
-            .insert(workDays)
-            .values({ orgId: actor.orgId, userId: actor.userId, date: today, ...values });
+          await tx.workDays.insert({ userId: actor.userId, date: today, ...values });
         }
         return buildToday(tx, actor);
       });
@@ -265,22 +207,10 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { settings, now } = await context(tx, actor);
         requireModule(settings);
-        const [open] = await tx
-          .select()
-          .from(workDays)
-          .where(
-            and(
-              eq(workDays.orgId, actor.orgId),
-              eq(workDays.userId, actor.userId),
-              isNotNull(workDays.checkinAt),
-              isNull(workDays.checkoutAt),
-            ),
-          )
-          .orderBy(desc(workDays.date))
-          .limit(1);
+        const open = await openDay(tx, actor.userId);
         if (!open) throw new AppError(409, 'not_checked_in', 'You are not checked in');
         const note = req.body.note || open.note || null;
         if (settings.requireNote && !(req.body.note || open.note)) {
@@ -289,10 +219,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
           });
         }
         const at = now < open.checkinAt! ? open.checkinAt! : now;
-        await tx
-          .update(workDays)
-          .set({ checkoutAt: at, note, updatedAt: now })
-          .where(and(eq(workDays.id, open.id), eq(workDays.orgId, actor.orgId)));
+        await tx.workDays.updateOne({ id: open.id }, { checkoutAt: at, note, updatedAt: now });
         return buildToday(tx, actor);
       });
     },
@@ -307,28 +234,10 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const { settings, tz, today } = await context(tx, actor);
         const dates = weekOf(req.query.date ?? today);
-        const rows = await tx
-          .select()
-          .from(workDays)
-          .where(
-            and(
-              eq(workDays.orgId, actor.orgId),
-              eq(workDays.userId, actor.userId),
-              gte(workDays.date, dates[0]!),
-              lte(workDays.date, dates[6]!),
-            ),
-          );
-        const hol = await tx
-          .select({ date: holidays.date, name: holidays.name })
-          .from(holidays)
-          .where(
-            and(
-              eq(holidays.orgId, actor.orgId),
-              gte(holidays.date, dates[0]!),
-              lte(holidays.date, dates[6]!),
-            ),
-          );
-        const siteRows = await siteList(tx, actor.orgId);
+        const range = { $gte: dates[0]!, $lte: dates[6]! };
+        const rows = await tx.workDays.find({ userId: actor.userId, date: range });
+        const hol = await tx.holidays.find({ date: range });
+        const siteRows = await siteList(tx);
         return {
           today,
           timezone: tz,
@@ -366,7 +275,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { settings, today } = await context(tx, actor);
         requireModule(settings);
         const seen = new Set<string>();
@@ -393,20 +302,10 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
           }
         }
         for (const d of req.body.days) {
-          const [row] = await tx
-            .select()
-            .from(workDays)
-            .where(
-              and(
-                eq(workDays.orgId, actor.orgId),
-                eq(workDays.userId, actor.userId),
-                eq(workDays.date, d.date),
-              ),
-            );
+          const row = await tx.workDays.findOne({ userId: actor.userId, date: d.date });
           if (!row) {
             if (d.location) {
-              await tx.insert(workDays).values({
-                orgId: actor.orgId,
+              await tx.workDays.insert({
                 userId: actor.userId,
                 date: d.date,
                 plannedLocation: d.location,
@@ -414,14 +313,12 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
               });
             }
           } else if (!row.checkinAt && !d.location) {
-            await tx
-              .delete(workDays)
-              .where(and(eq(workDays.id, row.id), eq(workDays.orgId, actor.orgId)));
+            await tx.workDays.deleteOne({ id: row.id });
           } else {
-            await tx
-              .update(workDays)
-              .set({ plannedLocation: d.location, updatedAt: new Date() })
-              .where(and(eq(workDays.id, row.id), eq(workDays.orgId, actor.orgId)));
+            await tx.workDays.updateOne(
+              { id: row.id },
+              { plannedLocation: d.location, updatedAt: new Date() },
+            );
           }
         }
         return { ok: true };
@@ -449,100 +346,102 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
         const settings = await loadSettings(tx, actor.orgId);
         requireModule(settings);
 
-        const filters: SQL[] = [];
+        let members = await tx.memberships.find({ status: 'active' });
         if (q.group) {
-          filters.push(
-            sql`and exists (select 1 from group_members gm where gm.group_id = ${q.group} and gm.org_id = ${actor.orgId} and gm.user_id = u.id)`,
+          const inGroup = new Set(
+            (await tx.groupMembers.find({ groupId: q.group })).map((g) => g.userId),
           );
+          members = members.filter((m) => inGroup.has(m.userId));
         }
         if (q.space) {
           // Visibility rules apply: a space the caller cannot see is "not found".
           const space = await resolveSpace(tx, actor, q.space);
-          filters.push(sql`and (
-            exists (select 1 from space_members sm where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId}
-                      and sm.principal_type = 'user' and sm.principal_id = u.id)
-            or exists (select 1 from space_members sm join group_members gm on gm.group_id = sm.principal_id and gm.org_id = sm.org_id
-                      where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId} and sm.principal_type = 'group' and gm.user_id = u.id)
-          )`);
+          const entries = await tx.spaceMembers.find({ spaceId: space.id });
+          const groupIds = entries.filter((e) => e.principalType === 'group').map((e) => e.principalId);
+          const links = groupIds.length ? await tx.groupMembers.find({ groupId: { $in: groupIds } }) : [];
+          const inSpace = new Set([
+            ...entries.filter((e) => e.principalType === 'user').map((e) => e.principalId),
+            ...links.map((l) => l.userId),
+          ]);
+          members = members.filter((m) => inSpace.has(m.userId));
         }
+        const people = await tx.users(members.map((m) => m.userId));
+        let rows = members.flatMap((m) => {
+          const u = people.get(m.userId);
+          return u ? [{ m, u }] : [];
+        });
         if (q.q) {
-          const p = `%${q.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-          filters.push(
-            sql`and (lower(coalesce(u.name, '')) like lower(${p}) or lower(u.email) like lower(${p}))`,
+          const needle = q.q.toLowerCase();
+          rows = rows.filter(({ u }) =>
+            [u.name, u.email].some((v) => v?.toLowerCase().includes(needle)),
           );
         }
+        rows.sort((a, b) => personName(a.u).localeCompare(personName(b.u)) || a.u.id.localeCompare(b.u.id));
+        rows = rows.slice(0, 1000);
 
-        const rows = await tx.execute<{
-          id: string;
-          name: string | null;
-          email: string;
-          avatar_url: string | null;
-          job_title: string | null;
-          reports_to: string | null;
-          location_type: string | null;
-          planned_location: string | null;
-          checkin_at: Date | null;
-          checkout_at: Date | null;
-          auto_closed: boolean | null;
-          site_name: string | null;
-          holiday_name: string | null;
-        }>(sql`
-          select u.id, u.name, u.email, u.avatar_url, u.job_title, m.reports_to,
-                 wd.location_type, wd.planned_location, wd.checkin_at, wd.checkout_at, wd.auto_closed,
-                 s.name as site_name, h.name as holiday_name
-          from memberships m
-          join users u on u.id = m.user_id
-          left join work_days wd on wd.org_id = m.org_id and wd.user_id = u.id
-               and wd.date = (now() at time zone u.timezone)::date
-          left join sites s on s.id = wd.site_id and s.org_id = wd.org_id
-          left join holidays h on h.org_id = m.org_id and h.date = (now() at time zone u.timezone)::date
-          where m.org_id = ${actor.orgId} and m.status = 'active'
-          ${sql.join(filters, sql` `)}
-          order by lower(coalesce(u.name, u.email)), u.id
-          limit 1000`);
+        // "Today" is each person's own local date.
+        const now = new Date();
+        const dateOf = new Map(
+          rows.map(({ u }) => [u.id, localDate(now, isValidTimezone(u.timezone) ? u.timezone : 'UTC')]),
+        );
+        const dates = [...new Set(dateOf.values())];
+        const days = await tx.workDays.find({
+          userId: { $in: rows.map(({ u }) => u.id) },
+          date: { $in: dates },
+        });
+        const dayOf = new Map(days.map((d) => [`${d.userId}:${d.date}`, d]));
+        const hols = await tx.holidays.find({ date: { $in: dates } });
+        const holByDate = new Map(hols.map((h) => [h.date, h.name]));
+        const siteRows = await tx.sites.find({
+          id: { $in: [...new Set(days.map((d) => d.siteId).filter((x): x is string => !!x))] },
+        });
+        const siteById = new Map(siteRows.map((s) => [s.id, s.name]));
 
         const isAdmin = can(actor, 'attendance.viewAll');
-        const items = rows.map((x) => {
+        const items = rows.map(({ m, u }) => {
+          const date = dateOf.get(u.id)!;
+          const wd = dayOf.get(`${u.id}:${date}`);
+          const holidayName = holByDate.get(date) ?? null;
           const state: 'in' | 'out' | 'leave' | 'holiday' | 'planned' | 'none' =
-            x.checkin_at && !x.checkout_at
+            wd?.checkinAt && !wd.checkoutAt
               ? 'in'
-              : x.checkout_at
+              : wd?.checkoutAt
                 ? 'out'
-                : x.planned_location === 'leave'
+                : wd?.plannedLocation === 'leave'
                   ? 'leave'
-                  : x.holiday_name
+                  : holidayName
                     ? 'holiday'
-                    : x.planned_location
+                    : wd?.plannedLocation
                       ? 'planned'
                       : 'none';
           const location =
             state === 'in' || state === 'out'
-              ? x.location_type
+              ? (wd?.locationType ?? null)
               : state === 'leave'
                 ? 'leave'
                 : state === 'holiday'
                   ? 'holiday'
                   : state === 'planned'
-                    ? x.planned_location
+                    ? (wd?.plannedLocation ?? null)
                     : null;
           // Teammates see status only. Exact times go to the person, their manager and admins.
           const seesTimes = can(actor, 'workday.viewTimes', {
-            isSelf: x.id === actor.userId,
-            isManager: x.reports_to === actor.userId,
+            isSelf: u.id === actor.userId,
+            isManager: m.reportsTo === actor.userId,
           });
           return {
-            id: x.id,
-            name: x.name,
-            email: x.email,
-            avatarUrl: x.avatar_url,
-            jobTitle: x.job_title,
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            avatarUrl: u.avatarUrl,
+            jobTitle: u.jobTitle,
             state,
             location,
-            siteName: x.site_name,
-            holiday: x.holiday_name,
-            checkinAt: seesTimes ? x.checkin_at : null,
-            checkoutAt: seesTimes ? x.checkout_at : null,
-            autoClosed: seesTimes ? (x.auto_closed ?? false) : null,
+            siteName: wd?.siteId ? (siteById.get(wd.siteId) ?? null) : null,
+            holiday: holidayName,
+            checkinAt: seesTimes ? (wd?.checkinAt ?? null) : null,
+            checkoutAt: seesTimes ? (wd?.checkoutAt ?? null) : null,
+            autoClosed: seesTimes ? (wd?.autoClosed ?? false) : null,
           };
         });
         const counts: Record<string, number> = {};
@@ -562,7 +461,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
   });
 
   async function historyRows(
-    tx: Tx,
+    tx: TenantDb,
     actor: Actor,
     q: { userId?: string; scope: 'me' | 'reports' | 'all'; from?: string; to?: string },
     paging?: { page: number; pageSize: number },
@@ -582,84 +481,60 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     }
 
     const isAdmin = can(actor, 'attendance.viewAll');
-    const conds: SQL[] = [
-      eq(workDays.orgId, actor.orgId),
-      gte(workDays.date, from),
-      lte(workDays.date, to),
-    ];
+    const filter: Record<string, unknown> = { date: { $gte: from, $lte: to } };
     if (q.userId) {
       if (q.userId !== actor.userId && !isAdmin) {
-        const [report] = await tx
-          .select({ id: memberships.userId })
-          .from(memberships)
-          .where(
-            and(
-              eq(memberships.orgId, actor.orgId),
-              eq(memberships.userId, q.userId),
-              eq(memberships.reportsTo, actor.userId),
-            ),
-          );
+        const report = await tx.memberships.exists({ userId: q.userId, reportsTo: actor.userId });
         if (!report) throw forbidden();
       }
-      conds.push(eq(workDays.userId, q.userId));
+      filter.userId = q.userId;
     } else if (q.scope === 'all') {
       if (!isAdmin) throw forbidden();
     } else if (q.scope === 'reports') {
-      conds.push(
-        inArray(
-          workDays.userId,
-          tx
-            .select({ id: memberships.userId })
-            .from(memberships)
-            .where(
-              and(eq(memberships.orgId, actor.orgId), eq(memberships.reportsTo, actor.userId)),
-            ),
-        ),
-      );
+      const reports = await tx.memberships.find({ reportsTo: actor.userId }, { projection: { userId: 1 } });
+      filter.userId = { $in: reports.map((m) => m.userId) };
     } else {
-      conds.push(eq(workDays.userId, actor.userId));
+      filter.userId = actor.userId;
     }
-    const where = and(...conds);
 
-    const query = tx
-      .select({
-        day: workDays,
-        name: users.name,
-        email: users.email,
-        timezone: users.timezone,
-        siteName: sites.name,
-        edited: sql<boolean>`exists (select 1 from work_day_edits e where e.work_day_id = ${workDays.id} and e.org_id = ${workDays.orgId})`,
+    const all = await tx.workDays.find(filter, { limit: 50_000 });
+    const people = await tx.users(all.map((d) => d.userId));
+    const sorted = all
+      .flatMap((d) => {
+        const u = people.get(d.userId);
+        return u ? [{ d, u }] : [];
       })
-      .from(workDays)
-      .innerJoin(users, eq(users.id, workDays.userId))
-      .leftJoin(sites, and(eq(sites.id, workDays.siteId), eq(sites.orgId, workDays.orgId)))
-      .where(where)
-      .orderBy(
-        desc(workDays.date),
-        asc(sql`lower(coalesce(${users.name}, ${users.email}))`),
-        asc(workDays.id),
+      .sort(
+        (a, b) =>
+          (a.d.date < b.d.date ? 1 : a.d.date > b.d.date ? -1 : 0) ||
+          personName(a.u).localeCompare(personName(b.u)) ||
+          a.d.id.localeCompare(b.d.id),
       );
-    const rows = paging
-      ? await query.limit(paging.pageSize).offset(offsetOf(paging))
-      : await query.limit(50_000);
-    const [count] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(workDays)
-      .where(where);
+    const page = paging ? sorted.slice(offsetOf(paging), offsetOf(paging) + paging.pageSize) : sorted;
+
+    const siteRows = await tx.sites.find({
+      id: { $in: [...new Set(page.map((x) => x.d.siteId).filter((s): s is string => !!s))] },
+    });
+    const siteById = new Map(siteRows.map((s) => [s.id, s.name]));
+    const edited = new Set(
+      (await tx.workDayEdits.find({ workDayId: { $in: page.map((x) => x.d.id) } }, { projection: { workDayId: 1 } })).map(
+        (e) => e.workDayId,
+      ),
+    );
 
     return {
       settings,
       from,
       to,
-      total: count?.n ?? 0,
-      items: rows.map((x) => ({
-        ...presentDay(x.day, x.siteName ?? null, zoneFor(x.timezone, settings)),
-        userId: x.day.userId,
-        name: x.name,
-        email: x.email,
-        timezone: zoneFor(x.timezone, settings),
-        source: x.day.source,
-        edited: x.edited,
+      total: sorted.length,
+      items: page.map(({ d, u }) => ({
+        ...presentDay(d, d.siteId ? (siteById.get(d.siteId) ?? null) : null, zoneFor(u.timezone, settings)),
+        userId: d.userId,
+        name: u.name,
+        email: u.email,
+        timezone: zoneFor(u.timezone, settings),
+        source: d.source,
+        edited: edited.has(d.id),
       })),
     };
   }
@@ -753,7 +628,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   /** Applies a correction to an existing or new day, with the history row and audit entry. */
   async function applyCorrection(
-    tx: Tx,
+    tx: TenantDb,
     actor: Actor,
     target: { userId: string; date: string; existing: WorkDay | null },
     b: {
@@ -767,11 +642,8 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
   ) {
     const settings = await loadSettings(tx, actor.orgId);
     requireModule(settings);
-    const [person] = await tx
-      .select({ tz: users.timezone })
-      .from(users)
-      .where(eq(users.id, target.userId));
-    const tz = zoneFor(person?.tz, settings);
+    const person = (await tx.users([target.userId])).get(target.userId);
+    const tz = zoneFor(person?.timezone, settings);
     const now = new Date();
     const old = target.existing;
 
@@ -803,11 +675,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
       });
     }
     if (b.siteId) {
-      const [site] = await tx
-        .select({ id: sites.id })
-        .from(sites)
-        .where(and(eq(sites.id, b.siteId), eq(sites.orgId, actor.orgId)));
-      if (!site)
+      if (!(await tx.sites.exists({ id: b.siteId })))
         throw new AppError(400, 'validation_error', 'Unknown site', {
           siteId: 'That site does not exist',
         });
@@ -851,27 +719,25 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     };
     let id: string;
     if (old) {
-      await tx
-        .update(workDays)
-        .set(values)
-        .where(and(eq(workDays.id, old.id), eq(workDays.orgId, actor.orgId)));
+      await tx.workDays.updateOne({ id: old.id }, values);
       id = old.id;
     } else {
-      const [created] = await tx
-        .insert(workDays)
-        .values({ orgId: actor.orgId, userId: target.userId, date: target.date, ...values })
-        .returning({ id: workDays.id });
-      id = created!.id;
+      const created = await tx.workDays.insert({
+        userId: target.userId,
+        date: target.date,
+        ...values,
+      });
+      id = created.id;
     }
     const pick = (o: Record<string, unknown>) =>
       Object.fromEntries(changedKeys.map((k) => [k, o[k]]));
-    await tx.insert(workDayEdits).values({
-      orgId: actor.orgId,
+    await tx.workDayEdits.insert({
       workDayId: id,
       editedBy: actor.userId,
       oldValues: pick(before as Record<string, unknown>),
       newValues: pick(after as Record<string, unknown>),
       reason: b.reason,
+      editedAt: new Date(),
     });
     await writeAudit(tx, {
       orgId: actor.orgId,
@@ -890,11 +756,8 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     return id;
   }
 
-  async function canCorrect(tx: Tx, actor: Actor, userId: string) {
-    const [m] = await tx
-      .select({ reportsTo: memberships.reportsTo })
-      .from(memberships)
-      .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, userId)));
+  async function canCorrect(tx: TenantDb, actor: Actor, userId: string) {
+    const m = await tx.memberships.findOne({ userId });
     if (!m) throw notFound('Person');
     return can(actor, 'workday.editOthers', {
       isSelf: userId === actor.userId,
@@ -910,11 +773,8 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
-        const [row] = await tx
-          .select()
-          .from(workDays)
-          .where(and(eq(workDays.id, req.params.id), eq(workDays.orgId, actor.orgId)));
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+        const row = await tx.workDays.get(req.params.id);
         // Days of people you may not manage look like they do not exist.
         if (!row || !(await canCorrect(tx, actor, row.userId))) throw notFound('Day');
         await applyCorrection(
@@ -923,7 +783,7 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
           { userId: row.userId, date: row.date, existing: row },
           req.body,
         );
-        const [fresh] = await tx.select().from(workDays).where(eq(workDays.id, row.id));
+        const fresh = await tx.workDays.get(row.id);
         return {
           id: fresh!.id,
           date: fresh!.date,
@@ -952,18 +812,9 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const { userId = actor.userId, date, ...rest } = req.body;
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         if (!(await canCorrect(tx, actor, userId))) throw forbidden();
-        const [existing] = await tx
-          .select()
-          .from(workDays)
-          .where(
-            and(
-              eq(workDays.orgId, actor.orgId),
-              eq(workDays.userId, userId),
-              eq(workDays.date, date),
-            ),
-          );
+        const existing = await tx.workDays.findOne({ userId, date });
         const id = await applyCorrection(
           tx,
           actor,
@@ -981,27 +832,19 @@ export async function checkinRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       return withTenant(deps.db, actor.orgId, async (tx) => {
-        const [row] = await tx
-          .select({ userId: workDays.userId })
-          .from(workDays)
-          .where(and(eq(workDays.id, req.params.id), eq(workDays.orgId, actor.orgId)));
+        const row = await tx.workDays.get(req.params.id);
         if (!row || !(await canCorrect(tx, actor, row.userId))) throw notFound('Day');
-        const items = await tx
-          .select({
-            id: workDayEdits.id,
-            reason: workDayEdits.reason,
-            oldValues: workDayEdits.oldValues,
-            newValues: workDayEdits.newValues,
-            editedAt: workDayEdits.editedAt,
-            editorName: users.name,
-            editorEmail: users.email,
-          })
-          .from(workDayEdits)
-          .innerJoin(users, eq(users.id, workDayEdits.editedBy))
-          .where(
-            and(eq(workDayEdits.workDayId, req.params.id), eq(workDayEdits.orgId, actor.orgId)),
-          )
-          .orderBy(desc(workDayEdits.editedAt));
+        const edits = await tx.workDayEdits.find({ workDayId: req.params.id }, { sort: { editedAt: -1 } });
+        const editors = await tx.users(edits.map((e) => e.editedBy));
+        const items = edits.map((e) => ({
+          id: e.id,
+          reason: e.reason,
+          oldValues: e.oldValues,
+          newValues: e.newValues,
+          editedAt: e.editedAt,
+          editorName: editors.get(e.editedBy)?.name ?? null,
+          editorEmail: editors.get(e.editedBy)?.email ?? '',
+        }));
         return { items };
       });
     },

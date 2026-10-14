@@ -44,6 +44,9 @@ const ADMIN_PAGES = [
   '/admin/crm',
   '/admin/billing',
   '/admin/settings/branding',
+  '/admin/settings/workspace',
+  '/my-workspaces',
+  '/my-workspaces/new',
   '/crm',
   '/crm/leads',
   '/crm/contacts',
@@ -126,6 +129,12 @@ test.describe('accessibility: guided sign-up steps', () => {
       await page.getByLabel('Company name').fill(`Access ${theme} ${Date.now() % 100000}`);
       await expect(page.getByText(/is available/)).toBeVisible();
       await scan(page, `signup company (${theme})`);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByTestId('work-type-software').click();
+      await scan(page, `signup kind of work (${theme})`);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expect(page.getByRole('heading', { name: 'How does your team plan to use it?' })).toBeVisible();
+      await scan(page, `signup usage (${theme})`);
       await page.getByRole('button', { name: 'Continue' }).click();
       await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
       await scan(page, `signup review (${theme})`);

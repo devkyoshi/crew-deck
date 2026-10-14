@@ -28,6 +28,11 @@ export interface Me {
     logoUrl: string | null;
     accentColor: string | null;
     domainRestricted: boolean;
+    /** What the workspace is for (see WORK_TYPES in @crew-deck/shared), if it was chosen. */
+    workType: string | null;
+    usage: string[];
+    /** Product modules switched on for this workspace. */
+    modules: string[];
   };
   plan: {
     key: string | null;
@@ -40,7 +45,7 @@ export interface Me {
   impersonatedBy: string | null;
   orgRole: 'owner' | 'admin' | 'member';
   permissions: string[];
-  orgs: { id: string; name: string; slug: string; orgRole: string }[];
+  orgs: { id: string; name: string; slug: string; orgRole: string; workType?: string | null }[];
 }
 
 export interface Providers {
@@ -51,10 +56,16 @@ export interface Providers {
 }
 
 /** Browser-side JSON call to the same-origin API proxy. */
-export async function api<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+export async function api<T>(
+  path: string,
+  init?: { method?: string; body?: unknown; headers?: Record<string, string> },
+): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     method: init?.method ?? (init?.body ? 'POST' : 'GET'),
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+    headers:
+      init?.body || init?.headers
+        ? { ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers }
+        : undefined,
     body: init?.body ? JSON.stringify(init.body) : undefined,
     credentials: 'same-origin',
   });

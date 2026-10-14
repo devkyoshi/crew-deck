@@ -1,60 +1,59 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { groupMembers, groups, memberships, users } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
+import type { GroupDoc } from '../db/types.js';
 import { AppError, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
+import { containsRegex, offsetOf, pageQuery } from '../lib/pagination.js';
 import { can } from '../permissions/can.js';
 
 const idParam = z.object({ id: z.string().uuid() });
 const nameSchema = z.string().trim().min(1, 'Enter a name').max(60);
 const descriptionSchema = z.string().trim().max(500);
 
-const effectiveStatus = sql<
-  'active' | 'invited' | 'deactivated'
->`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`;
-
 const nameTaken = () =>
   new AppError(409, 'name_taken', 'A group with that name already exists', {
     name: 'A group with that name already exists',
   });
 
-async function loadGroup(tx: Tx, orgId: string, id: string) {
-  const [g] = await tx
-    .select()
-    .from(groups)
-    .where(and(eq(groups.id, id), eq(groups.orgId, orgId)));
+async function loadGroup(t: TenantDb, id: string) {
+  const g = await t.groups.get(id);
   if (!g) throw notFound('Group');
   return g;
 }
 
-async function loadMembers(tx: Tx, orgId: string, groupId: string) {
-  return tx
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      avatarUrl: users.avatarUrl,
-      jobTitle: users.jobTitle,
-      orgRole: memberships.orgRole,
-      status: effectiveStatus,
+const personName = (u: { name: string | null; email: string }) => (u.name ?? u.email).toLowerCase();
+
+async function loadMembers(t: TenantDb, groupId: string) {
+  const links = await t.groupMembers.find({ groupId });
+  const ids = links.map((l) => l.userId);
+  const [people, ms] = [await t.users(ids), await t.memberships.find({ userId: { $in: ids } })];
+  const roleOf = new Map(ms.map((m) => [m.userId, m]));
+  return ids
+    .flatMap((id) => {
+      const u = people.get(id);
+      const m = roleOf.get(id);
+      if (!u || !m) return [];
+      return [
+        {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          avatarUrl: u.avatarUrl,
+          jobTitle: u.jobTitle,
+          orgRole: m.orgRole,
+          status: (m.status === 'deactivated' ? 'deactivated' : u.status) as
+            'active' | 'invited' | 'deactivated',
+        },
+      ];
     })
-    .from(groupMembers)
-    .innerJoin(users, eq(users.id, groupMembers.userId))
-    .innerJoin(
-      memberships,
-      and(eq(memberships.userId, users.id), eq(memberships.orgId, groupMembers.orgId)),
-    )
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.orgId, orgId)))
-    .orderBy(asc(sql`lower(coalesce(${users.name}, ${users.email}))`), asc(users.id));
+    .sort((a, b) => personName(a).localeCompare(personName(b)) || a.id.localeCompare(b.id));
 }
 
-const present = (g: typeof groups.$inferSelect) => ({
+const present = (g: GroupDoc) => ({
   id: g.id,
   name: g.name,
   description: g.description,
@@ -75,67 +74,46 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const q = req.query;
-      const where = and(
-        eq(groups.orgId, actor.orgId),
-        q.q
-          ? or(ilike(groups.name, likePattern(q.q)), ilike(groups.description, likePattern(q.q)))
-          : undefined,
-      );
-      return withTenant(deps.db, actor.orgId, async (tx) => {
-        const rows = await tx
-          .select({
-            id: groups.id,
-            name: groups.name,
-            description: groups.description,
-            createdAt: groups.createdAt,
-            memberCount: sql<number>`(select count(*)::int from group_members gm where gm.group_id = "groups"."id")`,
-          })
-          .from(groups)
-          .where(where)
-          .orderBy(asc(sql`lower(${groups.name})`), asc(groups.id))
-          .limit(q.pageSize)
-          .offset(offsetOf(q));
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(groups)
-          .where(where);
+      const filter = q.q
+        ? { $or: [{ name: containsRegex(q.q) }, { description: containsRegex(q.q) }] }
+        : {};
+      return withTenant(deps.db, actor.orgId, async (t) => {
+        const rows = await t.groups.find(filter, {
+          sort: { nameLower: 1, id: 1 },
+          skip: offsetOf(q),
+          limit: q.pageSize,
+        });
+        const total = await t.groups.count(filter);
 
-        // A few member avatars per group for the list view.
+        // A few member avatars per group for the list view, and the full member count.
+        const links = rows.length
+          ? await t.groupMembers.find(
+              { groupId: { $in: rows.map((g) => g.id) } },
+              { sort: { createdAt: 1 } },
+            )
+          : [];
+        const people = await t.users(links.map((l) => l.userId));
+        const counts = new Map<string, number>();
         const preview = new Map<
           string,
           { id: string; name: string | null; email: string; avatarUrl: string | null }[]
         >();
-        if (rows.length) {
-          const people = await tx
-            .select({
-              groupId: groupMembers.groupId,
-              id: users.id,
-              name: users.name,
-              email: users.email,
-              avatarUrl: users.avatarUrl,
-            })
-            .from(groupMembers)
-            .innerJoin(users, eq(users.id, groupMembers.userId))
-            .where(
-              and(
-                eq(groupMembers.orgId, actor.orgId),
-                inArray(
-                  groupMembers.groupId,
-                  rows.map((g) => g.id),
-                ),
-              ),
-            )
-            .orderBy(asc(groupMembers.createdAt));
-          for (const p of people) {
-            const list = preview.get(p.groupId) ?? [];
-            if (list.length < 4)
-              list.push({ id: p.id, name: p.name, email: p.email, avatarUrl: p.avatarUrl });
-            preview.set(p.groupId, list);
-          }
+        for (const l of links) {
+          counts.set(l.groupId, (counts.get(l.groupId) ?? 0) + 1);
+          const p = people.get(l.userId);
+          if (!p) continue;
+          const list = preview.get(l.groupId) ?? [];
+          if (list.length < 4)
+            list.push({ id: p.id, name: p.name, email: p.email, avatarUrl: p.avatarUrl });
+          preview.set(l.groupId, list);
         }
         return {
-          items: rows.map((g) => ({ ...g, members: preview.get(g.id) ?? [] })),
-          total: count?.n ?? 0,
+          items: rows.map((g) => ({
+            ...present(g),
+            memberCount: counts.get(g.id) ?? 0,
+            members: preview.get(g.id) ?? [],
+          })),
+          total,
           page: q.page,
           pageSize: q.pageSize,
         };
@@ -146,9 +124,9 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.get('/groups/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     const isAdmin = can(actor, 'group.manage');
-    return withTenant(deps.db, actor.orgId, async (tx) => {
-      const g = await loadGroup(tx, actor.orgId, req.params.id);
-      const members = await loadMembers(tx, actor.orgId, g.id);
+    return withTenant(deps.db, actor.orgId, async (t) => {
+      const g = await loadGroup(t, req.params.id);
+      const members = await loadMembers(t, g.id);
       // Non-admins do not see deactivated people.
       return {
         ...present(g),
@@ -167,34 +145,21 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'group.manage')) throw forbidden();
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
-          const dup = await tx
-            .select({ id: groups.id })
-            .from(groups)
-            .where(
-              and(
-                eq(groups.orgId, actor.orgId),
-                sql`lower(${groups.name}) = lower(${req.body.name})`,
-              ),
-            );
-          if (dup.length) throw nameTaken();
-          const [g] = await tx
-            .insert(groups)
-            .values({
-              orgId: actor.orgId,
-              name: req.body.name,
-              description: req.body.description || null,
-            })
-            .returning();
-          await writeAudit(tx, {
+        return await withTenantTx(deps.db, actor.orgId, async (t) => {
+          if (await t.groups.exists({ nameLower: req.body.name.toLowerCase() })) throw nameTaken();
+          const g = await t.groups.insert({
+            name: req.body.name,
+            description: req.body.description || null,
+          });
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'group.created',
             targetType: 'group',
-            targetId: g!.id,
-            after: { name: g!.name, description: g!.description },
+            targetId: g.id,
+            after: { name: g.name, description: g.description },
           });
-          return { ...present(g!), members: [] };
+          return { ...present(g), members: [] };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -220,19 +185,10 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'group.manage')) throw forbidden();
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
-          const before = await loadGroup(tx, actor.orgId, req.params.id);
+        return await withTenantTx(deps.db, actor.orgId, async (t) => {
+          const before = await loadGroup(t, req.params.id);
           if (req.body.name && req.body.name.toLowerCase() !== before.name.toLowerCase()) {
-            const dup = await tx
-              .select({ id: groups.id })
-              .from(groups)
-              .where(
-                and(
-                  eq(groups.orgId, actor.orgId),
-                  sql`lower(${groups.name}) = lower(${req.body.name})`,
-                ),
-              );
-            if (dup.length) throw nameTaken();
+            if (await t.groups.exists({ nameLower: req.body.name.toLowerCase() })) throw nameTaken();
           }
           const patch = {
             ...(req.body.name !== undefined ? { name: req.body.name } : {}),
@@ -240,12 +196,11 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
               ? { description: req.body.description || null }
               : {}),
           };
-          const [g] = await tx
-            .update(groups)
-            .set({ ...patch, updatedAt: new Date() })
-            .where(and(eq(groups.id, before.id), eq(groups.orgId, actor.orgId)))
-            .returning();
-          await writeAudit(tx, {
+          const g = await t.groups.findOneAndUpdate(
+            { id: before.id },
+            { ...patch, updatedAt: new Date() },
+          );
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'group.updated',
@@ -256,7 +211,7 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
             ),
             after: patch,
           });
-          return { ...present(g!), members: await loadMembers(tx, actor.orgId, g!.id) };
+          return { ...present(g!), members: await loadMembers(t, g!.id) };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -268,12 +223,14 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.delete('/groups/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     if (!can(actor, 'group.manage')) throw forbidden();
-    await withTenant(deps.db, actor.orgId, async (tx) => {
-      const g = await loadGroup(tx, actor.orgId, req.params.id);
-      const members = await loadMembers(tx, actor.orgId, g.id);
-      // Group memberships go with the group (ON DELETE CASCADE).
-      await tx.delete(groups).where(and(eq(groups.id, g.id), eq(groups.orgId, actor.orgId)));
-      await writeAudit(tx, {
+    await withTenantTx(deps.db, actor.orgId, async (t) => {
+      const g = await loadGroup(t, req.params.id);
+      const members = await loadMembers(t, g.id);
+      // Group memberships, and the group's access to spaces, go with the group (the old ON DELETE CASCADE).
+      await t.groupMembers.deleteMany({ groupId: g.id });
+      await t.spaceMembers.deleteMany({ principalType: 'group', principalId: g.id });
+      await t.groups.deleteOne({ id: g.id });
+      await writeAudit(t, {
         orgId: actor.orgId,
         actorId: actor.userId,
         action: 'group.deleted',
@@ -297,52 +254,32 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
       if (!can(actor, 'group.manage')) throw forbidden();
       const wanted = [...new Set(req.body.userIds)];
 
-      return withTenant(deps.db, actor.orgId, async (tx) => {
-        const g = await loadGroup(tx, actor.orgId, req.params.id);
-        const current = await tx
-          .select({ userId: groupMembers.userId })
-          .from(groupMembers)
-          .where(and(eq(groupMembers.groupId, g.id), eq(groupMembers.orgId, actor.orgId)));
+      return withTenantTx(deps.db, actor.orgId, async (t) => {
+        const g = await loadGroup(t, req.params.id);
+        const current = await t.groupMembers.find({ groupId: g.id });
         const currentIds = new Set(current.map((c) => c.userId));
         const added = wanted.filter((id) => !currentIds.has(id));
         const removed = [...currentIds].filter((id) => !wanted.includes(id));
 
         if (added.length) {
-          const eligible = await tx
-            .select({ id: users.id })
-            .from(memberships)
-            .innerJoin(users, eq(users.id, memberships.userId))
-            .where(
-              and(
-                eq(memberships.orgId, actor.orgId),
-                eq(memberships.status, 'active'),
-                inArray(users.id, added),
-              ),
-            );
-          if (eligible.length !== added.length) {
+          const eligible = await t.memberships.count({
+            status: 'active',
+            userId: { $in: added },
+          });
+          if (eligible !== added.length) {
             throw new AppError(
               400,
               'invalid_members',
               'Every person must be an active member of this workspace',
             );
           }
-          await tx
-            .insert(groupMembers)
-            .values(added.map((userId) => ({ groupId: g.id, orgId: actor.orgId, userId })));
+          await t.groupMembers.insert(added.map((userId) => ({ groupId: g.id, userId })));
         }
         if (removed.length) {
-          await tx
-            .delete(groupMembers)
-            .where(
-              and(
-                eq(groupMembers.groupId, g.id),
-                eq(groupMembers.orgId, actor.orgId),
-                inArray(groupMembers.userId, removed),
-              ),
-            );
+          await t.groupMembers.deleteMany({ groupId: g.id, userId: { $in: removed } });
         }
         if (added.length || removed.length) {
-          await writeAudit(tx, {
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'group.members_changed',
@@ -351,7 +288,7 @@ export async function groupRoutes(app: FastifyInstance, deps: AuthDeps) {
             after: { added, removed },
           });
         }
-        return { ...present(g), members: await loadMembers(tx, actor.orgId, g.id) };
+        return { ...present(g), members: await loadMembers(t, g.id) };
       });
     },
   );

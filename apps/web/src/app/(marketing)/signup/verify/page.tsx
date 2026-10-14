@@ -4,24 +4,33 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, PartyPopper } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Notice } from '@/components/shared/notice';
 import { MIN_PASSWORD, PasswordStrength } from '@/components/auth/password-strength';
-import { useWizard, WizardProgress } from '@/components/auth/wizard';
+import { useWizard } from '@/components/auth/wizard';
+import {
+  bigInput,
+  FieldGroup,
+  FieldStack,
+  SetupLoading,
+  SetupMessage,
+  StepFooter,
+  StepHero,
+  WizardShell,
+  type ShellStep,
+} from '@/components/auth/wizard-shell';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
 
 const STEPS = ['you', 'password', 'done'] as const;
-const LABELS = [
-  { id: 'you', label: 'You' },
-  { id: 'password', label: 'Password' },
-  { id: 'done', label: 'Ready' },
+const SHELL_STEPS: ShellStep[] = [
+  { id: 'you', label: 'Confirm details', hint: 'Make sure this is you' },
+  { id: 'password', label: 'Password', hint: 'Secure your account' },
+  { id: 'done', label: 'Ready', hint: 'Your workspace is live' },
 ];
 
 interface Answers {
@@ -39,48 +48,24 @@ interface Preview {
   name: string | null;
 }
 
-function Heading({
-  headingRef,
-  children,
-  lead,
-}: {
-  headingRef: React.Ref<HTMLHeadingElement>;
-  children: React.ReactNode;
-  lead?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-6 space-y-2">
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
-      >
-        {children}
-      </h1>
-      {lead && <p className="text-muted-foreground">{lead}</p>}
-    </div>
-  );
-}
-
 function Expired() {
   return (
-    <Card className="shadow-lg">
-      <CardContent className="space-y-4 p-6 sm:p-8">
-        <h1 className="text-2xl font-semibold tracking-tight">This link has expired</h1>
-        <p className="text-muted-foreground">
-          Sign-up links work once and last 24 hours. If you already used it, your workspace exists:
-          find it and sign in. Otherwise start again and we will send a fresh one.
-        </p>
-        <div className="flex flex-wrap gap-2">
+    <SetupMessage
+      title="This link has expired"
+      actions={
+        <>
           <Button asChild>
             <Link href="/signup">Start again</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/workspaces">Find my workspace</Link>
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </>
+      }
+    >
+      Sign-up links work once and last 24 hours. If you already used it, your workspace exists: find it
+      and sign in. Otherwise start again and we will send a fresh one.
+    </SetupMessage>
   );
 }
 
@@ -128,8 +113,7 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
     return () => clearTimeout(t);
   }, [w.step, a.url]);
 
-  if (!w.ready)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+  if (!w.ready) return <SetupLoading />;
 
   function fromYou(e: React.FormEvent) {
     e.preventDefault();
@@ -153,127 +137,112 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
   }
 
   const first = (a.name || preview.name || '').trim().split(/\s+/)[0];
-  const steps = preview.hasAccount ? LABELS.filter((s) => s.id !== 'password') : LABELS;
+  const steps = preview.hasAccount ? SHELL_STEPS.filter((s) => s.id !== 'password') : SHELL_STEPS;
 
   return (
-    <Card className="shadow-lg">
-      <CardContent className="p-6 sm:p-8">
-        <WizardProgress
-          steps={steps}
-          index={steps.findIndex((s) => s.id === w.step)}
-          reached={Math.min(w.reached, steps.length - 1)}
-          onGo={w.go}
-        />
-        {formError && (
-          <div className="mb-4">
-            <Notice variant="error">{formError}</Notice>
-          </div>
-        )}
+    <WizardShell steps={steps} current={w.step} reachedId={STEPS[w.reached]} onGo={w.go}>
+      {formError && (
+        <div className="mb-5">
+          <Notice variant="error">{formError}</Notice>
+        </div>
+      )}
 
-        {w.step === 'you' && (
-          <form onSubmit={fromYou} noValidate>
-            <Heading
-              headingRef={w.headingRef}
-              lead={`You are creating ${preview.company} at ${preview.slug}.`}
-            >
-              {first ? `Welcome, ${first}. Is this you?` : 'Welcome. Is this you?'}
-            </Heading>
-            <div className="space-y-4">
-              <div className="bg-muted/40 rounded-xl border px-4 py-3 text-sm">
-                <p className="text-muted-foreground">Signing up as</p>
-                <p className="font-medium">{preview.email}</p>
+      {w.step === 'you' && (
+        <form onSubmit={fromYou} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title={first ? `Welcome, ${first}. Is this you?` : 'Welcome. Is this you?'}
+            lead={`You are creating ${preview.company} at ${preview.slug}.`}
+          />
+          <FieldStack>
+            <FieldGroup title="Account">
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-xs">Signing up as</p>
+                <p className="text-[15px] font-medium">{preview.email}</p>
               </div>
               <Field label="Your name" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
                 <Input
                   autoFocus
                   autoComplete="name"
+                  placeholder="Your full name"
+                  className={bigInput}
                   value={a.name}
                   maxLength={100}
                   onChange={(e) => w.set({ name: e.target.value })}
                 />
               </Field>
-              {preview.hasAccount && (
-                <Notice variant="info">
-                  You already have a Crew Deck account, so you keep your existing password.
-                </Notice>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <Button type="submit" disabled={busy}>
-                {preview.hasAccount ? (busy ? 'Creating…' : 'Create my workspace') : 'Continue'}{' '}
-                {!busy && <ArrowRight />}
-              </Button>
-            </div>
-          </form>
-        )}
+            </FieldGroup>
+            {preview.hasAccount && (
+              <Notice variant="info">
+                You already have a Crew Deck account, so you keep your existing password.
+              </Notice>
+            )}
+          </FieldStack>
+          <StepFooter
+            next={preview.hasAccount ? (busy ? 'Creating…' : 'Create my workspace') : 'Continue'}
+            loading={busy}
+            left={<span />}
+          />
+        </form>
+      )}
 
-        {w.step === 'password' && (
-          <form onSubmit={fromPassword} noValidate>
-            <Heading headingRef={w.headingRef} lead="You will use it with your email to sign in.">
-              Choose a password
-            </Heading>
-            <div className="space-y-4">
-              <Field
-                label="Password"
-                htmlFor="password"
-                error={errors.password}
-                shakeKey={shakeKey}
-              >
-                <PasswordInput
-                  autoFocus
-                  autoComplete="new-password"
-                  value={a.password}
-                  onChange={(e) => w.set({ password: e.target.value })}
-                />
-              </Field>
-              <PasswordStrength password={a.password} />
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={w.back} disabled={busy}>
-                <ArrowLeft /> Back
-              </Button>
-              <Button type="submit" disabled={busy}>
-                {busy ? (
-                  <>
-                    <Loader2 className="animate-spin" /> Creating…
-                  </>
-                ) : (
-                  'Create my workspace'
-                )}
-              </Button>
-            </div>
-          </form>
-        )}
+      {w.step === 'password' && (
+        <form onSubmit={fromPassword} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title="Choose a password"
+            lead="You will use it with your email to sign in."
+          />
+          <FieldStack>
+            <Field label="Password" htmlFor="password" error={errors.password} shakeKey={shakeKey}>
+              <PasswordInput
+                autoFocus
+                autoComplete="new-password"
+                placeholder="••••••••••••"
+                className={bigInput}
+                value={a.password}
+                onChange={(e) => w.set({ password: e.target.value })}
+              />
+            </Field>
+            <PasswordStrength password={a.password} />
+          </FieldStack>
+          <StepFooter
+            next={busy ? 'Creating…' : 'Create my workspace'}
+            onBack={busy ? undefined : w.back}
+            loading={busy}
+          />
+        </form>
+      )}
 
-        {w.step === 'done' && (
-          <div className="space-y-5 text-center" role="status">
-            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
-              <PartyPopper className="size-7" aria-hidden />
-            </span>
-            <h1
-              ref={w.headingRef}
-              tabIndex={-1}
-              className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
-            >
-              {preview.company} is ready
-            </h1>
-            <p className="text-muted-foreground">
-              Taking you to {preview.slug} now. Your trial has started.
-            </p>
-            <ul className="mx-auto max-w-xs space-y-1.5 text-left text-sm">
+      {w.step === 'done' && (
+        <div role="status">
+          <StepHero
+            headingRef={w.headingRef}
+            title={`${preview.company} is ready`}
+            lead={`Taking you to ${preview.slug} now. Your trial has started.`}
+          />
+          <FieldStack>
+            <ul className="space-y-2.5">
               {['Workspace created', 'You are the owner', 'Business trial started'].map((t) => (
-                <li key={t} className="flex items-center gap-2">
-                  <CheckCircle2 className="size-4 text-emerald-600" aria-hidden /> {t}
+                <li key={t} className="flex items-center gap-2.5 text-sm font-medium">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden />
+                  {t}
                 </li>
               ))}
             </ul>
-            <Button type="button" onClick={() => a.url && window.location.assign(a.url)}>
+          </FieldStack>
+          <div className="mt-9">
+            <Button
+              type="button"
+              
+              onClick={() => a.url && window.location.assign(a.url)}
+            >
               Open my workspace <ArrowRight />
             </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </WizardShell>
   );
 }
 
@@ -287,16 +256,13 @@ function VerifyInner() {
     staleTime: Infinity,
   });
   if (!token || preview.isError) return <Expired />;
-  if (preview.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+  if (preview.isPending) return <SetupLoading />;
   return <VerifyWizard token={token} preview={preview.data} />;
 }
 
 export default function VerifyPage() {
   return (
-    <Suspense
-      fallback={<Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />}
-    >
+    <Suspense fallback={<SetupLoading />}>
       <VerifyInner />
     </Suspense>
   );

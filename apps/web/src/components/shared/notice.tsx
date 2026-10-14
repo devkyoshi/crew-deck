@@ -15,7 +15,7 @@ const VARIANTS = {
   },
   info: {
     icon: Info,
-    box: 'border-primary/20 bg-accent text-accent-foreground',
+    box: 'border-blue-500/25 bg-blue-500/10 text-blue-900 dark:text-blue-300',
     role: 'status' as const,
   },
   success: {
@@ -45,7 +45,7 @@ export function Notice({
     <div
       role={v.role}
       className={cn(
-        'animate-slide-down flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm',
+        'flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm',
         v.box,
         className,
       )}

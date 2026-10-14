@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SplitLayout } from '@/components/auth/split-layout';
-import type { PanelVariant } from '@/components/auth/photo-panel';
+import { AuthSplitLayout, type SplitVariant } from '@/components/auth/auth-split-layout';
 
 /** The bare-domain origin, whether we are on it or on a workspace address like acme.example.com. */
 function apexOrigin() {
@@ -13,30 +12,29 @@ function apexOrigin() {
   return `${protocol}//${onWorkspace ? labels.slice(1).join('.') : host}`;
 }
 
-/** Every signed-out screen shares the photo split; the photo and words depend on the screen. */
+/**
+ * Sign-in screens share the framed split layout. Accept-invite is a setup flow, so it renders on
+ * a blank full screen and brings its own stepper.
+ */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [apex, setApex] = useState<string | null>(null);
   useEffect(() => setApex(apexOrigin()), []);
 
-  const variant: PanelVariant = pathname.startsWith('/platform')
+  if (pathname.startsWith('/accept-invite')) return <>{children}</>;
+
+  const variant: SplitVariant = pathname.startsWith('/platform')
     ? 'platform'
-    : pathname.startsWith('/accept-invite')
-      ? 'invite'
-      : pathname.startsWith('/workspaces')
-        ? 'workspaces'
-        : 'signin';
+    : pathname.startsWith('/workspaces')
+      ? 'workspaces'
+      : 'signin';
   const top =
-    variant === 'platform'
+    variant === 'platform' || !apex
       ? undefined
-      : variant === 'invite'
-        ? { text: 'Already have an account?', label: 'Sign in', href: '/sign-in' }
-        : apex
-          ? { text: 'New to Crew Deck?', label: 'Create a workspace', href: `${apex}/signup` }
-          : undefined;
+      : { text: 'New to Crew Deck?', label: 'Sign Up', href: `${apex}/signup` };
   return (
-    <SplitLayout variant={variant} top={top}>
+    <AuthSplitLayout variant={variant} top={top}>
       {children}
-    </SplitLayout>
+    </AuthSplitLayout>
   );
 }

@@ -2,6 +2,8 @@
 
 ## ADR-001: Drizzle with hand-written reversible SQL migrations
 
+*Superseded by ADR-051 (MongoDB).*
+
 Drizzle gives typed queries and keeps RLS policies as plain SQL. drizzle-kit does not produce down migrations, and the brief requires reversible ones, so migrations are `NNNN_name.up.sql` / `.down.sql` files run by `src/db/migrate.ts`. The Drizzle schema in `src/db/schema.ts` is kept in step by hand.
 
 ## ADR-002: Google-only SSO for now
@@ -10,9 +12,13 @@ Microsoft is deferred. Auth code uses a `GoogleClient` interface so another prov
 
 ## ADR-003: Shared schema with Postgres RLS
 
+*Superseded by ADR-051 (MongoDB).*
+
 `org_id` on every business table, RLS enabled and FORCEd, policies on `current_org_id()` (`app.current_org`, set per transaction by `withTenant`). The app connects as `crew_app` (no superuser, no BYPASSRLS); migrations and seeding use the owner role. Repositories also filter by `org_id`.
 
 ## ADR-004: `users` is global but RLS-scoped; pre-tenant lookups use SECURITY DEFINER functions
+
+*Superseded by ADR-051 (MongoDB).*
 
 A user is visible only when they have a membership in the current tenant. Sign-in and invite acceptance happen before a tenant context exists, so migration 0002 adds narrow `SECURITY DEFINER` functions (`auth_org_by_slug`, `auth_org_by_id`, `auth_user_by_email`, `auth_invitation_by_hash`, `auth_pending_invitation`, `auth_user_id_by_email`, `auth_user_orgs`). Each takes a specific key and returns the minimum columns; none lists data. They bypass RLS because they are owned by the migration role, so that role must be a superuser or have BYPASSRLS (true for the Docker setup; revisit for a managed Postgres).
 
@@ -209,6 +215,55 @@ Epic, story, task, bug and subtask are fixed enums. Hierarchy: epic, then story/
 
 Board and item changes reach other browsers over server-sent events scoped by tenant and space access, with Redis pub/sub fan-out; clients refetch on focus as a fallback. Work items use string ranks from `fractional-indexing` (decided in W2) while CRM deals keep their numeric positions (ADR-034). Status: planned (W2, W7).
 
+## ADR-050: Moving cards: neighbour-based string ranks, one lock per space
+
+A card move sends the target status and its neighbour (`afterItemId` or `beforeItemId`, or neither for the end of the column); the server computes a fractional-indexing string rank between the neighbours and returns the item with its new rank, so a move rewrites one row (work items use string ranks; CRM deals keep their numeric positions, ADR-034). Ranks sort bytewise (`COLLATE "C"`). Creates, moves, bulk changes and edits take the space's counter row lock first, so two people dropping cards into the same gap queue up and each sees the other's committed result: both succeed with distinct, ordered ranks. Every move carries `If-Match` with the item's `updated_at` and is checked inside the UPDATE (412 on a stale write), and a neighbour that left the column is a 422 so the board refreshes. A rank over 40 characters queues a background rebalance of that column (BullMQ, tenant context, one job per column, under the same lock); two neighbours with equal ranks are spread apart on the spot. Dropping into a swimlane cell can change the lane's field (assignee, priority or epic) in the same call, with a confirmation when ownership changes. Bulk changes are one transaction per call, limited to 100 items in one space, and skip (and report) the items the person may not change. On the screen the whole card drags with a mouse or finger, and the handle button gives keyboard users the same drag (Space, arrows, Space) with screen-reader announcements; the drag overlay is rendered in the page body so a transformed layout cannot offset it.
+
 ## Open (not blocking)
 
 Brevo sender address/domain (must be verified in Brevo), product name/logo/accent color, who can create spaces, check-in policy, hosting target.
+
+## ADR-051: MongoDB instead of Postgres
+
+The data store moved from Postgres to MongoDB (`mongodb` driver 6, no ODM). Documents keep the old
+camelCase column names and a UUID `id` field, so the API's response shapes and the web app did not change;
+the Mongo `_id` is never exposed. Dates are `Date`; calendar dates stay `YYYY-MM-DD` strings. Indexes
+(`src/db/indexes.ts`) replace the SQL migrations and are created idempotently at startup, by
+`pnpm db:migrate` and in test setup. The plan catalogue is upserted the same way (`src/db/reference.ts`).
+MongoDB runs as a single-node replica set locally so multi-document transactions are available.
+
+Postgres-only behaviour moved into application code: the trigger that gave every space a board and
+statuses (`work/seed.ts`), composite foreign keys (explicit same-tenant and same-space checks), cascades
+(explicit deletes in a transaction), `FOR UPDATE` (a write to the space counter document inside the
+transaction, so concurrent moves conflict and retry), `ILIKE` (escaped case-insensitive regex) and
+`lower(name)` unique indexes (a stored `nameLower` field with a unique index).
+
+## ADR-052: Tenant isolation in the repository layer
+
+With no row-level security, isolation is structural. Route and service code receive a `TenantDb`
+(`src/db/client.ts`): each repository adds `orgId` to every filter, stamps it on every insert, refuses an
+insert for another tenant, and turns a filter naming another tenant into one that matches nothing.
+Users are global; a tenant reads them only through `TenantDb.users(ids)`, which goes through memberships
+first. A tenant may change only its own branding (`updateBranding`). The audit log and work-day
+corrections are append-only through the tenant scope. Code that must cross tenants (sign-in, the platform
+console, background fan-out jobs, seeds and tests) uses the explicit `db.global` scope, which keeps those
+call sites easy to find. `test/tenant-isolation.test.ts` checks every tenant collection.
+
+## ADR-053: A person belongs to many workspaces, each with many spaces
+
+The model was already user > workspaces (organizations, via memberships) > spaces; it is now visible in
+the product. A signed-in person can create another workspace (`POST /workspaces`, they become its owner,
+their account is reused, at most 10 owned workspaces) and sees all of theirs at `/my-workspaces` and in the
+switcher. Workspaces stay on their own subdomains and sessions stay per workspace address; creating a
+workspace hands the session over with the same one-time ticket sign-up uses.
+
+## ADR-054: Workspace types and templates
+
+Sign-up (and creating another workspace) asks "What kind of work do you do?" (15 types, from software to
+construction) and "How does your team plan to use it?" (usage options). Both are stored on the organization
+(`workType`, `usage`). The type picks a template in `packages/shared/src/workspace.ts`: the modules to switch
+on (check-in is on for everyone, CRM for sales, marketing and customer service, plus whatever the chosen
+usage implies) and the columns new spaces start with. Usage options that are not built are flagged
+`planned`, shown as *Coming soon*, and tracked in docs/MISSING-FEATURES.md. Changing the type later
+(`PUT /settings/workspace`) only adds modules, never removes them, so no data is hidden.
+

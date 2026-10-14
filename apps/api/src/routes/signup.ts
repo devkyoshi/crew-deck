@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../auth/password.js';
 import { type AuthDeps } from '../auth/plugin.js';
@@ -13,6 +12,8 @@ import { AppError } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
 import { emailDomainOf, isFreeEmailDomain, slugMessage, slugProblem } from '../onboarding/rules.js';
 import { provisionWorkspace } from '../onboarding/provision.js';
+import { getPlatformSettings } from '../onboarding/settings.js';
+import { USAGE_KEYS, WORK_TYPES, WORKSPACE_TEMPLATES, USAGE_OPTIONS } from '@crew-deck/shared';
 
 export type SendMail = (m: EmailMessage) => Promise<void>;
 
@@ -25,25 +26,43 @@ const perClient = (max: number, window: string) => ({
   config: { rateLimit: { max, timeWindow: window, keyGenerator: (req: { ip: string }) => req.ip } },
 });
 
-type PlatformSettings = {
-  block_free_email_domains: boolean;
-  signups_enabled: boolean;
-  trial_days: number;
-};
-
 export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { sendMail: SendMail }) {
   const { db, config, sessions, sendMail } = deps;
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   async function settings() {
-    const rows = await db.execute<PlatformSettings>(sql`select * from platform_settings_get()`);
-    return rows[0]!;
+    const s = await getPlatformSettings(db);
+    return {
+      block_free_email_domains: s.blockFreeEmailDomains,
+      signups_enabled: s.signupsEnabled,
+      trial_days: s.trialDays,
+    };
   }
 
   async function slugState(value: string): Promise<'ok' | 'invalid' | 'reserved' | 'taken'> {
     const problem = slugProblem(value);
     if (problem) return problem;
     return (await findOrgBySlug(db, value)) ? 'taken' : 'ok';
+  }
+
+  /** A usable sign-up request (not used, not expired), without using it. */
+  async function peekSignup(tokenHash: string) {
+    const r = await db.global.signupRequests.findOne({
+      tokenHash,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!r) return null;
+    const account = await db.global.users.exists({ email: r.email.toLowerCase() });
+    return {
+      email: r.email,
+      company: r.company,
+      slug: r.slug,
+      has_account: account,
+      name: r.name,
+      workType: r.workType,
+      usage: r.usage,
+    };
   }
 
   /** Sign-up pages work on the apex host only; a tenant host has nothing to sign up for. */
@@ -53,28 +72,28 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
 
   // Plans shown on the public pricing page. Prices are display-only.
   r.get('/public/plans', async () => {
-    const rows = await db.execute<{
-      key: string;
-      name: string;
-      sort: number;
-      price_cents: number | null;
-      limits: Record<string, number>;
-      features: string[];
-    }>(
-      sql`select key, name, sort, price_cents, limits, features from plans where public order by sort`,
-    );
+    const rows = await db.global.plans.find({ public: true }, { sort: { sort: 1 } });
     const s = await settings();
     return {
       trialDays: s.trial_days,
       plans: rows.map((p) => ({
         key: p.key,
         name: p.name,
-        priceCents: p.price_cents,
+        priceCents: p.priceCents,
         limits: p.limits,
         features: p.features,
       })),
     };
   });
+
+  // The work types and usage options the sign-up wizard shows (step "What kind of work do you do?").
+  r.get('/public/workspace-templates', async () => ({
+    workTypes: WORK_TYPES.map((t) => {
+      const w = WORKSPACE_TEMPLATES[t];
+      return { type: t, label: w.label, blurb: w.blurb, suggestedUsage: w.suggestedUsage };
+    }),
+    usage: USAGE_OPTIONS,
+  }));
 
   r.get('/signup/config', async () => {
     const s = await settings();
@@ -109,6 +128,8 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
           company: z.string().trim().min(2, 'Enter your company name').max(80),
           name: z.string().trim().max(100).optional(),
           slug,
+          workType: z.enum(WORK_TYPES).optional(),
+          usage: z.array(z.enum(USAGE_KEYS as [string, ...string[]])).max(20).optional(),
         }),
       },
       ...perClient(config.AUTH_RATE_LIMIT_MAX, '1 hour'),
@@ -136,10 +157,11 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         });
       }
       // At most three links per address per hour, so the form cannot be used to mail-bomb someone.
-      const recent = await db.execute<{ n: number }>(
-        sql`select signup_recent_count(${b.email}, ${new Date(Date.now() - 3_600_000).toISOString()}::timestamptz) as n`,
-      );
-      if ((recent[0]?.n ?? 0) >= 3) {
+      const recent = await db.global.signupRequests.count({
+        email: b.email.toLowerCase(),
+        createdAt: { $gt: new Date(Date.now() - 3_600_000) },
+      });
+      if (recent >= 3) {
         throw new AppError(
           429,
           'too_many_requests',
@@ -147,8 +169,16 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         );
       }
       const token = randomToken();
-      await db.execute(sql`select signup_request_create(${sha256(token)}, ${b.email}, ${b.name || null}::text, ${b.company},
-        ${b.slug}, ${new Date(Date.now() + SIGNUP_LINK_HOURS * 3_600_000).toISOString()}::timestamptz)`);
+      await db.global.signupRequests.insert({
+        tokenHash: sha256(token),
+        email: b.email.toLowerCase(),
+        name: b.name || null,
+        company: b.company,
+        slug: b.slug.toLowerCase(),
+        workType: b.workType ?? null,
+        usage: b.usage ?? [],
+        expiresAt: new Date(Date.now() + SIGNUP_LINK_HOURS * 3_600_000),
+      });
       const link = `${config.WEB_ORIGIN}/signup/verify?token=${encodeURIComponent(token)}`;
       try {
         await sendMail({
@@ -179,14 +209,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
     },
     async (req) => {
       apexOnly(req);
-      const rows = await db.execute<{
-        email: string;
-        company: string;
-        slug: string;
-        has_account: boolean;
-        name: string | null;
-      }>(sql`select * from signup_request_peek(${sha256(req.body.token)})`);
-      const row = rows[0];
+      const row = await peekSignup(sha256(req.body.token));
       if (!row)
         throw new AppError(
           400,
@@ -199,6 +222,8 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         slug: row.slug,
         hasAccount: row.has_account,
         name: row.name,
+        workType: row.workType,
+        usage: row.usage,
       };
     },
   );
@@ -220,14 +245,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
     async (req) => {
       apexOnly(req);
       const hash = sha256(req.body.token);
-      const rows = await db.execute<{
-        email: string;
-        company: string;
-        slug: string;
-        has_account: boolean;
-        name: string | null;
-      }>(sql`select * from signup_request_peek(${hash})`);
-      const row = rows[0];
+      const row = await peekSignup(hash);
       if (!row)
         throw new AppError(
           400,
@@ -266,6 +284,8 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         ownerMode: 'verified',
         consumeTokenHash: hash,
         createdBy: 'signup',
+        workType: (row.workType as (typeof WORK_TYPES)[number] | null) ?? null,
+        usage: row.usage,
       });
       const sid = await sessions.create(out.orgId, out.userId!);
       // Hand the session to the new workspace's own address with a one-time ticket.

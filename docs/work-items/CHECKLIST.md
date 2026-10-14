@@ -14,75 +14,75 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 ## W1: Statuses, items and a read-only board
 
 ### Plan and pricing
-- [ ] Migration `0011_plan_work_items` (up/down): new feature/limit keys in seeded plans
-- [ ] `plans/index.ts` keys + `countWorkItems`; `lib/plans.ts` mirrored; `plans.test.ts` updated
+- [x] Migration `0011_plan_work_items` (up/down): new feature/limit keys in seeded plans
+- [x] `plans/index.ts` keys + `countWorkItems`; `lib/plans.ts` mirrored; `plans.test.ts` updated
 
 ### Database
-- [ ] Migration `0012_work_items` up and down: boards, space_counters, space_statuses, work_items, labels, work_item_labels
-- [ ] All new tables: `org_id`, `UNIQUE (id, org_id)`, composite FKs, FORCE RLS, policy, `crew_app` grant
-- [ ] Backfill existing spaces (board + 4 default statuses + counter); idempotent
-- [ ] New spaces get board, statuses, counter in the same transaction
-- [ ] Indexes for board query and title search; `schema-work.ts` added
-- [ ] Round trip `pnpm db:migrate` then `pnpm db:rollback` then migrate again
+- [x] Migration `0012_work_items` up and down: boards, space_counters, space_statuses, work_items, labels, work_item_labels
+- [x] All new tables: `org_id`, `UNIQUE (id, org_id)`, composite FKs, FORCE RLS, policy, `crew_app` grant
+- [x] Backfill existing spaces (board + 4 default statuses + counter); idempotent
+- [x] New spaces get board, statuses, counter in the same transaction
+- [x] Indexes for board query and title search; `schema-work.ts` added
+- [x] Round trip `pnpm db:migrate` then `pnpm db:rollback` then migrate again
 
 ### Permissions
-- [ ] `Resource.isReporter` added; actions `item.view/create/edit/delete`, `status.manage`, `board.manage`
-- [ ] `permission-matrix.test.ts` rows (allowed and denied, all org and space roles)
+- [x] `Resource.isReporter` added; actions `item.view/create/edit/delete`, `status.manage`, `board.manage`
+- [x] `permission-matrix.test.ts` rows (allowed and denied, all org and space roles)
 
 ### API
-- [ ] Statuses: list, create (max 12), patch, delete with `replace_with`, reorder
-- [ ] At-least-one-status-per-category enforced on create/patch/delete
-- [ ] Board: `GET /spaces/:id/board` (per-column cursor, 50 per page, Done retention, epics/subtasks excluded)
-- [ ] `PATCH /boards/:id` settings
-- [ ] Items: list, create (key from counter, hierarchy validation, work_items limit), get by id or key, patch with `If-Match` (412/428), soft delete, subtasks
-- [ ] `resolved_at` set on Done category and cleared on leaving it
-- [ ] Shared enums in `packages/shared`
+- [x] Statuses: list, create (max 12), patch, delete with `replace_with`, reorder
+- [x] At-least-one-status-per-category enforced on create/patch/delete
+- [x] Board: `GET /spaces/:id/board` (per-column cursor, 50 per page, Done retention, epics/subtasks excluded)
+- [x] `PATCH /boards/:id` settings
+- [x] Items: list, create (key from counter, hierarchy validation, work_items limit), get by id or key, patch with `If-Match` (412/428), soft delete, subtasks
+- [x] `resolved_at` set on Done category and cleared on leaving it
+- [x] Shared enums in `packages/shared`
 
 ### Web
-- [ ] `/design`: card (both densities), column header with WIP, type icons, priority icons, status chip, item panel skeleton, empty board, create row, in light and dark
-- [ ] Owner approved the `/design` components
-- [ ] Create-space wizard: board type step (Kanban; Scrum shown as coming soon / locked)
-- [ ] Space tabs + sidebar expansion (Board, Settings)
-- [ ] Board page: sticky headers, counts, WIP usage, skeletons, empty state, load more, error state, density toggle (per user)
-- [ ] Inline create per column and `C` create dialog (type tabs, grouped fields, create another)
-- [ ] Item side panel and full page `/spaces/[key]/items/[ref]` (one component), inline edit, saved indicator, 412 prompt, unsaved guard
-- [ ] Board settings: status editor (add, rename, recolor, reorder, WIP, category, delete with replacement)
-- [ ] Viewer read-only states; permission-denied and not-found states
-- [ ] Free plan limit message and upgrade prompt when `work_items` cap is reached
+- [x] `/design`: card (both densities), column header with WIP, type icons, priority icons, status chip, item panel skeleton, empty board, create row, in light and dark
+- [x] Owner approved the `/design` components
+- [x] Create-space wizard: board type step (Kanban; Scrum shown as coming soon / locked)
+- [x] Space tabs + sidebar expansion (Board, Settings)
+- [x] Board page: sticky headers, counts, WIP usage, skeletons, empty state, load more, error state, density toggle (per user)
+- [x] Inline create per column and `C` create dialog (type tabs, grouped fields, create another)
+- [x] Item side panel and full page `/spaces/[key]/items/[ref]` (one component), inline edit, saved indicator, 412 prompt, unsaved guard
+- [x] Board settings: status editor (add, rename, recolor, reorder, WIP, category, delete with replacement)
+- [x] Viewer read-only states; permission-denied and not-found states
+- [x] Free plan limit message and upgrade prompt when `work_items` cap is reached
 
 ### Tests and docs
-- [ ] RLS tests for every new table; cross-tenant item/status/board tests
-- [ ] Concurrent create gives gap-free sequential keys
-- [ ] Hierarchy, status rules, `If-Match`, soft delete, retention tests
-- [ ] Lint, type-check, all tests pass
-- [ ] CHANGELOG entry (format of Phase 9), DECISIONS ADRs, FEATURES rows to Built, PROGRESS updated
-- [ ] **Done when:** a member can create items, see them in the right columns, keys are sequential per space, tenant isolation tests pass
+- [x] RLS tests for every new table; cross-tenant item/status/board tests
+- [x] Concurrent create gives gap-free sequential keys
+- [x] Hierarchy, status rules, `If-Match`, soft delete, retention tests
+- [x] Lint, type-check, all tests pass
+- [x] CHANGELOG entry (format of Phase 9), DECISIONS ADRs, FEATURES rows to Built, PROGRESS updated
+- [x] **Done when:** a member can create items, see them in the right columns, keys are sequential per space, tenant isolation tests pass
 
 ---
 
 ## W2: Drag and drop and board power features
 
-- [ ] `fractional-indexing` added; ADR on string ranks vs CRM float positions
-- [ ] `POST /items/:id/move` (status, before/after neighbour, swimlane value, sprint) with `If-Match`, returns rank
-- [ ] Neighbour validation (same space and tenant); WIP info in response
-- [ ] `POST /items/bulk` (move, assign, label, delete; max 100)
-- [ ] Labels CRUD + `label.*` actions + matrix tests
-- [ ] Rank rebalance job (tenant queue, idempotent)
-- [ ] dnd-kit: handle button, keyboard sensor, announcements, "Move to" menu
-- [ ] Optimistic move, rollback toast, stale 412 handling
-- [ ] Drag visuals (lift, insertion line, valid column highlight, drop animation under 200 ms)
-- [ ] Filter bar with URL state, chips, quick filters (My items, Recently updated)
-- [ ] Swimlanes (None, Assignee, Epic, Priority) with Unassigned lane, collapse, counts, ownership confirmation
-- [ ] WIP warning on column header (icon plus text)
-- [ ] Column collapse, independent scroll, horizontal scroll
-- [ ] Multi-select + bulk bar
-- [ ] Card field settings in board settings
-- [ ] Card menu (assign, priority, move to, copy link, delete)
-- [ ] Shortcuts `C`, `/`, arrows, `?` overlay
-- [ ] 500-item demo seed; board smooth (profile checked); `@tanstack/react-virtual` where needed
-- [ ] Concurrency tests (two moves into the same gap), rank ordering tests, bulk permission tests
-- [ ] Docs updated; lint, type-check, tests pass
-- [ ] **Done when:** two people can move and reorder at the same time without lost updates, and a 500-item board stays smooth
+- [x] `fractional-indexing` added; ADR on string ranks vs CRM float positions
+- [x] `POST /items/:id/move` (status, before/after neighbour, swimlane value, sprint) with `If-Match`, returns rank
+- [x] Neighbour validation (same space and tenant); WIP info in response
+- [x] `POST /items/bulk` (move, assign, label, delete; max 100)
+- [x] Labels CRUD + `label.*` actions + matrix tests
+- [x] Rank rebalance job (tenant queue, idempotent)
+- [x] dnd-kit: handle button, keyboard sensor, announcements, "Move to" menu
+- [x] Optimistic move, rollback toast, stale 412 handling
+- [x] Drag visuals (lift, insertion line, valid column highlight, drop animation under 200 ms)
+- [x] Filter bar with URL state, chips, quick filters (My items, Recently updated)
+- [x] Swimlanes (None, Assignee, Epic, Priority) with Unassigned lane, collapse, counts, ownership confirmation
+- [x] WIP warning on column header (icon plus text)
+- [x] Column collapse, independent scroll, horizontal scroll
+- [x] Multi-select + bulk bar
+- [x] Card field settings in board settings
+- [x] Card menu (assign, priority, move to, copy link, delete)
+- [x] Shortcuts `C`, `/`, arrows, `?` overlay
+- [x] 500-item demo seed; board smooth (profile checked); `@tanstack/react-virtual` where needed
+- [x] Concurrency tests (two moves into the same gap), rank ordering tests, bulk permission tests
+- [x] Docs updated; lint, type-check, tests pass
+- [x] **Done when:** two people can move and reorder at the same time without lost updates, and a 500-item board stays smooth
 
 ---
 

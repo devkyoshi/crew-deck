@@ -7,10 +7,21 @@ export type FeatureKey =
   | 'domain_lock'
   | 'space_audit'
   | 'branding_name'
-  | 'branding_full';
+  | 'branding_full'
+  | 'scrum_sprints'
+  | 'shared_filters'
+  | 'burndown_reports';
 
 export type LimitKey =
-  'seats' | 'spaces' | 'crm_records' | 'pipelines' | 'storage_mb' | 'audit_days' | 'sites';
+  | 'seats'
+  | 'spaces'
+  | 'crm_records'
+  | 'pipelines'
+  | 'storage_mb'
+  | 'audit_days'
+  | 'sites'
+  | 'work_items'
+  | 'max_attachment_mb';
 
 export interface PlanInfo {
   key: string;
@@ -46,10 +57,13 @@ export const LIMIT_LABEL: Record<LimitKey, string> = {
   storage_mb: 'Storage',
   audit_days: 'Audit log history',
   sites: 'Sites',
+  work_items: 'Work items',
+  max_attachment_mb: 'Attachment size',
 };
 
 export function formatLimit(key: LimitKey, value: number | undefined) {
   if (value === undefined) return 'Unlimited';
+  if (key === 'max_attachment_mb') return `${value} MB`;
   if (key === 'storage_mb') return value >= 1024 ? `${value / 1024} GB` : `${value} MB`;
   if (key === 'audit_days')
     return value >= 365 ? `${Math.round(value / 365)} year` : `${value} days`;
@@ -66,6 +80,11 @@ export function formatPrice(cents: number | null) {
 export const COMPARISON: { label: string; value: (p: PlanInfo) => string }[] = [
   { label: 'People', value: (p) => formatLimit('seats', p.limits.seats) },
   { label: 'Spaces', value: (p) => formatLimit('spaces', p.limits.spaces) },
+  {
+    label: 'Work items on boards',
+    value: (p) =>
+      p.limits.work_items === undefined ? 'Unlimited' : `Up to ${p.limits.work_items} items`,
+  },
   { label: 'Storage', value: (p) => formatLimit('storage_mb', p.limits.storage_mb) },
   { label: 'Audit log history', value: (p) => formatLimit('audit_days', p.limits.audit_days) },
   { label: 'Members, groups and access requests', value: () => 'Included' },

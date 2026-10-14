@@ -8,6 +8,7 @@ Prices are display-only until payments are added (there is no payment integratio
 | Trial                                                              | n/a              | n/a            | 14 days on sign-up, then Free |
 | **Seats** (`seats`)                                                | 5                | 50             | Unlimited                     |
 | **Spaces** (`spaces`)                                              | 3                | Unlimited      | Unlimited                     |
+| **Work items** (`work_items`)                                      | 250              | Unlimited      | Unlimited                     |
 | **Storage** (`storage_mb`)                                         | 100 MB           | 5 GB           | 50 GB                         |
 | **Audit log history** (`audit_days`)                               | 30 days          | 1 year         | Full                          |
 | Members, groups, access requests                                   | Yes              | Yes            | Yes                           |
@@ -33,13 +34,12 @@ Prices are display-only until payments are added (there is no payment integratio
 - Seats count active members (invited, not yet accepted, count as well so the limit cannot be bypassed by sending many invitations).
 - Platform admins can change a workspace's plan, extend its trial and set custom limits.
 
-## Planned: work management limits (not live yet)
+## Work management limits
 
-Proposed for the work items module; details, behaviour and wiring are in [work-items/PRICING-GATES.md](work-items/PRICING-GATES.md). These rows are added to the table above when the matching phase ships.
+Proposed for the work items module; details, behaviour and wiring are in [work-items/PRICING-GATES.md](work-items/PRICING-GATES.md). Work items (`work_items`) is live since W1. The rest are added to the table above when the matching phase ships (attachments W3, shared filters W4, Scrum and burndown W6).
 
 |                                                        | Free  | Team      | Business  |
 | ------------------------------------------------------ | ----- | --------- | --------- |
-| **Work items** (`work_items`)                          | 250   | Unlimited | Unlimited |
 | **Max attachment size** (`max_attachment_mb`)          | 5 MB  | 25 MB     | 100 MB    |
 | Scrum backlog and sprints (`scrum_sprints`)            | No    | Yes       | Yes       |
 | Filters shared with the space (`shared_filters`)       | No    | Yes       | Yes       |

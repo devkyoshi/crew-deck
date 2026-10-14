@@ -1,52 +1,22 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import postgres from 'postgres';
+import { pathToFileURL } from 'node:url';
+import { createDb } from './client.js';
+import { ensureIndexes } from './indexes.js';
+import { ensurePlans } from './reference.js';
 
-const dir = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
-
-/** Versioned, reversible SQL migrations: NNNN_name.up.sql / NNNN_name.down.sql. */
-export async function migrate(url: string, direction: 'up' | 'down', steps = 1) {
-  const sql = postgres(url, { max: 1, onnotice: () => {} });
+/** MongoDB has no schema migrations: this creates the collections' indexes (idempotent). */
+export async function migrate(uri: string, dbName: string) {
+  const { db, close } = await createDb(uri, dbName);
   try {
-    await sql`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
-    const applied = new Set(
-      (await sql`SELECT name FROM schema_migrations`).map((r) => r.name as string),
-    );
-    const all = readdirSync(dir)
-      .filter((f) => f.endsWith('.up.sql'))
-      .map((f) => f.replace('.up.sql', ''))
-      .sort();
-
-    if (direction === 'up') {
-      for (const name of all.filter((n) => !applied.has(n))) {
-        await sql.begin(async (tx) => {
-          await tx.unsafe(readFileSync(join(dir, `${name}.up.sql`), 'utf8'));
-          await tx`INSERT INTO schema_migrations (name) VALUES (${name})`;
-        });
-        console.log(`applied ${name}`);
-      }
-    } else {
-      const toRevert = all
-        .filter((n) => applied.has(n))
-        .reverse()
-        .slice(0, steps);
-      for (const name of toRevert) {
-        await sql.begin(async (tx) => {
-          await tx.unsafe(readFileSync(join(dir, `${name}.down.sql`), 'utf8'));
-          await tx`DELETE FROM schema_migrations WHERE name = ${name}`;
-        });
-        console.log(`reverted ${name}`);
-      }
-    }
+    await ensureIndexes(db.handle);
+    await ensurePlans(db);
   } finally {
-    await sql.end();
+    await close();
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const url = process.env.DATABASE_ADMIN_URL;
-  if (!url) throw new Error('DATABASE_ADMIN_URL is required');
-  const direction = process.argv[2] === 'down' ? 'down' : 'up';
-  await migrate(url, direction);
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('MONGODB_URI is required');
+  await migrate(uri, process.env.MONGODB_DB ?? 'crewdeck');
+  console.log('indexes and plans ensured');
 }

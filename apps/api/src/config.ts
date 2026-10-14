@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  DATABASE_URL: z.string().min(1),
+  MONGODB_URI: z.string().min(1),
+  MONGODB_DB: z.string().default('crewdeck'),
   REDIS_URL: z.string().min(1),
   API_PORT: z.coerce.number().default(4000),
   API_HOST: z.string().default('0.0.0.0'),

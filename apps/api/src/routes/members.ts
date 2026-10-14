@@ -1,47 +1,78 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { orgRoleSchema, type OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { groupMembers, groups, memberships, users } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
+import type { MembershipDoc, UserDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
-import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
+import { offsetOf, pageQuery } from '../lib/pagination.js';
 import { can } from '../permissions/can.js';
 
-const effectiveStatus = sql<
-  'active' | 'invited' | 'deactivated'
->`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`;
+type Status = 'active' | 'invited' | 'deactivated';
 
-const columns = {
-  id: users.id,
-  email: users.email,
-  name: users.name,
-  avatarUrl: users.avatarUrl,
-  jobTitle: users.jobTitle,
-  timezone: users.timezone,
-  orgRole: memberships.orgRole,
-  crmRole: memberships.crmRole,
-  status: effectiveStatus,
-  lastLoginAt: users.lastLoginAt,
-  joinedAt: memberships.createdAt,
-  reportsTo: memberships.reportsTo,
-  reportsToName: sql<
-    string | null
-  >`(select coalesce(mu.name, mu.email) from users mu where mu.id = ${memberships.reportsTo})`,
-};
+/** A member as the API shows them: the person plus their role in this workspace. */
+export interface MemberRow {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  timezone: string;
+  orgRole: OrgRole;
+  crmRole: MembershipDoc['crmRole'];
+  status: Status;
+  lastLoginAt: Date | null;
+  joinedAt: Date;
+  reportsTo: string | null;
+  reportsToName: string | null;
+}
+
+/** A deactivated membership wins over the global user status. */
+const effectiveStatus = (m: MembershipDoc, u: UserDoc): Status =>
+  m.status === 'deactivated' ? 'deactivated' : u.status;
+
+function toRow(m: MembershipDoc, u: UserDoc, names: Map<string, UserDoc>): MemberRow {
+  const boss = m.reportsTo ? names.get(m.reportsTo) : undefined;
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    avatarUrl: u.avatarUrl,
+    jobTitle: u.jobTitle,
+    timezone: u.timezone,
+    orgRole: m.orgRole,
+    crmRole: m.crmRole,
+    status: effectiveStatus(m, u),
+    lastLoginAt: u.lastLoginAt,
+    joinedAt: m.createdAt,
+    reportsTo: m.reportsTo,
+    reportsToName: boss ? (boss.name ?? boss.email) : null,
+  };
+}
+
+/** Every member of the workspace joined with their user record. Workspaces are small enough for this. */
+export async function loadMembers(t: TenantDb): Promise<MemberRow[]> {
+  const ms = await t.memberships.find({});
+  const users = await t.users(ms.map((m) => m.userId));
+  const rows: MemberRow[] = [];
+  for (const m of ms) {
+    const u = users.get(m.userId);
+    if (u) rows.push(toRow(m, u, users));
+  }
+  return rows;
+}
 
 const SORTS = {
-  name: sql`lower(coalesce(${users.name}, ${users.email}))`,
-  email: sql`lower(${users.email})`,
-  role: memberships.orgRole,
-  status: effectiveStatus,
-  lastLoginAt: users.lastLoginAt,
-  joinedAt: memberships.createdAt,
+  name: (r: MemberRow) => (r.name ?? r.email).toLowerCase(),
+  email: (r: MemberRow) => r.email.toLowerCase(),
+  role: (r: MemberRow) => r.orgRole,
+  status: (r: MemberRow) => r.status,
+  lastLoginAt: (r: MemberRow) => r.lastLoginAt?.getTime() ?? 0,
+  joinedAt: (r: MemberRow) => r.joinedAt.getTime(),
 } as const;
 
 const listQuery = pageQuery.extend({
@@ -68,29 +99,16 @@ const patchBody = z
   .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
 
 /** Active owners in the tenant, used to protect the last one. */
-async function activeOwnerCount(tx: Tx, orgId: string) {
-  const rows = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(memberships)
-    .where(
-      and(
-        eq(memberships.orgId, orgId),
-        eq(memberships.orgRole, 'owner'),
-        eq(memberships.status, 'active'),
-      ),
-    );
-  return rows[0]?.n ?? 0;
-}
+const activeOwnerCount = (t: TenantDb) =>
+  t.memberships.count({ orgRole: 'owner', status: 'active' });
 
-async function loadTarget(tx: Tx, orgId: string, userId: string) {
-  const rows = await tx
-    .select({ ...columns, membershipId: memberships.id, membershipStatus: memberships.status })
-    .from(memberships)
-    .innerJoin(users, eq(users.id, memberships.userId))
-    .where(and(eq(memberships.orgId, orgId), eq(users.id, userId)));
-  const row = rows[0];
-  if (!row) throw notFound('Member');
-  return row;
+async function loadTarget(t: TenantDb, userId: string) {
+  const m = await t.memberships.findOne({ userId });
+  if (!m) throw notFound('Member');
+  const users = await t.users([userId, ...(m.reportsTo ? [m.reportsTo] : [])]);
+  const u = users.get(userId);
+  if (!u) throw notFound('Member');
+  return { ...toRow(m, u, users), membershipStatus: m.status };
 }
 
 export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
@@ -110,37 +128,29 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const isAdmin = can(actor, 'member.deactivate');
       const q = req.query;
-      const conds: (SQL | undefined)[] = [eq(memberships.orgId, actor.orgId)];
+      let rows = await withTenant(deps.db, actor.orgId, (t) => loadMembers(t));
       if (q.q) {
-        const p = likePattern(q.q);
-        conds.push(or(ilike(users.name, p), ilike(users.email, p), ilike(users.jobTitle, p)));
+        const needle = q.q.toLowerCase();
+        rows = rows.filter((r) =>
+          [r.name, r.email, r.jobTitle].some((v) => v?.toLowerCase().includes(needle)),
+        );
       }
-      if (q.role) conds.push(eq(memberships.orgRole, q.role));
+      if (q.role) rows = rows.filter((r) => r.orgRole === q.role);
       // Non-admins only ever see active people.
       const status = isAdmin ? q.status : 'active';
-      if (status) conds.push(sql`${effectiveStatus} = ${status}`);
-      const where = and(...conds);
-      const order = (q.dir === 'desc' ? desc : asc)(SORTS[q.sort]);
+      if (status) rows = rows.filter((r) => r.status === status);
 
-      const { items, total } = await withTenant(deps.db, actor.orgId, async (tx) => {
-        const items = await tx
-          .select(columns)
-          .from(memberships)
-          .innerJoin(users, eq(users.id, memberships.userId))
-          .where(where)
-          .orderBy(order, asc(users.id))
-          .limit(q.pageSize)
-          .offset(offsetOf(q));
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(memberships)
-          .innerJoin(users, eq(users.id, memberships.userId))
-          .where(where);
-        return { items, total: count?.n ?? 0 };
+      const key = SORTS[q.sort];
+      const dir = q.dir === 'desc' ? -1 : 1;
+      rows.sort((a, b) => {
+        const x = key(a);
+        const y = key(b);
+        return (x < y ? -1 : x > y ? 1 : a.id < b.id ? -1 : 1) * dir;
       });
+      const items = rows.slice(offsetOf(q), offsetOf(q) + q.pageSize);
       return {
         items: items.map((i) => present(isAdmin, i)),
-        total,
+        total: rows.length,
         page: q.page,
         pageSize: q.pageSize,
       };
@@ -150,18 +160,17 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
   r.get('/members/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     const isAdmin = can(actor, 'member.deactivate');
-    const { row, memberGroups } = await withTenant(deps.db, actor.orgId, async (tx) => {
-      const row = await loadTarget(tx, actor.orgId, req.params.id);
-      const memberGroups = await tx
-        .select({ id: groups.id, name: groups.name })
-        .from(groupMembers)
-        .innerJoin(groups, eq(groups.id, groupMembers.groupId))
-        .where(and(eq(groupMembers.orgId, actor.orgId), eq(groupMembers.userId, row.id)))
-        .orderBy(asc(sql`lower(${groups.name})`));
+    const { row, memberGroups } = await withTenant(deps.db, actor.orgId, async (t) => {
+      const row = await loadTarget(t, req.params.id);
+      const links = await t.groupMembers.find({ userId: row.id });
+      const gs = links.length ? await t.groups.find({ id: { $in: links.map((l) => l.groupId) } }) : [];
+      const memberGroups = gs
+        .map((g) => ({ id: g.id, name: g.name }))
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       return { row, memberGroups };
     });
     if (!isAdmin && row.status !== 'active') throw notFound('Member');
-    const { membershipId: _m, membershipStatus: _s, ...member } = row;
+    const { membershipStatus: _s, ...member } = row;
     return { ...present(isAdmin, member), groups: memberGroups };
   });
 
@@ -173,23 +182,18 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
       const { orgRole, reportsTo, crmRole, ...profile } = req.body;
       const isSelf = req.params.id === actor.userId;
 
-      return withTenant(deps.db, actor.orgId, async (tx) => {
-        const target = await loadTarget(tx, actor.orgId, req.params.id);
+      return withTenantTx(deps.db, actor.orgId, async (t) => {
+        const target = await loadTarget(t, req.params.id);
 
         if (orgRole !== undefined && orgRole !== target.orgRole) {
           if (!can(actor, 'member.changeRole', { targetOrgRole: target.orgRole }))
             throw forbidden();
           if (orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
-          if (target.orgRole === 'owner' && (await activeOwnerCount(tx, actor.orgId)) <= 1) {
+          if (target.orgRole === 'owner' && (await activeOwnerCount(t)) <= 1) {
             throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
           }
-          await tx
-            .update(memberships)
-            .set({ orgRole: orgRole as OrgRole })
-            .where(
-              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
-            );
-          await writeAudit(tx, {
+          await t.memberships.updateOne({ userId: target.id }, { orgRole: orgRole as OrgRole });
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'member.role_changed',
@@ -203,13 +207,8 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (crmRole !== undefined && crmRole !== target.crmRole) {
           // CRM access is granted by admins; owners and admins always have full CRM access regardless.
           if (!can(actor, 'member.editProfile')) throw forbidden();
-          await tx
-            .update(memberships)
-            .set({ crmRole })
-            .where(
-              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
-            );
-          await writeAudit(tx, {
+          await t.memberships.updateOne({ userId: target.id }, { crmRole });
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'member.crm_role_changed',
@@ -229,10 +228,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
                 reportsTo: 'Choose someone else',
               });
             }
-            const [boss] = await tx
-              .select({ id: memberships.userId, status: memberships.status })
-              .from(memberships)
-              .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, reportsTo)));
+            const boss = await t.memberships.findOne({ userId: reportsTo });
             if (!boss || boss.status !== 'active') {
               throw new AppError(400, 'validation_error', 'That person is not an active member', {
                 reportsTo: 'Choose an active member',
@@ -246,20 +242,12 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
                   reportsTo: 'This person already reports to them',
                 });
               }
-              const [up] = await tx
-                .select({ next: memberships.reportsTo })
-                .from(memberships)
-                .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, cursor)));
-              cursor = up?.next ?? null;
+              const up: MembershipDoc | null = await t.memberships.findOne({ userId: cursor });
+              cursor = up?.reportsTo ?? null;
             }
           }
-          await tx
-            .update(memberships)
-            .set({ reportsTo })
-            .where(
-              and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)),
-            );
-          await writeAudit(tx, {
+          await t.memberships.updateOne({ userId: target.id }, { reportsTo });
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'member.manager_changed',
@@ -276,8 +264,8 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
             (can(actor, 'member.editProfile') &&
               (target.orgRole !== 'owner' || actor.orgRole === 'owner'));
           if (!allowed) throw forbidden();
-          await tx.update(users).set(profile).where(eq(users.id, target.id));
-          await writeAudit(tx, {
+          await t.updateUser(target.id, profile);
+          await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
             action: 'member.profile_updated',
@@ -290,11 +278,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
           });
         }
 
-        const {
-          membershipId: _m,
-          membershipStatus: _s,
-          ...member
-        } = await loadTarget(tx, actor.orgId, target.id);
+        const { membershipStatus: _s, ...member } = await loadTarget(t, target.id);
         return member;
       });
     },
@@ -310,26 +294,22 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
     if (deactivate && userId === actor.userId) {
       throw new AppError(400, 'cannot_deactivate_self', 'You cannot deactivate yourself');
     }
-    return withTenant(deps.db, actor.orgId, async (tx) => {
-      const target = await loadTarget(tx, actor.orgId, userId);
+    return withTenantTx(deps.db, actor.orgId, async (t) => {
+      const target = await loadTarget(t, userId);
       if (target.orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
       const already = (target.membershipStatus === 'deactivated') === deactivate;
       if (!already) {
-        if (
-          deactivate &&
-          target.orgRole === 'owner' &&
-          (await activeOwnerCount(tx, actor.orgId)) <= 1
-        ) {
+        if (deactivate && target.orgRole === 'owner' && (await activeOwnerCount(t)) <= 1) {
           throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
         }
-        await tx
-          .update(memberships)
-          .set({
+        await t.memberships.updateOne(
+          { userId },
+          {
             status: deactivate ? 'deactivated' : 'active',
             deactivatedAt: deactivate ? new Date() : null,
-          })
-          .where(and(eq(memberships.id, target.membershipId), eq(memberships.orgId, actor.orgId)));
-        await writeAudit(tx, {
+          },
+        );
+        await writeAudit(t, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: deactivate ? 'member.deactivated' : 'member.reactivated',
@@ -339,11 +319,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
           after: { status: deactivate ? 'deactivated' : 'active' },
         });
       }
-      const {
-        membershipId: _m,
-        membershipStatus: _s,
-        ...member
-      } = await loadTarget(tx, actor.orgId, userId);
+      const { membershipStatus: _s, ...member } = await loadTarget(t, userId);
       return member;
     });
   }

@@ -66,8 +66,9 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 
 | Feature                                                              | Status  | Gate               |
 | -------------------------------------------------------------------- | ------- | ------------------ |
-| Work items, hierarchy, statuses and Kanban board (W1, W2)            | Planned | `work_items`       |
-| Drag and drop, filters, swimlanes, labels, bulk actions (W2)         | Planned |                    |
+| Work items, hierarchy, statuses, Kanban board with inline create, side panel, board settings (W1) | Built | `work_items` |
+| Drag and drop between columns, keyboard and touch (W2)               | Built   |                    |
+| Filters in the URL, swimlanes, labels, bulk actions, shortcuts (W2)  | Built   |                    |
 | Rich text, comments, mentions, attachments, links, activity (W3)     | Planned | `max_attachment_mb`, `storage_mb` |
 | List view, epics, search, My work, saved filters (W4)                | Planned | `shared_filters`   |
 | Notifications: in-app, email, preferences (W5)                       | Planned |                    |
@@ -75,6 +76,18 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Burndown and sprint report (W6)                                      | Planned | `burndown_reports` |
 | Live updates (W7)                                                    | Planned |                    |
 
+## Workspaces and templates
+
+| Feature                                                                 | Status  | Gate |
+| ----------------------------------------------------------------------- | ------- | ---- |
+| One account in several workspaces, switcher, "Your workspaces" page      | Built   |      |
+| Create another workspace while signed in                                 | Built   |      |
+| "What kind of work do you do?" and "How will you use it?" at sign-up     | Built   |      |
+| Templates: modules and starting columns per kind of work                 | Built   |      |
+| Change the kind of work later (Settings, Kind of work)                   | Built   |      |
+| Type-specific modules (ticket queues, punch lists, approvals, calendar)  | Planned |      |
+
 ## Not built yet
 
-Chat, payments, custom domains, per-tenant SSO, and the work management module above.
+Chat, payments, custom domains, per-tenant SSO, the planned work management phases above, and the
+type-specific modules. The full list is in [MISSING-FEATURES.md](MISSING-FEATURES.md).

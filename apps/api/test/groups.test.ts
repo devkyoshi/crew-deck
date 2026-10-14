@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -9,7 +8,6 @@ import {
   tenantIds,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, groupMembers, groups } from '../src/db/schema.js';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -29,10 +27,7 @@ async function makeGroup(cookie = adminC, slug = 'acme', n = name('Team')) {
 async function auditFor(action: string, targetId: string) {
   const a = adminDb();
   try {
-    return await a.db
-      .select()
-      .from(auditLogs)
-      .where(and(eq(auditLogs.action, action), eq(auditLogs.targetId, targetId)));
+    return await a.db.global.all.auditLogs.find({ action, targetId });
   } finally {
     await a.close();
   }
@@ -473,9 +468,7 @@ describe('DELETE /groups/:id', () => {
     ).toBe(404);
     const a = adminDb();
     try {
-      expect(
-        await a.db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id)),
-      ).toHaveLength(0);
+      expect(await a.db.global.all.groupMembers.find({ groupId: g.id })).toHaveLength(0);
     } finally {
       await a.close();
     }
@@ -575,24 +568,23 @@ describe('inviting into groups', () => {
   });
 });
 
-describe('database guarantees', () => {
+describe('integrity (application-enforced; MongoDB has no foreign keys)', () => {
   it('refuses a group membership that crosses tenants', async () => {
     const g = await makeGroup();
+    // A user who only belongs to the other workspace cannot be added to an acme group.
+    const res = await call({
+      method: 'PUT',
+      url: `/groups/${g.id}/members`,
+      slug: 'acme',
+      cookie: adminC,
+      payload: { userIds: [globexUser.id] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('invalid_members');
     const a = adminDb();
     try {
-      // Right group, but a user who only belongs to the other workspace.
-      await expect(
-        a.db.insert(groupMembers).values({ groupId: g.id, orgId: ids.acme, userId: globexUser.id }),
-      ).rejects.toThrow();
-      // Right user, wrong org for the group.
-      await expect(
-        a.db
-          .insert(groupMembers)
-          .values({ groupId: g.id, orgId: ids.globex, userId: globexUser.id }),
-      ).rejects.toThrow();
-      expect((await a.db.select().from(groups).where(eq(groups.id, g.id)))[0]!.orgId).toBe(
-        ids.acme,
-      );
+      expect(await a.db.global.all.groupMembers.find({ groupId: g.id })).toHaveLength(0);
+      expect((await a.db.global.all.groups.get(g.id))!.orgId).toBe(ids.acme);
     } finally {
       await a.close();
     }

@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-14 - MongoDB, workspaces of every kind, dev logins per role
+
+- Data store moved from Postgres to MongoDB (ADR-051). Docker compose runs `mongo:7` as a single-node
+  replica set on port 27018; env vars `MONGODB_URI` and `MONGODB_DB` replace `DATABASE_URL` and
+  `DATABASE_ADMIN_URL`. SQL migrations, Drizzle and the Postgres role setup were removed; `pnpm db:migrate`
+  now creates indexes and the plan catalogue.
+- Tenant isolation moved from row-level security to the repository layer (ADR-052), with a new isolation
+  test over every tenant collection.
+- Sign-up asks what kind of work the team does and how it will use the product; templates set modules
+  and the starting columns of new spaces (ADR-054). Signed-in people can create more workspaces and see
+  them all at `/my-workspaces` and in the switcher (ADR-053). New settings page: Settings, Kind of work.
+- Dev seed: five workspaces of different kinds (software, sales, construction, marketing, suspended), one
+  login per role, a person in four workspaces, all with password `dev@1234`; demo content for each.
+- Docs: MISSING-FEATURES.md (what each kind of work needs that is not built yet).
+- Tests: all 415 API tests ported to MongoDB, plus 11 for workspaces and templates (426 in total). Browser
+  suite (77) updated for the two new sign-up steps, with new tests for workspace types, the switcher,
+  creating a workspace and the Kind of work settings; all green on a fresh database.
+- Fixes found by the browser suite: CRM pages could mismatch on hydration when the sidebar's CRM access
+  request answered first (now render the server's skeleton until hydrated); the dev seed resets the
+  platform settings so a reseed undoes console changes.
+- Verified the containerised stack (`--profile full`) with MongoDB from empty volumes: migrate, API health,
+  seed, sign-in. The old Postgres container and volume were removed from the dev machine.
+
+## 2026-10-14 - Phase W2: Drag and drop and board power features
+
+- API: move endpoint (`POST /items/:id/move`) with fractional string ranks, `If-Match` and a per-space lock; bulk endpoint (move, assign, label, delete, up to 100); labels (list, create, rename, recolour, delete) and `labelIds` on items; board and column filters (`assignee`, `type`, `priority`, `label`, `epic`, `due`, `q`, `mine`, `recent`) with a filtered count and an unfiltered WIP count; rank rebalance job. New `can()` actions `label.create` and `label.manage`. Dependency: `fractional-indexing`.
+- Web: drag and drop with dnd-kit (mouse, touch and keyboard, screen-reader announcements, optimistic move that snaps back with a message), filter bar with chips and URL state (shareable), swimlanes (assignee, epic, priority) with confirmation when a drop changes the assignee, labels on cards, the item panel and the create dialog, multi-select (Ctrl or Cmd-click, or "Select" in the card menu) with a bulk bar, shortcuts `/` and `?` with a shortcut list, arrow-key navigation between cards, card field and swimlane settings, "Show more" per column.
+- Fixes found while testing: the drag overlay is portalled to the page body; the WIP count ignores filters.
+- Tests: 23 new API tests (move ordering, concurrency, rebalancing, bulk permissions, labels, filters, a 500-item board), permission-matrix rows, and browser tests of keyboard and mouse drags, filters in the URL, bulk changes, labels, swimlanes, a 500-item board and an accessibility scan in both themes.
+
+## 2026-10-14 - Phase W1: Work items and a Kanban board
+
+- Docs: docs/work-items (phases W1 to W7, progress, checklist, pricing gates, UI spec); ADR-041 to ADR-049.
+- Migrations 0011 (plan limits and gates in the seeded plans) and 0012 (boards, space counters, statuses, work items, labels, with row-level security; a trigger gives every new space a board and the four default statuses; existing spaces backfilled).
+- API: statuses (add, rename, recolour, WIP limit, reorder, delete with a replacement, at most 12, one per category at least), board with per-column paging and Done retention, work items (create, read by id or key, edit with `If-Match` and 412, soft delete, subtasks), assignee search. New `can()` actions `item.view/create/edit/delete`, `status.manage`, `board.manage`; members delete only items they reported. Free plan holds 250 work items (402 `plan_limit`); `boardType` on space creation (Scrum answers 402 on Free, otherwise "not available yet").
+- Web: Board tab on every space (columns, cards, density toggle, inline create, `C` to create, load more, collapsible columns, snap-scroll on phones), item side panel and full page at /spaces/ENG/items/ENG-1 with inline editing and saved state, board settings (status editor with drag reorder, card fields, Done retention), board type step in the create-space wizard, work items usage on the billing page, `/design` section "Work management".
+- Demo: ENG and OPS boards are filled by `make demo`.
+- Tests: 49 new API tests (keys under concurrency, hierarchy, 412, permissions, plan limit, tenant isolation), matrix rows, RLS rows, a browser test of the whole flow and an accessibility scan of the new screens in both themes.
+
 ## 2026-10-14 - Guided, photo-led signed-out screens
 
 - One shared split layout for every signed-out screen (photo and message beside the task; a short banner on phones): sign-in, find workspace, accept invitation, platform sign-in, sign-up and verify. Six Unsplash photos downloaded into `apps/web/public/auth` with `CREDITS.md`.

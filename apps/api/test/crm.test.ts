@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -9,7 +8,6 @@ import {
   signInAs,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, crmDeals, memberships, tenantSettings } from '../src/db/schema.js';
 import { parseCsv } from '../src/routes/crm-io.js';
 
 const t = makeApp();
@@ -41,10 +39,7 @@ async function crmUser(w: W, crmRole: 'none' | 'viewer' | 'member' | 'admin') {
   });
   const db = adminDb();
   try {
-    await db.db
-      .update(memberships)
-      .set({ crmRole })
-      .where(and(eq(memberships.orgId, w.orgId), eq(memberships.userId, u.id)));
+    await db.db.tenant(w.orgId).memberships.updateOne({ userId: u.id }, { crmRole });
   } finally {
     await db.close();
   }
@@ -154,9 +149,8 @@ describe('access and roles', () => {
     const db = adminDb();
     try {
       const rows = await db.db
-        .select()
-        .from(auditLogs)
-        .where(and(eq(auditLogs.orgId, A.orgId), eq(auditLogs.action, 'member.crm_role_changed')));
+        .tenant(A.orgId)
+        .auditLogs.find({ action: 'member.crm_role_changed' });
       expect(rows.length).toBeGreaterThan(0);
     } finally {
       await db.close();
@@ -189,10 +183,7 @@ describe('access and roles', () => {
     expect((await get('/crm/companies', cookie, c.slug)).statusCode).toBe(200);
     const db = adminDb();
     try {
-      const [row] = await db.db
-        .select()
-        .from(tenantSettings)
-        .where(eq(tenantSettings.orgId, c.org.id));
+      const row = await db.db.tenant(c.org.id).tenantSettings.findOne({});
       expect(row?.enabledModules).toContain('crm');
     } finally {
       await db.close();
@@ -518,10 +509,7 @@ describe('deals, pipelines and the board', () => {
     await del(`/crm/deals/${deal.id}`, adminC);
     const db = adminDb();
     try {
-      const rows = await db.db
-        .select({ action: auditLogs.action })
-        .from(auditLogs)
-        .where(and(eq(auditLogs.orgId, A.orgId), eq(auditLogs.targetId, deal.id)));
+      const rows = await db.db.tenant(A.orgId).auditLogs.find({ targetId: deal.id });
       expect(rows.map((r) => r.action).sort()).toEqual([
         'crm.deal_created',
         'crm.deal_deleted',
@@ -834,22 +822,21 @@ describe('tenant isolation', () => {
     expect(exp.body).not.toContain('Secret Co Isolation');
   });
 
-  it('the database itself refuses a deal that points at another workspace’s company', async () => {
+  it('refuses a deal that points at another workspace’s company', async () => {
     const co = await company('FK Guard Co');
-    const db = adminDb();
-    try {
-      const pipelines = j(await get('/crm/pipelines', bOwner, B.slug)).items[0];
-      await expect(
-        db.db.insert(crmDeals).values({
-          orgId: B.orgId,
-          pipelineId: pipelines.id,
-          stageId: pipelines.stages[0].id,
-          companyId: co.id,
-          title: 'FK cross',
-        }),
-      ).rejects.toThrow();
-    } finally {
-      await db.close();
-    }
+    const pipelines = j(await get('/crm/pipelines', bOwner, B.slug)).items[0];
+    const res = await post(
+      '/crm/deals',
+      bOwner,
+      {
+        pipelineId: pipelines.id,
+        stageId: pipelines.stages[0].id,
+        companyId: co.id,
+        title: 'FK cross',
+      },
+      B.slug,
+    );
+    expect(res.statusCode).toBe(400);
+    expect(j(res).fields.companyId).toBeTruthy();
   });
 });

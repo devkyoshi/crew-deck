@@ -7,5 +7,8 @@ export const pageQuery = z.object({
 
 export const offsetOf = (q: { page: number; pageSize: number }) => (q.page - 1) * q.pageSize;
 
-/** Escapes LIKE wildcards so user input is matched literally. */
-export const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+/** Escapes regex metacharacters so user input is matched literally. */
+export const escapeRegex = (q: string) => q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A case-insensitive "contains" match, for use as a Mongo filter value: `{ name: containsRegex(q) }`. */
+export const containsRegex = (q: string) => ({ $regex: escapeRegex(q), $options: 'i' });

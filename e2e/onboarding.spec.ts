@@ -11,6 +11,15 @@ async function signInToPlatform(page: Page) {
   await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
 }
 
+/** The "What kind of work" and "How will you use it" steps: pick a type, keep the suggested usage. */
+async function passWorkSteps(page: Page, type = 'software') {
+  await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeVisible();
+  await page.getByTestId(`work-type-${type}`).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { name: 'How does your team plan to use it?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+}
+
 /** Walks the sign-up steps up to and including "Email me the link". */
 async function walkSignUp(
   page: Page,
@@ -24,6 +33,7 @@ async function walkSignUp(
   if (a.slug) await page.getByLabel('Workspace address').fill(a.slug);
   await expect(page.getByText(/is available/)).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
+  await passWorkSteps(page);
   await page.getByRole('button', { name: 'Email me the link' }).click();
 }
 
@@ -67,8 +77,17 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   await page.getByLabel('Workspace address').fill(slug);
   await expect(page.getByText(`${slug}.localhost is available`)).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
+  // Choosing a kind of work pre-ticks what teams like this usually need.
+  await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('Choose the kind of work your team does')).toBeVisible();
+  await page.getByTestId('work-type-sales').click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByTestId('usage-track_leads').getByRole('checkbox')).toBeChecked();
+  await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByText('Sales', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Email me the link' }).click();
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   await page.getByTestId('dev-link').click();
@@ -218,8 +237,13 @@ test('platform settings can block free email providers at sign-up', async ({ pag
       .toBe(false);
     // Our earlier answers were kept: carry on from the first step with the email fixed.
     await page.getByLabel('Your work email').fill(`someone2-${tag}@gmail.com`);
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'Continue' }).click();
+    // Wait for each step before the next click: a click during a step change can be lost.
+    for (const next of ['company', 'work', 'usage', 'review']) {
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expect(page).toHaveURL(new RegExp(`step=${next}`));
+    }
+    // The kind of work and usage answers were kept too.
+    await expect(page.getByText('Software development', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Email me the link' }).click();
     await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   } finally {
@@ -244,7 +268,7 @@ test.describe('guided sign-up navigation', () => {
   }) => {
     const tag = rand(3);
     await page.goto(`${APEX}/signup`);
-    await expect(page.getByText('Step 1 of 4: You')).toBeVisible();
+    await expect(page.getByText('Step 1 of 6: You')).toBeVisible();
 
     // Step 1 will not continue without answers, and says what is missing.
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -256,7 +280,7 @@ test.describe('guided sign-up navigation', () => {
 
     // Step 2: a bad or reserved address is refused before moving on.
     await expect(page).toHaveURL(/step=company/);
-    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await expect(page.getByText('Step 2 of 6: Company')).toBeVisible();
     await page.getByLabel('Company name').fill(`Guided ${tag}`);
     await page.getByLabel('Workspace address').fill('Bad Address!');
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -275,17 +299,20 @@ test.describe('guided sign-up navigation', () => {
 
     // A refresh keeps the step and the answers.
     await page.reload();
-    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await expect(page.getByText('Step 2 of 6: Company')).toBeVisible();
     await expect(page.getByLabel('Workspace address')).toHaveValue(`guided-${tag}`);
 
     // Typing a later step into the address bar cannot skip the questions.
     await page.goto(`${APEX}/signup?step=sent`);
-    await expect(page.getByText('Step 2 of 4: Company')).toBeVisible();
+    await expect(page.getByText('Step 2 of 6: Company')).toBeVisible();
     await expect(page).toHaveURL(/step=company/);
 
     // Review shows the answers, with a way back to change each one.
     await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByText('Step 3 of 6: Work')).toBeVisible();
+    await passWorkSteps(page, 'construction');
     await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
+    await expect(page.getByText('Construction', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Change work email' }).click();
     await expect(page.getByLabel('Your work email')).toHaveValue(`sam-${tag}@guided.test`);
     // Completed steps in the progress bar are buttons back to them.
@@ -328,6 +355,20 @@ test.describe('guided sign-up navigation', () => {
     await page.keyboard.press('Tab');
     await page.keyboard.type(`Keys ${tag}`);
     await expect(page.getByText(/is available/)).toBeVisible();
+    await page.keyboard.press('Enter');
+    // Kind of work: the cards are buttons, so Tab reaches them and Space picks one.
+    await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('work-type-software')).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('work-type-software')).toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('button', { name: 'Continue' }).focus();
+    await page.keyboard.press('Enter');
+    // Usage: checkboxes, already ticked from the kind of work.
+    await expect(page.getByRole('heading', { name: 'How does your team plan to use it?' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('usage-run_sprints').getByRole('checkbox')).toBeFocused();
+    await page.getByRole('button', { name: 'Continue' }).focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeFocused();
     await page.getByRole('button', { name: 'Email me the link' }).focus();

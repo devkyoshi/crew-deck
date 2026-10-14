@@ -1,25 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, desc, eq, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { assertActiveMember, crmGuard, idParam, uuid } from '../crm/helpers.js';
-import { withTenant, type Tx } from '../db/client.js';
-import {
-  crmActivities,
-  crmCompanies,
-  crmContacts,
-  crmDeals,
-  crmLeads,
-  crmNotes,
-  crmPipelines,
-  crmStages,
-  memberships,
-  users,
-  type CrmRecordType,
-} from '../db/schema.js';
+import { assertActiveMember, crmGuard, idParam, ownerNames, uuid } from '../crm/helpers.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
+import type { CrmActivityDoc, CrmNoteDoc, CrmRecordType } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { offsetOf, pageQuery } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
@@ -27,21 +14,15 @@ import { can, type Actor } from '../permissions/can.js';
 const linkedType = z.enum(['company', 'contact', 'lead', 'deal']);
 const ACTIVITY_TYPES = ['call', 'meeting', 'email', 'task'] as const;
 
-const TABLES = {
-  company: crmCompanies,
-  contact: crmContacts,
-  lead: crmLeads,
-  deal: crmDeals,
-} as const;
-
 /** The record an activity or note is attached to must exist in this workspace and not be deleted. */
-async function assertLinked(tx: Tx, orgId: string, type: CrmRecordType, id: string) {
-  const t = TABLES[type];
-  const [row] = await tx
-    .select({ id: t.id })
-    .from(t)
-    .where(and(eq(t.id, id), eq(t.orgId, orgId), isNull(t.deletedAt)));
-  if (!row) {
+async function assertLinked(tx: TenantDb, _orgId: string, type: CrmRecordType, id: string) {
+  const repo = {
+    company: tx.crmCompanies,
+    contact: tx.crmContacts,
+    lead: tx.crmLeads,
+    deal: tx.crmDeals,
+  }[type] as typeof tx.crmCompanies;
+  if (!(await repo.exists({ id, deletedAt: null }))) {
     throw new AppError(400, 'validation_error', 'That record does not exist', {
       linkedId: 'Choose an existing record',
     });
@@ -53,26 +34,25 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   // ---- Activities -----------------------------------------------------------------------------
-  const activitySelect = {
-    id: crmActivities.id,
-    type: crmActivities.type,
-    subject: crmActivities.subject,
-    dueAt: crmActivities.dueAt,
-    completedAt: crmActivities.completedAt,
-    assigneeId: crmActivities.assigneeId,
-    assigneeName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
-    linkedType: crmActivities.linkedType,
-    linkedId: crmActivities.linkedId,
-    createdAt: crmActivities.createdAt,
-  };
+  async function presentActivities(tx: TenantDb, rows: CrmActivityDoc[]) {
+    const names = await ownerNames(tx, rows.map((a) => a.assigneeId));
+    return rows.map((a) => ({
+      id: a.id,
+      type: a.type,
+      subject: a.subject,
+      dueAt: a.dueAt,
+      completedAt: a.completedAt,
+      assigneeId: a.assigneeId,
+      assigneeName: a.assigneeId ? (names.get(a.assigneeId) ?? null) : null,
+      linkedType: a.linkedType,
+      linkedId: a.linkedId,
+      createdAt: a.createdAt,
+    }));
+  }
 
-  async function activityById(tx: Tx, orgId: string, id: string) {
-    const [row] = await tx
-      .select(activitySelect)
-      .from(crmActivities)
-      .leftJoin(users, eq(users.id, crmActivities.assigneeId))
-      .where(and(eq(crmActivities.id, id), eq(crmActivities.orgId, orgId)));
-    return row;
+  async function activityById(tx: TenantDb, id: string) {
+    const row = await tx.crmActivities.get(id);
+    return row ? (await presentActivities(tx, [row]))[0] : undefined;
   }
 
   r.get(
@@ -95,37 +75,33 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
       const q = req.query;
       return withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'view');
-        const filters: (SQL | undefined)[] = [
-          q.linkedType ? eq(crmActivities.linkedType, q.linkedType) : undefined,
-          q.linkedId ? eq(crmActivities.linkedId, q.linkedId) : undefined,
-          q.assigneeId ? eq(crmActivities.assigneeId, q.assigneeId) : undefined,
-          q.type ? eq(crmActivities.type, q.type) : undefined,
-          q.status === 'done' ? sql`${crmActivities.completedAt} is not null` : undefined,
-          q.status === 'open' ? isNull(crmActivities.completedAt) : undefined,
-          q.status === 'overdue'
-            ? and(isNull(crmActivities.completedAt), lt(crmActivities.dueAt, new Date()))
-            : undefined,
-        ];
-        const where = and(eq(crmActivities.orgId, actor.orgId), ...filters);
-        const items = await tx
-          .select(activitySelect)
-          .from(crmActivities)
-          .leftJoin(users, eq(users.id, crmActivities.assigneeId))
-          .where(where)
-          .orderBy(
+        const filter: Record<string, unknown> = {};
+        if (q.linkedType) filter.linkedType = q.linkedType;
+        if (q.linkedId) filter.linkedId = q.linkedId;
+        if (q.assigneeId) filter.assigneeId = q.assigneeId;
+        if (q.type) filter.type = q.type;
+        if (q.status === 'done') filter.completedAt = { $ne: null };
+        if (q.status === 'open') filter.completedAt = null;
+        if (q.status === 'overdue') {
+          filter.completedAt = null;
+          filter.dueAt = { $lt: new Date() };
+        }
+        const rows = await tx.crmActivities.aggregate<CrmActivityDoc>([
+          { $match: filter },
+          {
             // Open items first, soonest due first; finished items after, newest first.
-            sql`(${crmActivities.completedAt} is not null)`,
-            sql`${crmActivities.dueAt} asc nulls last`,
-            desc(crmActivities.createdAt),
-            asc(crmActivities.id),
-          )
-          .limit(q.pageSize)
-          .offset(offsetOf(q));
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(crmActivities)
-          .where(where);
-        return { items, total: count?.n ?? 0, page: q.page, pageSize: q.pageSize };
+            $addFields: {
+              _done: { $cond: [{ $ne: [{ $ifNull: ['$completedAt', null] }, null] }, 1, 0] },
+              _noDue: { $cond: [{ $eq: [{ $ifNull: ['$dueAt', null] }, null] }, 1, 0] },
+            },
+          },
+          { $sort: { _done: 1, _noDue: 1, dueAt: 1, createdAt: -1, id: 1 } },
+          { $skip: offsetOf(q) },
+          { $limit: q.pageSize },
+          { $project: { _id: 0, _done: 0, _noDue: 0 } },
+        ]);
+        const total = await tx.crmActivities.count(filter);
+        return { items: await presentActivities(tx, rows), total, page: q.page, pageSize: q.pageSize };
       });
     },
   );
@@ -154,34 +130,30 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const b = req.body;
         await assertActiveMember(tx, actor.orgId, b.assigneeId, 'assigneeId');
         if (b.linkedType && b.linkedId)
           await assertLinked(tx, actor.orgId, b.linkedType, b.linkedId);
-        const [row] = await tx
-          .insert(crmActivities)
-          .values({
-            orgId: actor.orgId,
-            type: b.type,
-            subject: b.subject,
-            dueAt: b.dueAt ? new Date(b.dueAt) : null,
-            assigneeId: b.assigneeId ?? actor.userId,
-            linkedType: b.linkedType ?? null,
-            linkedId: b.linkedId ?? null,
-            createdBy: actor.userId,
-          })
-          .returning({ id: crmActivities.id });
+        const row = await tx.crmActivities.insert({
+          type: b.type,
+          subject: b.subject,
+          dueAt: b.dueAt ? new Date(b.dueAt) : null,
+          assigneeId: b.assigneeId ?? actor.userId,
+          linkedType: b.linkedType ?? null,
+          linkedId: b.linkedId ?? null,
+          createdBy: actor.userId,
+        });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'crm.activity_created',
           targetType: b.linkedType ? (`crm_${b.linkedType}` as 'crm_deal') : 'crm_lead',
-          targetId: b.linkedId ?? row!.id,
+          targetId: b.linkedId ?? row.id,
           after: { type: b.type, subject: b.subject },
         });
-        return (await activityById(tx, actor.orgId, row!.id))!;
+        return (await activityById(tx, row.id))!;
       });
     },
   );
@@ -201,21 +173,20 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const b = req.body;
         await assertActiveMember(tx, actor.orgId, b.assigneeId, 'assigneeId');
         const { dueAt, ...rest } = b;
-        const done = await tx
-          .update(crmActivities)
-          .set({
+        const done = await tx.crmActivities.updateOne(
+          { id: req.params.id },
+          {
             ...rest,
             ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
-          })
-          .where(and(eq(crmActivities.id, req.params.id), eq(crmActivities.orgId, actor.orgId)))
-          .returning({ id: crmActivities.id });
-        if (!done.length) throw notFound('Activity');
-        return (await activityById(tx, actor.orgId, req.params.id))!;
+          },
+        );
+        if (!done) throw notFound('Activity');
+        return (await activityById(tx, req.params.id))!;
       });
     },
   );
@@ -225,15 +196,14 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam, body: z.object({ done: z.boolean() }) } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
-        const done = await tx
-          .update(crmActivities)
-          .set({ completedAt: req.body.done ? new Date() : null })
-          .where(and(eq(crmActivities.id, req.params.id), eq(crmActivities.orgId, actor.orgId)))
-          .returning({ id: crmActivities.id });
-        if (!done.length) throw notFound('Activity');
-        return (await activityById(tx, actor.orgId, req.params.id))!;
+        const done = await tx.crmActivities.updateOne(
+          { id: req.params.id },
+          { completedAt: req.body.done ? new Date() : null },
+        );
+        if (!done) throw notFound('Activity');
+        return (await activityById(tx, req.params.id))!;
       });
     },
   );
@@ -243,12 +213,9 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
-        const [a] = await tx
-          .select()
-          .from(crmActivities)
-          .where(and(eq(crmActivities.id, req.params.id), eq(crmActivities.orgId, actor.orgId)));
+        const a = await tx.crmActivities.get(req.params.id);
         if (!a) throw notFound('Activity');
         // Members remove their own entries; CRM admins remove anyone's.
         if (
@@ -258,41 +225,33 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
         ) {
           throw forbidden();
         }
-        await tx
-          .delete(crmActivities)
-          .where(and(eq(crmActivities.id, a.id), eq(crmActivities.orgId, actor.orgId)));
+        await tx.crmActivities.deleteOne({ id: a.id });
       });
       return { ok: true };
     },
   );
 
   // ---- Notes ----------------------------------------------------------------------------------
-  const noteSelect = {
-    id: crmNotes.id,
-    body: crmNotes.body,
-    authorId: crmNotes.authorId,
-    authorName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
-    mentions: crmNotes.mentions,
-    linkedType: crmNotes.linkedType,
-    linkedId: crmNotes.linkedId,
-    createdAt: crmNotes.createdAt,
-    updatedAt: crmNotes.updatedAt,
-  };
+  async function presentNotes(tx: TenantDb, rows: CrmNoteDoc[]) {
+    const names = await ownerNames(tx, rows.map((n) => n.authorId));
+    return rows.map((n) => ({
+      id: n.id,
+      body: n.body,
+      authorId: n.authorId,
+      authorName: names.get(n.authorId) ?? null,
+      mentions: n.mentions,
+      linkedType: n.linkedType,
+      linkedId: n.linkedId,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+    }));
+  }
 
-  async function activeMemberIds(tx: Tx, orgId: string, ids: string[]) {
+  async function activeMemberIds(tx: TenantDb, _orgId: string, ids: string[]) {
     const wanted = [...new Set(ids)];
     if (!wanted.length) return [];
-    const found = await tx
-      .select({ id: memberships.userId })
-      .from(memberships)
-      .where(
-        and(
-          eq(memberships.orgId, orgId),
-          eq(memberships.status, 'active'),
-          inArray(memberships.userId, wanted),
-        ),
-      );
-    if (found.length !== wanted.length) {
+    const found = await tx.memberships.count({ status: 'active', userId: { $in: wanted } });
+    if (found !== wanted.length) {
       throw new AppError(400, 'validation_error', 'You can only mention active members', {
         mentions: 'Mention active members only',
       });
@@ -310,20 +269,11 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'view');
-        const items = await tx
-          .select(noteSelect)
-          .from(crmNotes)
-          .leftJoin(users, eq(users.id, crmNotes.authorId))
-          .where(
-            and(
-              eq(crmNotes.orgId, actor.orgId),
-              eq(crmNotes.linkedType, req.query.linkedType),
-              eq(crmNotes.linkedId, req.query.linkedId),
-            ),
-          )
-          .orderBy(desc(crmNotes.createdAt), asc(crmNotes.id))
-          .limit(200);
-        return { items };
+        const rows = await tx.crmNotes.find(
+          { linkedType: req.query.linkedType, linkedId: req.query.linkedId },
+          { sort: { createdAt: -1, id: 1 }, limit: 200 },
+        );
+        return { items: await presentNotes(tx, rows) };
       });
     },
   );
@@ -341,37 +291,25 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const b = req.body;
         await assertLinked(tx, actor.orgId, b.linkedType, b.linkedId);
         const mentions = await activeMemberIds(tx, actor.orgId, b.mentions);
-        const [row] = await tx
-          .insert(crmNotes)
-          .values({
-            orgId: actor.orgId,
-            body: b.body,
-            authorId: actor.userId,
-            linkedType: b.linkedType,
-            linkedId: b.linkedId,
-            mentions,
-          })
-          .returning({ id: crmNotes.id });
-        const [out] = await tx
-          .select(noteSelect)
-          .from(crmNotes)
-          .leftJoin(users, eq(users.id, crmNotes.authorId))
-          .where(and(eq(crmNotes.id, row!.id), eq(crmNotes.orgId, actor.orgId)));
-        return out!;
+        const row = await tx.crmNotes.insert({
+          body: b.body,
+          authorId: actor.userId,
+          linkedType: b.linkedType,
+          linkedId: b.linkedId,
+          mentions,
+        });
+        return (await presentNotes(tx, [row]))[0]!;
       });
     },
   );
 
-  async function ownNote(tx: Tx, actor: Actor, id: string) {
-    const [n] = await tx
-      .select()
-      .from(crmNotes)
-      .where(and(eq(crmNotes.id, id), eq(crmNotes.orgId, actor.orgId)));
+  async function ownNote(tx: TenantDb, actor: Actor, id: string) {
+    const n = await tx.crmNotes.get(id);
     if (!n) throw notFound('Note');
     if (n.authorId !== actor.userId && !can(actor, 'crm.admin')) throw forbidden();
     return n;
@@ -382,20 +320,15 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam, body: noteBody } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const n = await ownNote(tx, actor, req.params.id);
         const mentions = await activeMemberIds(tx, actor.orgId, req.body.mentions);
-        await tx
-          .update(crmNotes)
-          .set({ body: req.body.body, mentions, updatedAt: new Date() })
-          .where(and(eq(crmNotes.id, n.id), eq(crmNotes.orgId, actor.orgId)));
-        const [out] = await tx
-          .select(noteSelect)
-          .from(crmNotes)
-          .leftJoin(users, eq(users.id, crmNotes.authorId))
-          .where(and(eq(crmNotes.id, n.id), eq(crmNotes.orgId, actor.orgId)));
-        return out!;
+        const out = await tx.crmNotes.findOneAndUpdate(
+          { id: n.id },
+          { body: req.body.body, mentions, updatedAt: new Date() },
+        );
+        return (await presentNotes(tx, [out!]))[0]!;
       });
     },
   );
@@ -405,12 +338,10 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const n = await ownNote(tx, actor, req.params.id);
-        await tx
-          .delete(crmNotes)
-          .where(and(eq(crmNotes.id, n.id), eq(crmNotes.orgId, actor.orgId)));
+        await tx.crmNotes.deleteOne({ id: n.id });
       });
       return { ok: true };
     },
@@ -422,98 +353,77 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     return withTenant(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'view');
 
-      const byStage = await tx
-        .select({
-          stageId: crmStages.id,
-          stage: crmStages.name,
-          position: crmStages.position,
-          pipeline: crmPipelines.name,
-          currency: crmDeals.currency,
-          count: sql<number>`count(*)::int`,
-          total: sql<number>`coalesce(sum(${crmDeals.value}), 0)::float8`,
+      const grouped = await tx.crmDeals.aggregate<{
+        _id: { stageId: string; pipelineId: string; currency: string };
+        count: number;
+        total: number;
+      }>([
+        { $match: { status: 'open', deletedAt: null } },
+        {
+          $group: {
+            _id: { stageId: '$stageId', pipelineId: '$pipelineId', currency: '$currency' },
+            count: { $sum: 1 },
+            total: { $sum: '$value' },
+          },
+        },
+      ]);
+      const stages = await tx.crmStages.find({});
+      const pipelines = await tx.crmPipelines.find({});
+      const stageById = new Map(stages.map((s) => [s.id, s]));
+      const pipelineName = new Map(pipelines.map((p) => [p.id, p.name]));
+      const byStage = grouped
+        .flatMap((g) => {
+          const s = stageById.get(g._id.stageId);
+          return s
+            ? [
+                {
+                  stageId: s.id,
+                  stage: s.name,
+                  position: s.position,
+                  pipeline: pipelineName.get(g._id.pipelineId) ?? '',
+                  currency: g._id.currency,
+                  count: g.count,
+                  total: Number(g.total),
+                },
+              ]
+            : [];
         })
-        .from(crmDeals)
-        .innerJoin(
-          crmStages,
-          and(eq(crmStages.id, crmDeals.stageId), eq(crmStages.orgId, crmDeals.orgId)),
-        )
-        .innerJoin(
-          crmPipelines,
-          and(eq(crmPipelines.id, crmDeals.pipelineId), eq(crmPipelines.orgId, crmDeals.orgId)),
-        )
-        .where(
-          and(
-            eq(crmDeals.orgId, actor.orgId),
-            eq(crmDeals.status, 'open'),
-            isNull(crmDeals.deletedAt),
-          ),
-        )
-        .groupBy(
-          crmStages.id,
-          crmStages.name,
-          crmStages.position,
-          crmPipelines.name,
-          crmDeals.currency,
-        )
-        .orderBy(asc(crmPipelines.name), asc(crmStages.position));
+        .sort((a, b) => a.pipeline.localeCompare(b.pipeline) || a.position - b.position);
 
       // "This month" is the calendar month in UTC; the figures are for orientation, not accounting.
-      const won = await tx
-        .select({
-          currency: crmDeals.currency,
-          count: sql<number>`count(*)::int`,
-          total: sql<number>`coalesce(sum(${crmDeals.value}), 0)::float8`,
-        })
-        .from(crmDeals)
-        .where(
-          and(
-            eq(crmDeals.orgId, actor.orgId),
-            eq(crmDeals.status, 'won'),
-            isNull(crmDeals.deletedAt),
-            sql`${crmDeals.closedAt} >= date_trunc('month', now())`,
-          ),
-        )
-        .groupBy(crmDeals.currency);
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+      const wonRows = await tx.crmDeals.aggregate<{ _id: string; count: number; total: number }>([
+        { $match: { status: 'won', deletedAt: null, closedAt: { $gte: monthStart } } },
+        { $group: { _id: '$currency', count: { $sum: 1 }, total: { $sum: '$value' } } },
+      ]);
+      const won = wonRows.map((w) => ({ currency: w._id, count: w.count, total: Number(w.total) }));
 
-      const leadsBySource = await tx
-        .select({
-          source: sql<string>`coalesce(${crmLeads.source}, 'Unknown')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(crmLeads)
-        .where(and(eq(crmLeads.orgId, actor.orgId), isNull(crmLeads.deletedAt)))
-        .groupBy(sql`coalesce(${crmLeads.source}, 'Unknown')`)
-        .orderBy(desc(sql`count(*)`), asc(sql`coalesce(${crmLeads.source}, 'Unknown')`))
-        .limit(10);
+      const sources = await tx.crmLeads.aggregate<{ _id: string; count: number }>([
+        { $match: { deletedAt: null } },
+        { $group: { _id: { $ifNull: ['$source', 'Unknown'] }, count: { $sum: 1 } } },
+        { $sort: { count: -1, _id: 1 } },
+        { $limit: 10 },
+      ]);
+      const leadsBySource = sources.map((s) => ({ source: s._id, count: s.count }));
 
-      const myOverdue = await tx
-        .select(activitySelect)
-        .from(crmActivities)
-        .leftJoin(users, eq(users.id, crmActivities.assigneeId))
-        .where(
-          and(
-            eq(crmActivities.orgId, actor.orgId),
-            eq(crmActivities.assigneeId, actor.userId),
-            isNull(crmActivities.completedAt),
-            lt(crmActivities.dueAt, new Date()),
-          ),
-        )
-        .orderBy(asc(crmActivities.dueAt))
-        .limit(10);
+      const overdue = await tx.crmActivities.find(
+        { assigneeId: actor.userId, completedAt: null, dueAt: { $lt: new Date() } },
+        { sort: { dueAt: 1 }, limit: 10 },
+      );
+      const myOverdue = await presentActivities(tx, overdue);
 
-      const [leadCounts] = await tx
-        .select({
-          open: sql<number>`count(*) filter (where ${crmLeads.convertedAt} is null)::int`,
-          converted: sql<number>`count(*) filter (where ${crmLeads.convertedAt} is not null)::int`,
-        })
-        .from(crmLeads)
-        .where(and(eq(crmLeads.orgId, actor.orgId), isNull(crmLeads.deletedAt)));
+      const [open, converted] = await Promise.all([
+        tx.crmLeads.count({ deletedAt: null, convertedAt: null }),
+        tx.crmLeads.count({ deletedAt: null, convertedAt: { $ne: null } }),
+      ]);
 
       return {
         openDealsByStage: byStage,
         wonThisMonth: won,
         leadsBySource,
-        leads: leadCounts ?? { open: 0, converted: 0 },
+        leads: { open, converted },
         myOverdue,
       };
     });

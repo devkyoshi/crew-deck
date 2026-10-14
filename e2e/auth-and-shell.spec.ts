@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
-import postgres from 'postgres';
+import { randomUUID } from 'node:crypto';
+import { orgIdOf, withDb } from './db';
 import { expect, test, type Page } from '@playwright/test';
 import { completeInvite } from './helpers';
 
 const OWNER = {
   email: 'owner@acme.test',
-  password: process.env.SEED_PASSWORD ?? 'dev-password-123',
+  password: process.env.SEED_PASSWORD ?? 'dev@1234',
 };
 const shots = process.env.E2E_SCREENSHOTS;
 
@@ -17,21 +18,24 @@ async function signIn(page: Page, email = OWNER.email, password = OWNER.password
 }
 
 async function createInvite() {
-  const sql = postgres(
-    process.env.DATABASE_ADMIN_URL ??
-      'postgres://crew_admin:crew_admin_dev@localhost:5433/crewdeck',
-  );
-  try {
-    const token = randomBytes(24).toString('base64url');
-    const email = `e2e-${randomBytes(4).toString('hex')}@acme.test`;
-    await sql`
-      insert into invitations (org_id, email, org_role, token_hash, expires_at)
-      select id, ${email}, 'member', ${createHash('sha256').update(token).digest('hex')}, now() + interval '1 hour'
-      from organizations where slug = 'acme'`;
-    return { token, email };
-  } finally {
-    await sql.end();
-  }
+  const token = randomBytes(24).toString('base64url');
+  const email = `e2e-${randomBytes(4).toString('hex')}@acme.test`;
+  await withDb(async (db) => {
+    await db.collection('invitations').insertOne({
+      id: randomUUID(),
+      orgId: await orgIdOf(db, 'acme'),
+      email,
+      orgRole: 'member',
+      groupIds: [],
+      tokenHash: createHash('sha256').update(token).digest('hex'),
+      expiresAt: new Date(Date.now() + 3_600_000),
+      acceptedAt: null,
+      revokedAt: null,
+      invitedBy: null,
+      createdAt: new Date(),
+    });
+  });
+  return { token, email };
 }
 
 test('password sign-in lands on the shell, and sign-out returns to sign-in', async ({ page }) => {

@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Check, ChevronRight, ChevronsUpDown, Layers } from 'lucide-react';
+import { Check, ChevronRight, ChevronsUpDown, Layers, LayoutGrid, Plus } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -25,6 +26,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useIsAdmin, useMe } from './me-context';
+import { workTypeLabel } from '@/components/workspace/work-type-picker';
 import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
 import { visibleGroups } from './nav';
@@ -54,7 +56,6 @@ function usePersistedOpen(key: string, initial = true) {
 
 function TenantSwitcher() {
   const { org, orgs } = useMe();
-  const multiple = orgs.length > 1;
 
   function switchTo(slug: string) {
     const { protocol, host } = window.location;
@@ -70,43 +71,49 @@ function TenantSwitcher() {
           <Layers className="size-3.5" aria-hidden />
         </span>
       )}
-      <span className="grid flex-1 text-left leading-tight">
+      <span className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
         <span className="truncate text-[13px] font-semibold">{org.name}</span>
         <span className="text-muted-foreground truncate text-[11px]">{org.slug}</span>
       </span>
     </>
   );
 
-  if (!multiple) {
-    return (
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent">
-            {label}
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    );
-  }
-
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" aria-label="Switch workspace">
+            <SidebarMenuButton size="lg" aria-label="Switch workspace" className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:size-9!">
               {label}
-              <ChevronsUpDown className="size-3.5 opacity-60" aria-hidden />
+              <ChevronsUpDown className="size-3.5 opacity-60 group-data-[collapsible=icon]:hidden" aria-hidden />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56">
             <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
             {orgs.map((o) => (
               <DropdownMenuItem key={o.id} onSelect={() => o.slug !== org.slug && switchTo(o.slug)}>
-                <span className="flex-1">{o.name}</span>
+                <span className="grid flex-1 leading-tight">
+                  <span className="truncate">{o.name}</span>
+                  {o.workType && (
+                    <span className="text-muted-foreground truncate text-[11px]">
+                      {workTypeLabel(o.workType)}
+                    </span>
+                  )}
+                </span>
                 {o.slug === org.slug && <Check className="size-4" aria-hidden />}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/my-workspaces">
+                <LayoutGrid className="size-4" aria-hidden /> All workspaces
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/my-workspaces/new">
+                <Plus className="size-4" aria-hidden /> Create a workspace
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

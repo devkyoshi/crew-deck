@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { sql } from 'drizzle-orm';
+import { modulesFor, WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import type { Db } from '../db/client.js';
-import { invitations, memberships, tenantSettings, users } from '../db/schema.js';
 import { AppError, isUniqueViolation } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
 
@@ -26,6 +25,9 @@ export interface ProvisionInput {
   consumeTokenHash?: string;
   /** Who created it, for the audit trail (platform admin email or "signup"). */
   createdBy: string;
+  /** What the workspace is for, and how the team plans to use it. Drives the template. */
+  workType?: WorkType | null;
+  usage?: string[];
 }
 
 export interface Provisioned {
@@ -43,15 +45,22 @@ const slugTaken = () =>
 /**
  * Creates a workspace end to end in one transaction: the workspace itself, its settings, its first
  * owner and the plan. Either all of it exists afterwards or none of it does.
+ *
+ * The workspace type picks a template: it decides which modules are on and is remembered so new spaces
+ * start with the matching columns (see WORKSPACE_TEMPLATES in @crew-deck/shared).
  */
 export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise<Provisioned> {
+  const workType = input.workType ?? null;
+  const usage = input.usage ?? (workType ? WORKSPACE_TEMPLATES[workType].suggestedUsage : []);
+  const modules = modulesFor(workType ?? 'other', usage);
   try {
-    return await db.transaction(async (tx) => {
+    return await db.globalTx(async (g) => {
       if (input.consumeTokenHash) {
-        const used = await tx.execute<{ id: string }>(
-          sql`select id from signup_request_consume(${input.consumeTokenHash})`,
+        const used = await g.signupRequests.updateOne(
+          { tokenHash: input.consumeTokenHash, usedAt: null, expiresAt: { $gt: new Date() } },
+          { usedAt: new Date() },
         );
-        if (!used[0]) {
+        if (used === 0) {
           throw new AppError(
             400,
             'invalid_signup_link',
@@ -61,30 +70,35 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
       }
       const trialEnds =
         input.trialDays > 0 ? new Date(Date.now() + input.trialDays * 86_400_000) : null;
-      const created = await tx.execute<{ id: string }>(sql`
-        select platform_create_org(${input.name}, ${input.slug}, ${input.domain}, ${input.plan},
-          ${trialEnds !== null}, ${trialEnds ? trialEnds.toISOString() : null}::timestamptz, ${input.domainRestricted}, ${input.via}) as id`);
-      const orgId = created[0]!.id;
-      await tx.execute(sql`select set_config('app.current_org', ${orgId}, true)`);
-      await tx.insert(tenantSettings).values({ orgId }).onConflictDoNothing();
+      const orgId = randomUUID();
+      await g.organizations.insert({
+        id: orgId,
+        name: input.name,
+        slug: input.slug.toLowerCase(),
+        domain: input.domain.toLowerCase(),
+        planKey: input.plan,
+        onTrial: trialEnds !== null,
+        trialEndsAt: trialEnds,
+        domainRestricted: input.domainRestricted,
+        createdVia: input.via,
+        workType,
+        usage,
+      });
+      const t = g.forOrg(orgId);
+      await t.tenantSettings.upsert({}, { enabledModules: modules, updatedAt: new Date() }, {
+        timezone: input.timezone ?? 'UTC',
+      });
 
       let userId: string | null = null;
       let inviteToken: string | null = null;
       if (input.ownerMode === 'verified') {
-        const existing = await tx.execute<{ id: string }>(
-          sql`select id from auth_user_id_by_email(${input.ownerEmail})`,
-        );
-        userId = existing[0]?.id ?? null;
+        const existing = await g.users.findOne({ email: input.ownerEmail.toLowerCase() });
+        userId = existing?.id ?? null;
         if (userId) {
-          await tx
-            .update(users)
-            .set({ status: 'active' })
-            .where(sql`id = ${userId}`);
+          await g.users.updateOne({ id: userId }, { status: 'active' });
         } else {
-          // The id is chosen here (not RETURNING) because the person is only visible to this workspace
-          // once their membership exists.
           userId = randomUUID();
-          await tx.insert(users).values({
+          await g.users.insert({
             id: userId,
             email: input.ownerEmail.toLowerCase(),
             name: input.ownerName ?? null,
@@ -93,11 +107,10 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
             timezone: input.timezone ?? 'UTC',
           });
         }
-        await tx.insert(memberships).values({ orgId, userId, orgRole: 'owner' });
+        await t.memberships.insert({ userId, orgRole: 'owner' });
       } else {
         inviteToken = randomToken();
-        await tx.insert(invitations).values({
-          orgId,
+        await t.invitations.insert({
           email: input.ownerEmail.toLowerCase(),
           orgRole: 'owner',
           groupIds: [],
@@ -105,7 +118,7 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
           expiresAt: new Date(Date.now() + 7 * 86_400_000),
         });
       }
-      await writeAudit(tx, {
+      await writeAudit(t, {
         orgId,
         actorId: userId,
         action: 'workspace.created',
@@ -116,6 +129,7 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
           via: input.via,
           createdBy: input.createdBy,
           owner: input.ownerEmail,
+          workType,
         },
       });
       return { orgId, slug: input.slug.toLowerCase(), userId, inviteToken };
