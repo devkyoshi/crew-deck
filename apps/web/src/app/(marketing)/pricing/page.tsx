@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 const BLURB: Record<string, { line: string; points: string[] }> = {
   free: {
     line: 'For a small team getting started with agility.',
-    points: ['Up to 5 people', 'Spaces, groups and daily check-in', 'Kanban boards and CRM to start'],
+    points: ['Up to 5 people', 'Kanban boards with up to 250 work items', 'Spaces, groups and daily check-in'],
   },
   team: {
     line: 'For growing companies needing full collaboration.',

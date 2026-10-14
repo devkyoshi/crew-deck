@@ -3,7 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { and, asc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
-import { assertWithinLimit, countSpaces, loadPlan } from '../plans/index.js';
+import { assertFeature, assertWithinLimit, countSpaces, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant, type Tx } from '../db/client.js';
@@ -157,6 +157,7 @@ const createBody = z.object({
   description: descriptionSchema.optional(),
   icon: iconSchema.default('folder'),
   visibility: visibilitySchema.default('open'),
+  boardType: z.enum(['kanban', 'scrum']).default('kanban'),
   members: z
     .array(z.object({ type: z.enum(['user', 'group']), id: z.string().uuid(), role: roleSchema }))
     .max(200)
@@ -250,11 +251,15 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
 
     try {
       return await withTenant(deps.db, actor.orgId, async (tx) => {
-        assertWithinLimit(
-          await loadPlan(tx, actor.orgId),
-          'spaces',
-          await countSpaces(tx, actor.orgId),
-        );
+        const plan = await loadPlan(tx, actor.orgId);
+        assertWithinLimit(plan, 'spaces', await countSpaces(tx, actor.orgId));
+        if (b.boardType === 'scrum') {
+          // Plan first, so a Free workspace gets the upgrade prompt rather than "not available".
+          assertFeature(plan, 'scrum_sprints', 'Scrum boards');
+          throw new AppError(422, 'not_available', 'Scrum boards are not available yet', {
+            boardType: 'Scrum boards are not available yet',
+          });
+        }
         // Keys are unique per workspace and never reused, deleted spaces included.
         const taken = await tx
           .select({ id: spaces.id })

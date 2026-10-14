@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-14 - Phase W2: Drag and drop and board power features
+
+- API: move endpoint (`POST /items/:id/move`) with fractional string ranks, `If-Match` and a per-space lock; bulk endpoint (move, assign, label, delete, up to 100); labels (list, create, rename, recolour, delete) and `labelIds` on items; board and column filters (`assignee`, `type`, `priority`, `label`, `epic`, `due`, `q`, `mine`, `recent`) with a filtered count and an unfiltered WIP count; rank rebalance job. New `can()` actions `label.create` and `label.manage`. Dependency: `fractional-indexing`.
+- Web: drag and drop with dnd-kit (mouse, touch and keyboard, screen-reader announcements, optimistic move that snaps back with a message), filter bar with chips and URL state (shareable), swimlanes (assignee, epic, priority) with confirmation when a drop changes the assignee, labels on cards, the item panel and the create dialog, multi-select (Ctrl or Cmd-click, or "Select" in the card menu) with a bulk bar, shortcuts `/` and `?` with a shortcut list, arrow-key navigation between cards, card field and swimlane settings, "Show more" per column.
+- Fixes found while testing: the drag overlay is portalled to the page body; the WIP count ignores filters.
+- Tests: 23 new API tests (move ordering, concurrency, rebalancing, bulk permissions, labels, filters, a 500-item board), permission-matrix rows, and browser tests of keyboard and mouse drags, filters in the URL, bulk changes, labels, swimlanes, a 500-item board and an accessibility scan in both themes.
+
+## 2026-10-14 - Phase W1: Work items and a Kanban board
+
+- Docs: docs/work-items (phases W1 to W7, progress, checklist, pricing gates, UI spec); ADR-041 to ADR-049.
+- Migrations 0011 (plan limits and gates in the seeded plans) and 0012 (boards, space counters, statuses, work items, labels, with row-level security; a trigger gives every new space a board and the four default statuses; existing spaces backfilled).
+- API: statuses (add, rename, recolour, WIP limit, reorder, delete with a replacement, at most 12, one per category at least), board with per-column paging and Done retention, work items (create, read by id or key, edit with `If-Match` and 412, soft delete, subtasks), assignee search. New `can()` actions `item.view/create/edit/delete`, `status.manage`, `board.manage`; members delete only items they reported. Free plan holds 250 work items (402 `plan_limit`); `boardType` on space creation (Scrum answers 402 on Free, otherwise "not available yet").
+- Web: Board tab on every space (columns, cards, density toggle, inline create, `C` to create, load more, collapsible columns, snap-scroll on phones), item side panel and full page at /spaces/ENG/items/ENG-1 with inline editing and saved state, board settings (status editor with drag reorder, card fields, Done retention), board type step in the create-space wizard, work items usage on the billing page, `/design` section "Work management".
+- Demo: ENG and OPS boards are filled by `make demo`.
+- Tests: 49 new API tests (keys under concurrency, hierarchy, 412, permissions, plan limit, tenant isolation), matrix rows, RLS rows, a browser test of the whole flow and an accessibility scan of the new screens in both themes.
+
 ## 2026-10-14 - Guided, photo-led signed-out screens
 
 - One shared split layout for every signed-out screen (photo and message beside the task; a short banner on phones): sign-in, find workspace, accept invitation, platform sign-in, sign-up and verify. Six Unsplash photos downloaded into `apps/web/public/auth` with `CREDITS.md`.

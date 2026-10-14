@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { generateKeyBetween } from 'fractional-indexing';
 import { hashPassword } from '../auth/password.js';
 import { createDb } from './client.js';
 import { DEFAULT_STAGES } from '../crm/helpers.js';
@@ -26,9 +27,97 @@ import {
   spaceAccessRequests,
   spaceMembers,
   spaceStars,
+  spaceCounters,
+  spaceStatuses,
   spaces,
   users,
+  workItems,
 } from './schema.js';
+
+
+type DemoItem = {
+  type: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+  title: string;
+  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  priority?: 'highest' | 'high' | 'medium' | 'low' | 'lowest';
+  assignee?: string;
+  estimate?: number;
+  dueInDays?: number;
+  parent?: string;
+  description?: string;
+};
+
+const WORK_DEMO: Record<string, DemoItem[]> = {
+  ENG: [
+    { type: 'epic', title: 'Checkout redesign', status: 'In Progress', priority: 'high', description: 'A faster, clearer checkout for returning customers.' },
+    { type: 'story', title: 'Let customers save a card for next time', status: 'In Progress', priority: 'high', assignee: 'priya', estimate: 5, dueInDays: 4, parent: 'Checkout redesign', description: 'Tokenise the card with the payment provider.\nShow saved cards on the payment step.' },
+    { type: 'subtask', title: 'Add the saved cards table', status: 'Done', assignee: 'ben', parent: 'Let customers save a card for next time' },
+    { type: 'subtask', title: 'Show saved cards on the payment step', status: 'To Do', assignee: 'priya', parent: 'Let customers save a card for next time' },
+    { type: 'story', title: 'Guest checkout without an account', status: 'To Do', priority: 'medium', estimate: 3, parent: 'Checkout redesign' },
+    { type: 'bug', title: 'Payment page crashes with more than twenty line items', status: 'To Do', priority: 'highest', assignee: 'ben', estimate: 3, dueInDays: -3 },
+    { type: 'task', title: 'Set up error tracking', status: 'Done', priority: 'medium', assignee: 'ben', estimate: 2 },
+    { type: 'task', title: 'Update the onboarding copy', status: 'To Do', priority: 'low' },
+    { type: 'task', title: 'Review the payment provider contract', status: 'In Review', priority: 'medium', assignee: 'priya', estimate: 1, dueInDays: 1 },
+    { type: 'task', title: 'Move CI to the new runners', status: 'In Progress', priority: 'medium', assignee: 'ben', estimate: 8 },
+  ],
+  OPS: [
+    { type: 'task', title: 'Rotate the staging credentials', status: 'To Do', priority: 'high', dueInDays: 2 },
+    { type: 'task', title: 'Write the on-call handover notes', status: 'In Progress', priority: 'medium' },
+    { type: 'bug', title: 'Backup job reports success on empty dumps', status: 'To Do', priority: 'highest' },
+  ],
+};
+
+/** Fills a demo space's board with a believable spread of work (only when the space has no items yet). */
+async function seedWorkItems(
+  db: ReturnType<typeof createDb>['db'],
+  orgId: string,
+  spaceId: string,
+  items: DemoItem[],
+  reporter: string,
+  userId: (handle: string) => string,
+) {
+  const existing = await db.select({ id: workItems.id }).from(workItems).where(eq(workItems.spaceId, spaceId)).limit(1);
+  if (existing.length) return;
+  const statuses = await db.select().from(spaceStatuses).where(eq(spaceStatuses.spaceId, spaceId));
+  const statusByName = new Map(statuses.map((st) => [st.name, st]));
+  const lastRank = new Map<string, string | null>();
+  const idByTitle = new Map<string, string>();
+  for (const it of items) {
+    const status = statusByName.get(it.status);
+    if (!status) continue;
+    const [counter] = await db
+      .update(spaceCounters)
+      .set({ lastNumber: sql`${spaceCounters.lastNumber} + 1` })
+      .where(eq(spaceCounters.spaceId, spaceId))
+      .returning();
+    const rank = generateKeyBetween(lastRank.get(status.id) ?? null, null);
+    lastRank.set(status.id, rank);
+    const due = it.dueInDays === undefined ? null : new Date(Date.now() + it.dueInDays * 86_400_000).toISOString().slice(0, 10);
+    const [row] = await db
+      .insert(workItems)
+      .values({
+        orgId,
+        spaceId,
+        number: counter!.lastNumber,
+        type: it.type,
+        parentId: it.parent ? idByTitle.get(it.parent) : null,
+        title: it.title,
+        description: it.description
+          ? { type: 'doc', content: it.description.split('\n').map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] })) }
+          : null,
+        statusId: status.id,
+        priority: it.priority ?? 'medium',
+        assigneeId: it.assignee ? userId(it.assignee) : null,
+        reporterId: reporter,
+        estimate: it.estimate === undefined ? null : String(it.estimate),
+        dueDate: due,
+        rank,
+        resolvedAt: status.category === 'done' ? new Date(Date.now() - 2 * 86_400_000) : null,
+      })
+      .returning({ id: workItems.id });
+    idByTitle.set(it.title, row!.id);
+  }
+}
 
 /**
  * A believable demo workspace for the Acme tenant: people, teams, spaces with a mix of open,
@@ -274,6 +363,12 @@ export async function seedDemo(adminUrl: string) {
           });
         }
       }
+    }
+
+    // Work items: a spread of epics, stories, bugs and tasks on the ENG and OPS boards.
+    for (const [key, items] of Object.entries(WORK_DEMO)) {
+      const id = spaceId.get(key);
+      if (id) await seedWorkItems(db, org.id, id, items, owner, userId);
     }
 
     // Stars: the owner and the demo member each pin a couple of spaces.

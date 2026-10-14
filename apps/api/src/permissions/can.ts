@@ -18,6 +18,14 @@ export type Action =
   | 'space.view'
   | 'audit.viewOrg'
   | 'audit.viewSpace'
+  | 'item.view'
+  | 'item.create'
+  | 'item.edit'
+  | 'item.delete'
+  | 'status.manage'
+  | 'board.manage'
+  | 'label.create'
+  | 'label.manage'
   | 'settings.manage'
   | 'attendance.viewAll'
   | 'attendance.export'
@@ -48,6 +56,8 @@ export interface Resource {
   isSelf?: boolean;
   /** For work-day actions: the day belongs to someone who reports to the caller. */
   isManager?: boolean;
+  /** For item actions: the caller reported the item (members may delete only these). */
+  isReporter?: boolean;
 }
 
 const isAdminLike = (role: OrgRole) => role === 'owner' || role === 'admin';
@@ -100,13 +110,29 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'accessRequest.approve':
       return adminLike || spaceAdmin;
 
+    // Work items (brief section 7). Viewing follows the space; editing needs member or better.
+    case 'item.view':
     case 'space.view':
       if (adminLike) return true;
       if (resource.spaceRole) return true;
       return resource.spaceVisibility === 'open';
 
     case 'audit.viewSpace':
+    case 'status.manage':
+    case 'board.manage':
+    case 'label.manage':
       return adminLike || spaceAdmin;
+
+    case 'item.create':
+    case 'item.edit':
+    case 'label.create':
+      return adminLike || spaceAdmin || resource.spaceRole === 'member';
+
+    // Members delete only what they reported; viewers never delete.
+    case 'item.delete':
+      return (
+        adminLike || spaceAdmin || (resource.spaceRole === 'member' && resource.isReporter === true)
+      );
 
     default:
       return false;

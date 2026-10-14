@@ -51,10 +51,16 @@ export interface Providers {
 }
 
 /** Browser-side JSON call to the same-origin API proxy. */
-export async function api<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+export async function api<T>(
+  path: string,
+  init?: { method?: string; body?: unknown; headers?: Record<string, string> },
+): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     method: init?.method ?? (init?.body ? 'POST' : 'GET'),
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+    headers:
+      init?.body || init?.headers
+        ? { ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers }
+        : undefined,
     body: init?.body ? JSON.stringify(init.body) : undefined,
     credentials: 'same-origin',
   });

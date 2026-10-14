@@ -65,6 +65,7 @@ export function makeApp(
       text: string;
     }) => Promise<void> | void;
     env?: Record<string, string>;
+    enqueueRebalance?: (job: { orgId: string; spaceId: string; statusId: string }) => Promise<void> | void;
   } = {},
 ) {
   const config = loadConfig({
@@ -86,6 +87,9 @@ export function makeApp(
     },
     sendMail: async (m) => {
       await opts.sendMail?.(m);
+    },
+    enqueueRebalance: async (job) => {
+      await opts.enqueueRebalance?.(job);
     },
   });
   return {

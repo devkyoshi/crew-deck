@@ -6,6 +6,7 @@ import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js
 import { createBrevoSender, createLogSender } from './email/sender.js';
 import { createRedis } from './lib/redis.js';
 import { startTrialExpiry } from './plans/jobs.js';
+import { startRebalanceJobs } from './work/jobs.js';
 
 const config = loadConfig();
 const { db, close } = createDb(config.DATABASE_URL);
@@ -18,12 +19,17 @@ const sender = emailEnabled(config)
       fromName: config.EMAIL_FROM_NAME,
     })
   : createLogSender((m) => console.log(m));
+const rebalance = startRebalanceJobs(redis, db, {
+  info: (m) => console.log(m),
+  error: (m) => console.error(m),
+});
 const app = buildApp({
   db,
   redis,
   config,
   enqueueInviteEmail: queue,
   sendMail: (m) => sender.send(m),
+  enqueueRebalance: rebalance.enqueue,
 });
 
 const worker = startInviteEmailWorker(redis, sender, (m) => app.log.error(m));
@@ -42,6 +48,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     await worker.close();
     await autoClose.close();
     await trials.close();
+    await rebalance.close();
     await queue.close();
     await app.close();
     redis.disconnect();

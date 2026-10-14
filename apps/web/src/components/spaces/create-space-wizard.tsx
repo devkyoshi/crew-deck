@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, Lock, Users } from 'lucide-react';
+import { Globe, Kanban, Lock, Timer, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,7 @@ const schema = z.object({
   icon: z.string(),
   description: z.string().trim().max(1000, 'Keep it under 1000 characters'),
   visibility: z.enum(['open', 'private']),
+  boardType: z.enum(['kanban', 'scrum']),
 });
 type Values = z.infer<typeof schema>;
 
@@ -78,7 +79,7 @@ export function CreateSpaceWizard() {
     formState: { errors },
   } = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', key: '', icon: 'folder', description: '', visibility: 'open' },
+    defaultValues: { name: '', key: '', icon: 'folder', description: '', visibility: 'open', boardType: 'kanban' },
   });
   const v = watch();
   const roleOf = (id: string) => roles[id] ?? 'member';
@@ -100,6 +101,7 @@ export function CreateSpaceWizard() {
           description: values.description || undefined,
           icon: values.icon,
           visibility: values.visibility,
+          boardType: values.boardType,
           members: [
             ...others.map((p) => ({ type: 'user', id: p.id, role: roleOf(p.id) })),
             ...groupsSel.map((g) => ({ type: 'group', id: g.id, role: roleOf(g.id) })),
@@ -258,6 +260,41 @@ export function CreateSpaceWizard() {
           </div>
         )}
 
+        {step === 1 && (
+          <div className="space-y-2" role="group" aria-label="Board type">
+            <h3 className="text-sm font-medium">Board type</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={v.boardType === 'kanban'}
+                onClick={() => setValue('boardType', 'kanban')}
+                className={cn(
+                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors',
+                  v.boardType === 'kanban' && 'border-primary bg-accent ring-primary/30 ring-2',
+                )}
+              >
+                <Kanban className="text-primary size-5" aria-hidden />
+                <div className="font-medium">Kanban</div>
+                <p className="text-muted-foreground text-xs">
+                  Continuous flow. Work moves across columns as it progresses.
+                </p>
+              </button>
+              <div
+                aria-disabled="true"
+                className="space-y-2 rounded-2xl border border-dashed p-4 opacity-70"
+              >
+                <Timer className="text-muted-foreground size-5" aria-hidden />
+                <div className="flex items-center gap-2 font-medium">
+                  Scrum <span className="bg-secondary rounded-full px-2 py-0.5 text-[11px]">Coming soon</span>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  A backlog and sprints. Available on the Team plan when it launches.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {step === 2 && (
           <>
             <div className="bg-muted/50 flex items-center justify-between rounded-xl p-3 text-sm">
@@ -332,6 +369,14 @@ export function CreateSpaceWizard() {
                 )}
               </div>
               <VisibilityPill visibility={v.visibility} />
+            </div>
+            <div className="rounded-2xl border p-4 text-sm">
+              <div className="flex items-center gap-2 font-medium">
+                <Kanban className="size-4" aria-hidden /> Kanban board
+              </div>
+              <p className="text-muted-foreground mt-1">
+                Starts with To Do, In Progress, In Review and Done. You can change the columns later.
+              </p>
             </div>
             <div className="rounded-2xl border p-4 text-sm">
               <div className="mb-2 flex items-center gap-2 font-medium">

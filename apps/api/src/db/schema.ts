@@ -263,3 +263,4 @@ export const workDayEdits = pgTable('work_day_edits', {
 });
 
 export * from './schema-crm.js';
+export * from './schema-work.js';

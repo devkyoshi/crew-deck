@@ -358,6 +358,7 @@ describe('trials', () => {
     expect(plan.plan).toMatchObject({ key: 'business', onTrial: true });
     expect(plan.plan.features).toContain('space_audit');
     expect(plan.usage.seats).toBe(1);
+    expect(plan.usage.work_items).toBe(0);
     expect(plan.plans.map((p: { key: string }) => p.key)).toEqual(['free', 'team', 'business']);
     expect((await invite(o, 8)).statusCode).toBe(200);
   });

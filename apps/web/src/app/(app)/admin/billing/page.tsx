@@ -13,7 +13,15 @@ import { api } from '@/lib/api';
 import { daysUntil } from '@/lib/format';
 import { formatLimit, formatPrice, LIMIT_LABEL, type LimitKey, type PlanState } from '@/lib/plans';
 
-const METERS: LimitKey[] = ['seats', 'spaces', 'crm_records', 'pipelines', 'sites', 'storage_mb'];
+const METERS: LimitKey[] = [
+  'seats',
+  'spaces',
+  'work_items',
+  'crm_records',
+  'pipelines',
+  'sites',
+  'storage_mb',
+];
 
 export default function BillingPage() {
   const isAdmin = useIsAdmin();

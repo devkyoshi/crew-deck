@@ -10,6 +10,7 @@ import {
   memberships,
   sites,
   spaces,
+  workItems,
 } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 
@@ -22,6 +23,8 @@ export const LIMIT_KEYS = [
   'storage_mb',
   'audit_days',
   'sites',
+  'work_items',
+  'max_attachment_mb',
 ] as const;
 export type LimitKey = (typeof LIMIT_KEYS)[number];
 
@@ -33,6 +36,9 @@ export const FEATURE_KEYS = [
   'space_audit',
   'branding_name',
   'branding_full',
+  'scrum_sprints',
+  'shared_filters',
+  'burndown_reports',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
@@ -135,6 +141,8 @@ const LIMIT_WORDS: Record<LimitKey, string> = {
   storage_mb: 'MB of storage',
   audit_days: 'days of audit history',
   sites: 'sites',
+  work_items: 'work items',
+  max_attachment_mb: 'MB per attachment',
 };
 
 /** Throws when adding `adding` more would pass the plan's limit. Existing data is never touched. */
@@ -214,6 +222,15 @@ export const countSites = (tx: Tx, orgId: string) =>
       .where(eq(sites.orgId, orgId)),
   );
 
+/** Work items that are not deleted, across every space. Deleted items never count toward the limit. */
+export const countWorkItems = (tx: Tx, orgId: string) =>
+  count(
+    tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(workItems)
+      .where(and(eq(workItems.orgId, orgId), isNull(workItems.deletedAt))),
+  );
+
 export type Usage = Partial<Record<LimitKey, number>>;
 
 export async function loadUsage(tx: Tx, orgId: string): Promise<Usage> {
@@ -223,6 +240,7 @@ export async function loadUsage(tx: Tx, orgId: string): Promise<Usage> {
     crm_records: await countCrmRecords(tx, orgId),
     pipelines: await countPipelines(tx, orgId),
     sites: await countSites(tx, orgId),
+    work_items: await countWorkItems(tx, orgId),
     // No file storage exists yet; the limit is wired in so it is ready when uploads arrive.
     storage_mb: 0,
   };

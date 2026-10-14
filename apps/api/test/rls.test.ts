@@ -1,7 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { withTenant } from '../src/db/client.js';
-import { memberships, organizations, users } from '../src/db/schema.js';
+import {
+  boards,
+  labels,
+  memberships,
+  organizations,
+  spaceCounters,
+  spaceStatuses,
+  users,
+  workItemLabels,
+  workItems,
+} from '../src/db/schema.js';
 import { appDb, tenantIds } from './helpers.js';
 
 const app = appDb();
@@ -89,3 +99,21 @@ describe('row-level security (direct database)', () => {
     );
   });
 });
+
+describe('row-level security: work items', () => {
+  const tables = { boards, spaceCounters, spaceStatuses, workItems, labels, workItemLabels };
+
+  it.each(Object.entries(tables))('%s shows nothing without a tenant context', async (_n, table) => {
+    expect(await app.db.select().from(table)).toHaveLength(0);
+  });
+
+  it.each(Object.entries(tables))('%s only ever shows the current tenant', async (_n, table) => {
+    for (const orgId of [ids.acme, ids.globex]) {
+      await withTenant(app.db, orgId, async (tx) => {
+        const rows = (await tx.select().from(table)) as { orgId: string }[];
+        expect(rows.every((r) => r.orgId === orgId)).toBe(true);
+      });
+    }
+  });
+});
+

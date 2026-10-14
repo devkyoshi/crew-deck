@@ -28,6 +28,12 @@ import { crmActivityRoutes } from './routes/crm-activity.js';
 import { crmIoRoutes } from './routes/crm-io.js';
 import { spaceRoutes } from './routes/spaces.js';
 import { workSettingsRoutes } from './routes/work-settings.js';
+import { statusRoutes } from './routes/statuses.js';
+import { boardRoutes } from './routes/board.js';
+import { workItemRoutes } from './routes/work-items.js';
+import { workMoveRoutes } from './routes/work-move.js';
+import { labelRoutes } from './routes/labels.js';
+import type { EnqueueRebalance } from './work/jobs.js';
 import { memberRoutes } from './routes/members.js';
 import { planRoutes } from './routes/plan.js';
 import { platformRoutes } from './routes/platform.js';
@@ -44,9 +50,19 @@ export interface AppDeps {
   enqueueInviteEmail?: EnqueueInviteEmail;
   /** Sends a one-off email (sign-up verification). Logs in development, Brevo in production. */
   sendMail?: SendMail;
+  /** Queues a rank rebalance for one board column (BullMQ in the server, a fake in tests). */
+  enqueueRebalance?: EnqueueRebalance;
 }
 
-export function buildApp({ db, redis, config, google, enqueueInviteEmail, sendMail }: AppDeps) {
+export function buildApp({
+  db,
+  redis,
+  config,
+  google,
+  enqueueInviteEmail,
+  sendMail,
+  enqueueRebalance,
+}: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
     logger: {
@@ -97,6 +113,11 @@ export function buildApp({ db, redis, config, google, enqueueInviteEmail, sendMa
   app.register(groupRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(spaceRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(spaceMemberRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(statusRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(boardRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(workMoveRoutes, { prefix: '/api/v1', ...authDeps, enqueueRebalance });
+  app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(checkinRoutes, { prefix: '/api/v1', ...authDeps });

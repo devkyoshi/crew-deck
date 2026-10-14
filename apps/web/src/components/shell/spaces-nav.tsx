@@ -32,6 +32,27 @@ function SpaceLink({ spaceKey, name, icon }: { spaceKey: string; name: string; i
           <span>{name}</span>
         </Link>
       </SidebarMenuSubButton>
+      {active && (
+        <ul className="border-sidebar-border mt-0.5 mb-1 ml-4 space-y-0.5 border-l pl-2 text-xs">
+          {[
+            { to: href, label: 'Overview' },
+            { to: `${href}/board`, label: 'Board' },
+          ].map((l) => {
+            const on = l.to === href ? pathname === href : pathname.startsWith(l.to) || pathname.startsWith(`${href}/items`) && l.label === 'Board';
+            return (
+              <li key={l.to}>
+                <Link
+                  href={l.to}
+                  aria-current={on ? 'page' : undefined}
+                  className={`hover:bg-sidebar-accent block rounded px-2 py-1 ${on ? 'text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80'}`}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </SidebarMenuSubItem>
   );
 }

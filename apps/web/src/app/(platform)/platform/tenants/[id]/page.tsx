@@ -60,7 +60,16 @@ interface Detail {
 }
 
 const NO_PLAN = '__internal';
-const LIMITS: LimitKey[] = ['seats', 'spaces', 'crm_records', 'pipelines', 'sites', 'storage_mb'];
+const LIMITS: LimitKey[] = [
+  'seats',
+  'spaces',
+  'work_items',
+  'crm_records',
+  'pipelines',
+  'sites',
+  'storage_mb',
+  'max_attachment_mb',
+];
 const fail = (e: unknown) =>
   toast.error(e instanceof ApiError ? e.message : 'Something went wrong');
 

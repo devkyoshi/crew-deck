@@ -505,3 +505,186 @@ describe('Section 5 matrix: space-level actions', () => {
     expect(verdict).toEqual(only('owner', 'orgAdmin'));
   });
 });
+
+describe('Section 7 matrix: work items', () => {
+  const item = async (space: { id: string }, cookie: string) => {
+    const res = await call({
+      method: 'POST',
+      url: `/spaces/${space.id}/items`,
+      slug: 'acme',
+      cookie,
+      payload: { type: 'task', title: 'Matrix item' },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json() as { id: string; key: string; updatedAt: string };
+  };
+
+  it('View the board and items: everyone in an open space; only members of a private one', async () => {
+    const seed = await item(privateSpace, cookies.spaceAdmin);
+    expect(
+      await run((_, c) => status(call({ method: 'GET', url: `/spaces/${privateSpace.id}/board`, slug: 'acme', cookie: c }))),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember', 'spaceViewer'));
+    expect(
+      await run((_, c) => status(call({ method: 'GET', url: `/items/${seed.key}`, slug: 'acme', cookie: c }))),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember', 'spaceViewer'));
+    expect(
+      await run((_, c) => status(call({ method: 'GET', url: `/spaces/${openSpace.id}/board`, slug: 'acme', cookie: c }))),
+    ).toEqual(only('owner', 'orgAdmin', 'orgMember', 'spaceAdmin', 'spaceMember', 'spaceViewer'));
+    expect(
+      await run((_, c) => status(call({ method: 'GET', url: `/spaces/${hiddenSpace.id}/board`, slug: 'acme', cookie: c }))),
+    ).toEqual(only('owner', 'orgAdmin'));
+  });
+
+  it('Create items: admins and space members, not viewers or outsiders', async () => {
+    expect(
+      await run((_, c) =>
+        status(
+          call({
+            method: 'POST',
+            url: `/spaces/${privateSpace.id}/items`,
+            slug: 'acme',
+            cookie: c,
+            payload: { type: 'task', title: 'Created' },
+          }),
+        ),
+      ),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember'));
+  });
+
+  it('Edit items and move them between statuses: admins and space members', async () => {
+    const verdict = {} as Verdict;
+    for (const a of ACTORS) {
+      const it = await item(privateSpace, cookies.spaceAdmin);
+      verdict[a] = ok(
+        await status(
+          Promise.resolve(
+            t.app.inject({
+              method: 'PATCH',
+              url: `/api/v1/items/${it.id}`,
+              headers: { host: 'acme.localhost:3000', 'if-match': it.updatedAt },
+              cookies: { cd_session: cookies[a] },
+              payload: { title: 'Edited', priority: 'high' },
+            }),
+          ),
+        ),
+      );
+    }
+    expect(verdict).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember'));
+  });
+
+  it('Delete items: admins any; a space member only their own; viewers never', async () => {
+    const others = {} as Verdict;
+    const own = {} as Verdict;
+    for (const a of ACTORS) {
+      const byAdmin = await item(privateSpace, cookies.spaceAdmin);
+      others[a] = ok(
+        await status(call({ method: 'DELETE', url: `/items/${byAdmin.id}`, slug: 'acme', cookie: cookies[a] })),
+      );
+      if (a === 'spaceViewer' || a === 'orgMember') {
+        own[a] = false;
+        continue;
+      }
+      const mine = await item(privateSpace, cookies[a]);
+      own[a] = ok(
+        await status(call({ method: 'DELETE', url: `/items/${mine.id}`, slug: 'acme', cookie: cookies[a] })),
+      );
+    }
+    expect(others).toEqual(only('owner', 'orgAdmin', 'spaceAdmin'));
+    expect(own).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember'));
+  });
+
+  it('Manage statuses and board settings: space admins and org admins only', async () => {
+    expect(
+      await run((_, c) =>
+        status(
+          call({
+            method: 'POST',
+            url: `/spaces/${openSpace.id}/statuses`,
+            slug: 'acme',
+            cookie: c,
+            payload: { name: `S${Math.random().toString(36).slice(2, 8)}`, category: 'todo' },
+          }),
+        ),
+      ),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin'));
+    const board = (
+      await call({ method: 'GET', url: `/spaces/${openSpace.id}/board`, slug: 'acme', cookie: cookies.owner })
+    ).json();
+    expect(
+      await run((_, c) =>
+        status(
+          call({
+            method: 'PATCH',
+            url: `/boards/${board.board.id}`,
+            slug: 'acme',
+            cookie: c,
+            payload: { settings: { swimlane: 'priority' } },
+          }),
+        ),
+      ),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin'));
+  });
+
+  it('Create labels: admins and space members; manage (rename, delete) labels: admins only', async () => {
+    expect(
+      await run((a, c) =>
+        status(
+          call({
+            method: 'POST',
+            url: `/spaces/${privateSpace.id}/labels`,
+            slug: 'acme',
+            cookie: c,
+            payload: { name: `L-${a}-${Math.random().toString(36).slice(2, 7)}` },
+          }),
+        ),
+      ),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember'));
+    const label = (
+      await call({
+        method: 'POST',
+        url: `/spaces/${privateSpace.id}/labels`,
+        slug: 'acme',
+        cookie: cookies.owner,
+        payload: { name: `Managed-${Math.random().toString(36).slice(2, 7)}` },
+      })
+    ).json();
+    expect(
+      await run((a, c) =>
+        status(
+          call({
+            method: 'PATCH',
+            url: `/labels/${label.id}`,
+            slug: 'acme',
+            cookie: c,
+            payload: { color: a === 'owner' ? 'red' : 'blue' },
+          }),
+        ),
+      ),
+    ).toEqual(only('owner', 'orgAdmin', 'spaceAdmin'));
+  });
+
+  it('Move cards between columns: same as editing, so admins and space members', async () => {
+    const verdict = {} as Verdict;
+    const board = (
+      await call({ method: 'GET', url: `/spaces/${privateSpace.id}/statuses`, slug: 'acme', cookie: cookies.owner })
+    ).json();
+    const done = board.items.find((s: { category: string }) => s.category === 'done');
+    for (const a of ACTORS) {
+      const it = await item(privateSpace, cookies.spaceAdmin);
+      verdict[a] = ok(
+        await status(
+          Promise.resolve(
+            t.app.inject({
+              method: 'POST',
+              url: `/api/v1/items/${it.id}/move`,
+              headers: { host: 'acme.localhost:3000', 'if-match': it.updatedAt },
+              cookies: { cd_session: cookies[a] },
+              payload: { statusId: done.id },
+            }),
+          ),
+        ),
+      );
+    }
+    expect(verdict).toEqual(only('owner', 'orgAdmin', 'spaceAdmin', 'spaceMember'));
+  });
+});

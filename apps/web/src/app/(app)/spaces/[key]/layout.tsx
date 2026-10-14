@@ -97,6 +97,7 @@ export default function SpaceLayout({
   const base = `/spaces/${space.key}`;
   const tabs = [
     { href: base, label: 'Overview' },
+    { href: `${base}/board`, label: 'Board' },
     { href: `${base}/members`, label: 'Members' },
     ...(space.permissions.edit ? [{ href: `${base}/settings`, label: 'Settings' }] : []),
   ];
