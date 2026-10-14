@@ -1,21 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, desc, eq, ilike, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { ITEM_TYPES, PRIORITIES, type ItemType } from '@crew-deck/shared';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { workItems } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
+import type { WorkItemDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
-import { likePattern } from '../lib/pagination.js';
+import { containsRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
 import { textToDoc } from '../work/doc.js';
 import {
   assertAssignable,
   assertWritable,
-  itemQuery,
   ifMatch,
   listStatuses,
   liveParent,
@@ -96,8 +94,8 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
     };
   };
 
-  async function fresh(tx: Tx, actor: Actor, space: SpaceRow, id: string) {
-    const [row] = await loadItemRows(tx, eq(workItems.id, id));
+  async function fresh(tx: TenantDb, actor: Actor, space: SpaceRow, id: string) {
+    const [row] = await loadItemRows(tx, { id });
     if (!row) throw notFound('Work item');
     return {
       ...presentItem(row, space.key),
@@ -115,27 +113,22 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const q = req.query;
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
-        const conds: (SQL | undefined)[] = [
-          eq(workItems.spaceId, space.id),
-          isNull(workItems.deletedAt),
-        ];
-        if (q.status) conds.push(eq(workItems.statusId, q.status));
-        if (q.type) conds.push(eq(workItems.type, q.type));
-        if (q.priority) conds.push(eq(workItems.priority, q.priority));
-        if (q.assignee === 'none') conds.push(isNull(workItems.assigneeId));
-        else if (q.assignee) conds.push(eq(workItems.assigneeId, q.assignee));
-        if (q.parent) conds.push(eq(workItems.parentId, q.parent));
-        if (q.q) conds.push(ilike(workItems.title, likePattern(q.q)));
-        const before = Number(q.cursor);
+        const filter: Record<string, unknown> = { spaceId: space.id, deletedAt: null };
+        if (q.status) filter.statusId = q.status;
+        if (q.type) filter.type = q.type;
+        if (q.priority) filter.priority = q.priority;
+        if (q.assignee === 'none') filter.assigneeId = null;
+        else if (q.assignee) filter.assigneeId = q.assignee;
+        if (q.parent) filter.parentId = q.parent;
+        if (q.q) filter.title = containsRegex(q.q);
         if (q.cursor) {
+          const before = Number(q.cursor);
           if (!Number.isInteger(before) || before < 1) {
             throw new AppError(400, 'bad_cursor', 'That page marker is not valid');
           }
-          conds.push(lt(workItems.number, before));
+          filter.number = { $lt: before };
         }
-        const rows = await loadItemRows(tx, and(...conds))
-          .orderBy(desc(workItems.number))
-          .limit(q.limit + 1);
+        const rows = await loadItemRows(tx, filter, { sort: { number: -1 }, limit: q.limit + 1 });
         const page = rows.slice(0, q.limit);
         return {
           items: page.map((row) => presentItem(row, space.key)),
@@ -157,33 +150,38 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
-        const like = req.query.q ? likePattern(req.query.q) : null;
         // Active members who can open the space: everyone for an open space, otherwise org admins
         // and anyone with a direct or group role.
-        const rows = await tx.execute<{
-          id: string;
-          name: string | null;
-          email: string;
-          avatar_url: string | null;
-        }>(sql`
-          select u.id, u.name, u.email, u.avatar_url
-          from memberships m join users u on u.id = m.user_id
-          where m.org_id = ${actor.orgId} and m.status = 'active'
-            and (${like}::text is null or u.name ilike ${like} or u.email ilike ${like})
-            and (
-              ${space.visibility === 'open'} or m.org_role in ('owner', 'admin') or exists (
-                select 1 from space_members sm
-                where sm.space_id = ${space.id} and sm.org_id = ${actor.orgId}
-                  and ((sm.principal_type = 'user' and sm.principal_id = u.id)
-                    or (sm.principal_type = 'group' and sm.principal_id in (
-                      select gm.group_id from group_members gm
-                      where gm.user_id = u.id and gm.org_id = ${actor.orgId})))
-              )
-            )
-          order by lower(coalesce(u.name, u.email)), u.id
-          limit 25`);
+        const members = await tx.memberships.find({ status: 'active' });
+        const people = await tx.users(members.map((m) => m.userId));
+        let allowed: Set<string> | null = null;
+        if (space.visibility !== 'open') {
+          const entries = await tx.spaceMembers.find({ spaceId: space.id });
+          const groupIds = entries.filter((e) => e.principalType === 'group').map((e) => e.principalId);
+          const links = groupIds.length ? await tx.groupMembers.find({ groupId: { $in: groupIds } }) : [];
+          allowed = new Set([
+            ...entries.filter((e) => e.principalType === 'user').map((e) => e.principalId),
+            ...links.map((l) => l.userId),
+          ]);
+        }
+        const needle = req.query.q?.toLowerCase();
+        const items = members
+          .filter(
+            (m) => !allowed || allowed.has(m.userId) || m.orgRole === 'owner' || m.orgRole === 'admin',
+          )
+          .flatMap((m) => {
+            const u = people.get(m.userId);
+            return u ? [u] : [];
+          })
+          .filter((u) => !needle || [u.name, u.email].some((v) => v?.toLowerCase().includes(needle)))
+          .sort(
+            (a, b) =>
+              (a.name ?? a.email).toLowerCase().localeCompare((b.name ?? b.email).toLowerCase()) ||
+              a.id.localeCompare(b.id),
+          )
+          .slice(0, 25);
         return {
-          items: rows.map((u) => ({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatar_url })),
+          items: items.map((u) => ({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl })),
         };
       });
     },
@@ -197,7 +195,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const b = req.body;
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
         if (!can(actor, 'item.create', spaceCtx(space))) throw forbidden();
         assertWritable(space);
@@ -211,8 +209,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         validateHierarchy(b.type, parent);
 
         let statusId = b.statusId;
-        if (statusId) await statusIn(tx, space, statusId);
-        else {
+        if (!statusId) {
           const first = (await listStatuses(tx, space.id)).find((s) => s.category === 'todo');
           statusId = first!.id;
         }
@@ -224,30 +221,26 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         const number = await nextNumber(tx, space.id);
         const rank = await rankAtEnd(tx, space.id, statusId);
         const now = new Date();
-        const [created] = await tx
-          .insert(workItems)
-          .values({
-            orgId: actor.orgId,
-            spaceId: space.id,
-            number,
-            type: b.type,
-            parentId: b.parentId ?? null,
-            title: b.title,
-            description: textToDoc(b.description),
-            statusId,
-            priority: b.priority,
-            assigneeId: b.assigneeId ?? null,
-            reporterId: actor.userId,
-            estimate: b.estimate === null || b.estimate === undefined ? null : String(b.estimate),
-            dueDate: b.dueDate ?? null,
-            rank,
-            resolvedAt: resolvedAtFor(status.category, null, now),
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning({ id: workItems.id });
-        if (b.labelIds?.length) await setItemLabels(tx, actor.orgId, space, created!.id, b.labelIds);
-        return fresh(tx, actor, space, created!.id);
+        const created = await tx.workItems.insert({
+          spaceId: space.id,
+          number,
+          type: b.type,
+          parentId: b.parentId ?? null,
+          title: b.title,
+          description: textToDoc(b.description),
+          statusId,
+          priority: b.priority,
+          assigneeId: b.assigneeId ?? null,
+          reporterId: actor.userId,
+          estimate: b.estimate ?? null,
+          dueDate: b.dueDate ?? null,
+          rank,
+          resolvedAt: resolvedAtFor(status.category, null, now),
+          createdAt: now,
+          updatedAt: now,
+        });
+        if (b.labelIds?.length) await setItemLabels(tx, actor.orgId, space, created.id, b.labelIds);
+        return fresh(tx, actor, space, created.id);
       });
     },
   );
@@ -272,9 +265,11 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const { row, space } = await resolveItem(tx, actor, req.params.id);
-        const rows = await itemQuery(tx)
-          .where(and(eq(workItems.parentId, row.id), isNull(workItems.deletedAt)))
-          .orderBy(asc(workItems.number));
+        const rows = await loadItemRows(
+          tx,
+          { parentId: row.id, deletedAt: null },
+          { sort: { number: 1 } },
+        );
         return { items: rows.map((child) => presentItem(child, space.key)) };
       });
     },
@@ -289,7 +284,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const b = req.body;
       const expected = ifMatch(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { row, space } = await resolveItem(tx, actor, req.params.id);
         if (!can(actor, 'item.edit', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
           throw forbidden();
@@ -305,24 +300,24 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
               parentId: 'An item cannot be its own parent',
             });
           }
-          const kids = await tx
-            .select({ type: workItems.type })
-            .from(workItems)
-            .where(and(eq(workItems.parentId, row.id), isNull(workItems.deletedAt)));
+          const kids = await tx.workItems.find(
+            { parentId: row.id, deletedAt: null },
+            { projection: { type: 1 } },
+          );
           validateHierarchy(type, parent, kids.map((k) => k.type));
         }
         if (b.assigneeId) await assertAssignable(tx, actor.orgId, space, b.assigneeId);
 
         await lockSpace(tx, space.id);
         const now = new Date();
-        const set: Partial<typeof workItems.$inferInsert> = { updatedAt: now };
+        const set: Partial<WorkItemDoc> = { updatedAt: now };
         if (b.title !== undefined) set.title = b.title;
         if (b.description !== undefined) set.description = textToDoc(b.description);
         if (b.type !== undefined) set.type = b.type;
         if (b.parentId !== undefined) set.parentId = b.parentId;
         if (b.priority !== undefined) set.priority = b.priority;
         if (b.assigneeId !== undefined) set.assigneeId = b.assigneeId;
-        if (b.estimate !== undefined) set.estimate = b.estimate === null ? null : String(b.estimate);
+        if (b.estimate !== undefined) set.estimate = b.estimate;
         if (b.dueDate !== undefined) set.dueDate = b.dueDate;
         if (b.statusId !== undefined && b.statusId !== row.statusId) {
           const target = await statusIn(tx, space, b.statusId);
@@ -331,15 +326,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           set.resolvedAt = resolvedAtFor(target.category, null, now);
         }
 
-        // The version check lives in the UPDATE itself, so two simultaneous edits cannot both win.
-        const updated = await tx
-          .update(workItems)
-          .set(set)
-          .where(
-            and(eq(workItems.id, row.id), matchesVersion(expected)),
-          )
-          .returning({ id: workItems.id });
-        if (!updated.length) throw stale();
+        // The version check lives in the update's filter, so two simultaneous edits cannot both win.
+        const updated = await tx.workItems.updateOne({ id: row.id, ...matchesVersion(expected) }, set);
+        if (updated === 0) throw stale();
         if (b.labelIds !== undefined) await setItemLabels(tx, actor.orgId, space, row.id, b.labelIds);
         return fresh(tx, actor, space, row.id);
       });
@@ -350,7 +339,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.delete('/items/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
-    return withTenant(deps.db, actor.orgId, async (tx) => {
+    return withTenantTx(deps.db, actor.orgId, async (tx) => {
       const { row, space } = await resolveItem(tx, actor, req.params.id);
       if (!can(actor, 'item.delete', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
         throw forbidden();
@@ -361,15 +350,15 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const children =
         row.type === 'epic'
           ? []
-          : await tx
-              .select({ id: workItems.id })
-              .from(workItems)
-              .where(and(eq(workItems.parentId, row.id), isNull(workItems.deletedAt)));
+          : await tx.workItems.find(
+              { parentId: row.id, deletedAt: null },
+              { projection: { id: 1 } },
+            );
       const ids = [row.id, ...children.map((c) => c.id)];
-      await tx
-        .update(workItems)
-        .set({ deletedAt: now, updatedAt: now })
-        .where(and(inArray(workItems.id, ids), isNull(workItems.deletedAt)));
+      await tx.workItems.updateMany(
+        { id: { $in: ids }, deletedAt: null },
+        { deletedAt: now, updatedAt: now },
+      );
       return { deleted: ids.length, subtasks: children.length };
     });
   });

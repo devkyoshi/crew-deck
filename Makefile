@@ -1,9 +1,9 @@
-.PHONY: help install up down dev migrate rollback seed demo db-reset test lint typecheck build format
+.PHONY: help install up down dev migrate seed demo db-reset test lint typecheck build format
 
 help:
-	@echo "make dev        - start Postgres+Redis (docker), migrate, seed, run web+api locally"
-	@echo "make up/down    - start/stop Postgres+Redis containers"
-	@echo "make migrate    - apply SQL migrations (rollback: make rollback)"
+	@echo "make dev        - start Mongo+Redis (docker), migrate, seed, run web+api locally"
+	@echo "make up/down    - start/stop Mongo+Redis containers"
+	@echo "make migrate    - create MongoDB indexes"
 	@echo "make seed       - seed two demo tenants"
 	@echo "make demo       - add the demo workspace content (people, groups, spaces)"
 	@echo "make db-reset   - wipe DB volume, then migrate and seed"
@@ -14,16 +14,13 @@ install:
 	pnpm install
 
 up:
-	docker compose up -d --wait postgres redis
+	docker compose up -d --wait mongo redis
 
 down:
 	docker compose down
 
 migrate: install
 	pnpm db:migrate
-
-rollback: install
-	pnpm --filter @crew-deck/api db:rollback
 
 seed: install
 	pnpm db:seed
@@ -36,7 +33,7 @@ dev: install up migrate demo
 
 db-reset: install
 	docker compose down -v
-	docker compose up -d --wait postgres redis
+	docker compose up -d --wait mongo redis
 	pnpm db:migrate
 	pnpm db:seed
 	pnpm db:seed:demo

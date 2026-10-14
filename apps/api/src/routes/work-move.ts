@@ -1,13 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { generateKeyBetween } from 'fractional-indexing';
 import { z } from 'zod';
 import { PRIORITIES } from '@crew-deck/shared';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { labels, spaceStatuses, workItemLabels, workItems } from '../db/schema.js';
+import { withTenantTx } from '../db/client.js';
+import type { WorkItemDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can } from '../permissions/can.js';
 import type { EnqueueRebalance } from '../work/jobs.js';
@@ -32,8 +31,6 @@ import {
   type SpaceRow,
 } from '../work/service.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
-
-const C = sql.raw(' COLLATE "C"');
 
 export interface MoveDeps extends AuthDeps {
   enqueueRebalance?: EnqueueRebalance;
@@ -94,7 +91,8 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
       const expected = ifMatch(req);
       let rebalance: { spaceId: string; statusId: string } | null = null;
 
-      const result = await withTenant(deps.db, actor.orgId, async (tx) => {
+      const result = await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        rebalance = null;
         const { row, space } = await resolveItem(tx, actor, req.params.id);
         if (!can(actor, 'item.edit', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
           throw forbidden();
@@ -104,17 +102,13 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         await lockSpace(tx, space.id);
         const target = await statusIn(tx, space, b.statusId);
 
-        const column = and(
-          eq(workItems.spaceId, space.id),
-          eq(workItems.statusId, target.id),
-          isNull(workItems.deletedAt),
-          ne(workItems.id, row.id),
-        );
+        const columnBase = { spaceId: space.id, statusId: target.id, deletedAt: null };
+        const column = { ...columnBase, id: { $ne: row.id } };
         const neighbour = async (id: string) => {
-          const [n] = await tx
-            .select({ rank: workItems.rank })
-            .from(workItems)
-            .where(and(column, eq(workItems.id, id)));
+          const n = await tx.workItems.findOne(
+            { ...columnBase, $and: [{ id }, { id: { $ne: row.id } }] },
+            { projection: { rank: 1 } },
+          );
           if (!n) {
             throw new AppError(
               422,
@@ -130,29 +124,23 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
           let hi: string | null = null;
           if (b.afterItemId) {
             lo = await neighbour(b.afterItemId);
-            const [next] = await tx
-              .select({ rank: workItems.rank })
-              .from(workItems)
-              .where(and(column, sql`${workItems.rank}${C} > ${lo}::text${C}`))
-              .orderBy(sql`${workItems.rank}${C} asc`)
-              .limit(1);
+            const next = await tx.workItems.findOne(
+              { ...column, rank: { $gt: lo } },
+              { sort: { rank: 1 }, projection: { rank: 1 } },
+            );
             hi = next?.rank ?? null;
           } else if (b.beforeItemId) {
             hi = await neighbour(b.beforeItemId);
-            const [prev] = await tx
-              .select({ rank: workItems.rank })
-              .from(workItems)
-              .where(and(column, sql`${workItems.rank}${C} < ${hi}::text${C}`))
-              .orderBy(sql`${workItems.rank}${C} desc`)
-              .limit(1);
+            const prev = await tx.workItems.findOne(
+              { ...column, rank: { $lt: hi } },
+              { sort: { rank: -1 }, projection: { rank: 1 } },
+            );
             lo = prev?.rank ?? null;
           } else {
-            const [last] = await tx
-              .select({ rank: workItems.rank })
-              .from(workItems)
-              .where(column)
-              .orderBy(sql`${workItems.rank}${C} desc`)
-              .limit(1);
+            const last = await tx.workItems.findOne(column, {
+              sort: { rank: -1 },
+              projection: { rank: 1 },
+            });
             lo = last?.rank ?? null;
           }
           return generateKeyBetween(lo, hi);
@@ -168,7 +156,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         }
 
         const now = new Date();
-        const set: Partial<typeof workItems.$inferInsert> = {
+        const set: Partial<WorkItemDoc> = {
           statusId: target.id,
           rank,
           resolvedAt: resolvedAtFor(target.category, row.resolvedAt, now),
@@ -184,34 +172,22 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
           validateHierarchy(row.type, parent);
           set.parentId = b.epicId;
         }
-        const updated = await tx
-          .update(workItems)
-          .set(set)
-          .where(and(eq(workItems.id, row.id), matchesVersion(expected)))
-          .returning({ id: workItems.id });
-        if (!updated.length) throw stale();
+        const updated = await tx.workItems.updateOne({ id: row.id, ...matchesVersion(expected) }, set);
+        if (updated === 0) throw stale();
 
         if (needsRebalance(rank)) rebalance = { spaceId: space.id, statusId: target.id };
 
-        const [fresh] = await loadItemRows(tx, eq(workItems.id, row.id));
-        const [wip] = await tx
-          .select({ n: count() })
-          .from(workItems)
-          .where(
-            and(
-              eq(workItems.spaceId, space.id),
-              eq(workItems.statusId, target.id),
-              isNull(workItems.deletedAt),
-            ),
-          );
-        const [limit] = await tx
-          .select({ wipLimit: spaceStatuses.wipLimit })
-          .from(spaceStatuses)
-          .where(eq(spaceStatuses.id, target.id));
+        const [fresh] = await loadItemRows(tx, { id: row.id });
+        const wip = await tx.workItems.count({
+          spaceId: space.id,
+          statusId: target.id,
+          deletedAt: null,
+        });
+        const status = await tx.spaceStatuses.get(target.id);
         return {
           ...presentItem(fresh!, space.key),
           permissions: itemPermissions(actor, space, fresh!.reporterId, can),
-          wip: { limit: limit?.wipLimit ?? null, count: wip?.n ?? 0 },
+          wip: { limit: status?.wipLimit ?? null, count: wip },
         };
       });
 
@@ -229,25 +205,21 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
     const actor = actorOf(req);
     const b = req.body;
     const ids = [...new Set(b.ids)];
-    return withTenant(deps.db, actor.orgId, async (tx) => {
-      const rows = await tx
-        .select({
-          id: workItems.id,
-          number: workItems.number,
-          spaceId: workItems.spaceId,
-          type: workItems.type,
-          reporterId: workItems.reporterId,
-          resolvedAt: workItems.resolvedAt,
-          statusId: workItems.statusId,
-        })
-        .from(workItems)
-        .where(
-          and(
-            inArray(workItems.id, ids),
-            eq(workItems.orgId, actor.orgId),
-            isNull(workItems.deletedAt),
-          ),
-        );
+    return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const rows = await tx.workItems.find(
+        { id: { $in: ids }, deletedAt: null },
+        {
+          projection: {
+            id: 1,
+            number: 1,
+            spaceId: 1,
+            type: 1,
+            reporterId: 1,
+            resolvedAt: 1,
+            statusId: 1,
+          },
+        },
+      );
       if (rows.length !== ids.length) throw notFound('Work item');
       const spaceIds = new Set(rows.map((x) => x.spaceId));
       if (spaceIds.size > 1) {
@@ -275,7 +247,10 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
           failed.push({
             id: item.id,
             key: `${space.key}-${item.number}`,
-            reason: b.action === 'delete' ? 'You can only delete items you reported' : 'You cannot change this item',
+            reason:
+              b.action === 'delete'
+                ? 'You can only delete items you reported'
+                : 'You cannot change this item',
           });
         }
       }
@@ -288,71 +263,51 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
           const toMove = ok.filter((x) => x.statusId !== target.id);
           const ranks = await ranksAtEnd(tx, space.id, target.id, toMove.length);
           for (const [i, item] of toMove.entries()) {
-            await tx
-              .update(workItems)
-              .set({
+            await tx.workItems.updateOne(
+              { id: item.id },
+              {
                 statusId: target.id,
                 rank: ranks[i]!,
                 resolvedAt: resolvedAtFor(target.category, item.resolvedAt, now),
                 updatedAt: now,
-              })
-              .where(eq(workItems.id, item.id));
+              },
+            );
           }
         } else if (b.action === 'assign') {
           if (b.assigneeId) await assertAssignable(tx, actor.orgId, space, b.assigneeId);
-          await tx
-            .update(workItems)
-            .set({ assigneeId: b.assigneeId, updatedAt: now })
-            .where(inArray(workItems.id, idsOk));
+          await tx.workItems.updateMany(
+            { id: { $in: idsOk } },
+            { assigneeId: b.assigneeId, updatedAt: now },
+          );
         } else if (b.action === 'label') {
-          const [label] = await tx
-            .select({ id: labels.id })
-            .from(labels)
-            .where(and(eq(labels.id, b.labelId), eq(labels.spaceId, space.id)));
+          const label = await tx.labels.findOne({ id: b.labelId, spaceId: space.id });
           if (!label) {
             throw new AppError(422, 'invalid_label', 'That label does not exist in this space', {
               labelId: 'Choose a label from this space',
             });
           }
-          if (b.mode === 'add') {
-            await tx
-              .insert(workItemLabels)
-              .values(idsOk.map((workItemId) => ({ workItemId, labelId: label.id, orgId: actor.orgId, spaceId: space.id })))
-              .onConflictDoNothing();
-          } else {
-            await tx
-              .delete(workItemLabels)
-              .where(and(inArray(workItemLabels.workItemId, idsOk), eq(workItemLabels.labelId, label.id)));
-          }
-          await tx.update(workItems).set({ updatedAt: now }).where(inArray(workItems.id, idsOk));
+          await tx.workItems.updateMany(
+            { id: { $in: idsOk } },
+            b.mode === 'add'
+              ? { $addToSet: { labelIds: label.id }, $set: { updatedAt: now } }
+              : ({ $pull: { labelIds: label.id }, $set: { updatedAt: now } } as never),
+          );
         } else {
           // Subtasks go with their parent; stories under a deleted epic stay.
-          const subtaskRows = await tx
-            .select({ id: workItems.id })
-            .from(workItems)
-            .where(
-              and(
-                inArray(
-                  workItems.parentId,
-                  ok.filter((x) => x.type !== 'epic').map((x) => x.id),
-                ),
-                isNull(workItems.deletedAt),
-              ),
-            );
-          await tx
-            .update(workItems)
-            .set({ deletedAt: now, updatedAt: now })
-            .where(
-              and(
-                inArray(workItems.id, [...idsOk, ...subtaskRows.map((x) => x.id)]),
-                isNull(workItems.deletedAt),
-              ),
-            );
+          const parents = ok.filter((x) => x.type !== 'epic').map((x) => x.id);
+          const subtaskRows = parents.length
+            ? await tx.workItems.find(
+                { parentId: { $in: parents }, deletedAt: null },
+                { projection: { id: 1 } },
+              )
+            : [];
+          await tx.workItems.updateMany(
+            { id: { $in: [...idsOk, ...subtaskRows.map((x) => x.id)] }, deletedAt: null },
+            { deletedAt: now, updatedAt: now },
+          );
         }
       }
       return { updated: ok.length, failed };
     });
   });
 }
-
-export type { Tx };

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-14 - MongoDB, workspaces of every kind, dev logins per role
+
+- Data store moved from Postgres to MongoDB (ADR-051). Docker compose runs `mongo:7` as a single-node
+  replica set on port 27018; env vars `MONGODB_URI` and `MONGODB_DB` replace `DATABASE_URL` and
+  `DATABASE_ADMIN_URL`. SQL migrations, Drizzle and the Postgres role setup were removed; `pnpm db:migrate`
+  now creates indexes and the plan catalogue.
+- Tenant isolation moved from row-level security to the repository layer (ADR-052), with a new isolation
+  test over every tenant collection.
+- Sign-up asks what kind of work the team does and how it will use the product; templates set modules
+  and the starting columns of new spaces (ADR-054). Signed-in people can create more workspaces and see
+  them all at `/my-workspaces` and in the switcher (ADR-053). New settings page: Settings, Kind of work.
+- Dev seed: five workspaces of different kinds (software, sales, construction, marketing, suspended), one
+  login per role, a person in four workspaces, all with password `dev@1234`; demo content for each.
+- Docs: MISSING-FEATURES.md (what each kind of work needs that is not built yet).
+- Tests: all 415 API tests ported to MongoDB, plus 11 for workspaces and templates (426 in total).
+
 ## 2026-10-14 - Phase W2: Drag and drop and board power features
 
 - API: move endpoint (`POST /items/:id/move`) with fractional string ranks, `If-Match` and a per-space lock; bulk endpoint (move, assign, label, delete, up to 100); labels (list, create, rename, recolour, delete) and `labelIds` on items; board and column filters (`assignee`, `type`, `priority`, `label`, `epic`, `due`, `q`, `mine`, `recent`) with a filtered count and an unfiltered WIP count; rank rebalance job. New `can()` actions `label.create` and `label.manage`. Dependency: `fractional-indexing`.

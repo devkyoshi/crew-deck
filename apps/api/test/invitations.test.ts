@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -10,7 +9,6 @@ import {
   uniqueEmail,
   type CapturedInvite,
 } from './helpers.js';
-import { auditLogs, invitations } from '../src/db/schema.js';
 import { createBrevoSender } from '../src/email/sender.js';
 import { inviteEmail } from '../src/email/templates.js';
 
@@ -46,7 +44,7 @@ const invite = (cookie: string | undefined, emails: string[], orgRole?: string, 
 async function dbInvite(id: string) {
   const a = adminDb();
   try {
-    return (await a.db.select().from(invitations).where(eq(invitations.id, id)))[0]!;
+    return (await a.db.global.all.invitations.get(id))!;
   } finally {
     await a.close();
   }
@@ -122,10 +120,10 @@ describe('POST /invitations', () => {
     const id = (await invite(adminC, [email])).json().results[0].invitationId;
     const a = adminDb();
     try {
-      const rows = await a.db
-        .select()
-        .from(auditLogs)
-        .where(and(eq(auditLogs.targetId, id), eq(auditLogs.action, 'invitation.created')));
+      const rows = await a.db.global.all.auditLogs.find({
+        targetId: id,
+        action: 'invitation.created',
+      });
       expect(rows).toHaveLength(1);
       expect(rows[0]!.after).toMatchObject({ email, orgRole: 'member' });
     } finally {
@@ -187,10 +185,10 @@ describe('resend and revoke', () => {
     const oldToken = tokenOf(first.link);
     const a = adminDb();
     // make it nearly expired
-    await a.db
-      .update(invitations)
-      .set({ expiresAt: new Date(Date.now() + 1000) })
-      .where(eq(invitations.id, first.invitationId));
+    await a.db.global.all.invitations.updateOne(
+      { id: first.invitationId },
+      { expiresAt: new Date(Date.now() + 1000) },
+    );
     await a.close();
 
     const res = await call({
@@ -220,10 +218,10 @@ describe('resend and revoke', () => {
   it('resend works on expired invites, but not on accepted or revoked ones', async () => {
     const exp = (await invite(adminC, [uniqueEmail('ex')])).json().results[0];
     const a = adminDb();
-    await a.db
-      .update(invitations)
-      .set({ expiresAt: new Date(Date.now() - 1000) })
-      .where(eq(invitations.id, exp.invitationId));
+    await a.db.global.all.invitations.updateOne(
+      { id: exp.invitationId },
+      { expiresAt: new Date(Date.now() - 1000) },
+    );
     await a.close();
     const list = (
       await call({
@@ -367,12 +365,10 @@ describe('accepting an invite', () => {
     });
     const a = adminDb();
     try {
-      const rows = await a.db
-        .select()
-        .from(auditLogs)
-        .where(
-          and(eq(auditLogs.targetId, r.invitationId), eq(auditLogs.action, 'invitation.accepted')),
-        );
+      const rows = await a.db.global.all.auditLogs.find({
+        targetId: r.invitationId,
+        action: 'invitation.accepted',
+      });
       expect(rows).toHaveLength(1);
     } finally {
       await a.close();

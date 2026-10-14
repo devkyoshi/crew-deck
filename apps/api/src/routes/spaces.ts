@@ -1,17 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { assertFeature, assertWithinLimit, countSpaces, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { groups, memberships, spaceMembers, spaceStars, spaces, users } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
-import { likePattern, offsetOf, pageQuery } from '../lib/pagination.js';
+import { containsRegex, offsetOf, pageQuery } from '../lib/pagination.js';
 import { can, type Actor, type SpaceRole } from '../permissions/can.js';
-import { effectiveRoleSql, memberCountSql, starredSql, visibleTo } from '../spaces/access.js';
+import {
+  isOrgAdmin,
+  loadVisibleSpaces,
+  type SpaceView,
+} from '../spaces/access.js';
+import { seedSpaceWork } from '../work/seed.js';
+
+export { isOrgAdmin };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,39 +59,10 @@ const keyTaken = () =>
     key: 'That key is already used (keys are never reused)',
   });
 
-export function columnsFor(userId: string, orgId: string) {
-  return {
-    id: spaces.id,
-    key: spaces.key,
-    name: spaces.name,
-    description: spaces.description,
-    icon: spaces.icon,
-    visibility: spaces.visibility,
-    status: spaces.status,
-    ownerId: spaces.ownerId,
-    createdAt: spaces.createdAt,
-    updatedAt: spaces.updatedAt,
-    myRole: effectiveRoleSql(userId, orgId),
-    starred: starredSql(userId),
-    memberCount: memberCountSql,
-  };
-}
-export const isOrgAdmin = (a: Actor) => a.orgRole === 'owner' || a.orgRole === 'admin';
-
 /** Loads a space by id or key, or 404s. Hidden spaces look exactly like missing ones. */
-export async function resolveSpace(tx: Tx, actor: Actor, param: string) {
-  const cols = columnsFor(actor.userId, actor.orgId);
+export async function resolveSpace(t: TenantDb, actor: Actor, param: string): Promise<SpaceView> {
   const byId = UUID.test(param);
-  const rows = await tx
-    .select(cols)
-    .from(spaces)
-    .where(
-      and(
-        visibleTo({ orgId: actor.orgId, isOrgAdmin: isOrgAdmin(actor), role: cols.myRole }),
-        byId ? eq(spaces.id, param) : eq(spaces.key, param.toUpperCase()),
-      ),
-    );
-  const row = rows[0];
+  const [row] = await loadVisibleSpaces(t, actor, byId ? { id: param } : { key: param.toUpperCase() });
   if (!row) throw notFound('Space');
   return row;
 }
@@ -109,46 +85,47 @@ function presentPermissions(
   };
 }
 
-async function memberSummary(tx: Tx, orgId: string, spaceId: string) {
-  const direct = await tx
-    .select({
-      type: sql<'user'>`'user'`,
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      avatarUrl: users.avatarUrl,
-      role: spaceMembers.spaceRole,
-    })
-    .from(spaceMembers)
-    .innerJoin(users, eq(users.id, spaceMembers.principalId))
-    .where(
-      and(
-        eq(spaceMembers.spaceId, spaceId),
-        eq(spaceMembers.orgId, orgId),
-        eq(spaceMembers.principalType, 'user'),
-      ),
-    )
-    .orderBy(asc(spaceMembers.createdAt))
-    .limit(8);
-  const grouped = await tx
-    .select({
-      type: sql<'group'>`'group'`,
-      id: groups.id,
-      name: groups.name,
-      role: spaceMembers.spaceRole,
-    })
-    .from(spaceMembers)
-    .innerJoin(groups, eq(groups.id, spaceMembers.principalId))
-    .where(
-      and(
-        eq(spaceMembers.spaceId, spaceId),
-        eq(spaceMembers.orgId, orgId),
-        eq(spaceMembers.principalType, 'group'),
-      ),
-    )
-    .orderBy(asc(spaceMembers.createdAt))
-    .limit(8);
-  return [...direct, ...grouped];
+async function memberSummary(t: TenantDb, spaceId: string) {
+  const direct = await t.spaceMembers.find(
+    { spaceId, principalType: 'user' },
+    { sort: { createdAt: 1 }, limit: 8 },
+  );
+  const people = await t.users(direct.map((d) => d.principalId));
+  const grouped = await t.spaceMembers.find(
+    { spaceId, principalType: 'group' },
+    { sort: { createdAt: 1 }, limit: 8 },
+  );
+  const gs = grouped.length ? await t.groups.find({ id: { $in: grouped.map((g) => g.principalId) } }) : [];
+  const groupName = new Map(gs.map((g) => [g.id, g.name]));
+  return [
+    ...direct.flatMap((d) => {
+      const u = people.get(d.principalId);
+      return u
+        ? [
+            {
+              type: 'user' as const,
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              avatarUrl: u.avatarUrl,
+              role: d.spaceRole,
+            },
+          ]
+        : [];
+    }),
+    ...grouped.flatMap((g) =>
+      groupName.has(g.principalId)
+        ? [
+            {
+              type: 'group' as const,
+              id: g.principalId,
+              name: groupName.get(g.principalId)!,
+              role: g.spaceRole,
+            },
+          ]
+        : [],
+    ),
+  ];
 }
 
 const createBody = z.object({
@@ -181,9 +158,9 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
-  const detail = async (tx: Tx, actor: Actor, row: Awaited<ReturnType<typeof resolveSpace>>) => ({
+  const detail = async (tx: TenantDb, actor: Actor, row: SpaceView) => ({
     ...row,
-    members: await memberSummary(tx, actor.orgId, row.id),
+    members: await memberSummary(tx, row.id),
     permissions: presentPermissions(actor, row),
   });
 
@@ -205,34 +182,24 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const q = req.query;
-      const cols = columnsFor(actor.userId, actor.orgId);
-      const conds: (SQL | undefined)[] = [
-        visibleTo({ orgId: actor.orgId, isOrgAdmin: isOrgAdmin(actor), role: cols.myRole }),
-      ];
+      const filter: Record<string, unknown> = {};
       if (q.q) {
-        const p = likePattern(q.q);
-        conds.push(or(ilike(spaces.name, p), ilike(spaces.key, p), ilike(spaces.description, p)));
+        const rx = containsRegex(q.q);
+        filter.$or = [{ name: rx }, { key: rx }, { description: rx }];
       }
-      if (q.visibility !== 'all') conds.push(eq(spaces.visibility, q.visibility));
-      if (q.status !== 'all') conds.push(eq(spaces.status, q.status));
-      if (q.mine === 'true') conds.push(sql`${cols.myRole} is not null`);
-      if (q.starred === 'true') conds.push(starredSql(actor.userId));
-      if (q.key) conds.push(eq(spaces.key, q.key.toUpperCase()));
-      const where = and(...conds);
+      if (q.visibility !== 'all') filter.visibility = q.visibility;
+      if (q.status !== 'all') filter.status = q.status;
+      if (q.key) filter.key = q.key.toUpperCase();
 
       return withTenant(deps.db, actor.orgId, async (tx) => {
-        const items = await tx
-          .select(cols)
-          .from(spaces)
-          .where(where)
-          .orderBy(asc(sql`lower(${spaces.name})`), asc(spaces.id))
-          .limit(q.pageSize)
-          .offset(offsetOf(q));
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(spaces)
-          .where(where);
-        return { items, total: count?.n ?? 0, page: q.page, pageSize: q.pageSize };
+        let rows = await loadVisibleSpaces(tx, actor, filter);
+        if (q.mine === 'true') rows = rows.filter((r) => r.myRole !== null);
+        if (q.starred === 'true') rows = rows.filter((r) => r.starred);
+        rows.sort(
+          (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id.localeCompare(b.id),
+        );
+        const items = rows.slice(offsetOf(q), offsetOf(q) + q.pageSize);
+        return { items, total: rows.length, page: q.page, pageSize: q.pageSize };
       });
     },
   );
@@ -250,7 +217,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     const b = req.body;
 
     try {
-      return await withTenant(deps.db, actor.orgId, async (tx) => {
+      return await withTenantTx(deps.db, actor.orgId, async (tx) => {
         const plan = await loadPlan(tx, actor.orgId);
         assertWithinLimit(plan, 'spaces', await countSpaces(tx, actor.orgId));
         if (b.boardType === 'scrum') {
@@ -261,27 +228,14 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           });
         }
         // Keys are unique per workspace and never reused, deleted spaces included.
-        const taken = await tx
-          .select({ id: spaces.id })
-          .from(spaces)
-          .where(and(eq(spaces.orgId, actor.orgId), eq(spaces.key, b.key)));
-        if (taken.length) throw keyTaken();
+        if (await tx.spaces.exists({ key: b.key })) throw keyTaken();
 
         // Validate every requested principal belongs to this workspace.
         const userIds = [...new Set(b.members.filter((m) => m.type === 'user').map((m) => m.id))];
         const groupIds = [...new Set(b.members.filter((m) => m.type === 'group').map((m) => m.id))];
         if (userIds.length) {
-          const ok = await tx
-            .select({ id: memberships.userId })
-            .from(memberships)
-            .where(
-              and(
-                eq(memberships.orgId, actor.orgId),
-                eq(memberships.status, 'active'),
-                inArray(memberships.userId, userIds),
-              ),
-            );
-          if (ok.length !== userIds.length) {
+          const ok = await tx.memberships.count({ status: 'active', userId: { $in: userIds } });
+          if (ok !== userIds.length) {
             throw new AppError(
               400,
               'invalid_members',
@@ -290,28 +244,23 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           }
         }
         if (groupIds.length) {
-          const ok = await tx
-            .select({ id: groups.id })
-            .from(groups)
-            .where(and(eq(groups.orgId, actor.orgId), inArray(groups.id, groupIds)));
-          if (ok.length !== groupIds.length) {
+          const ok = await tx.groups.count({ id: { $in: groupIds } });
+          if (ok !== groupIds.length) {
             throw new AppError(400, 'invalid_members', 'One of the selected groups does not exist');
           }
         }
 
-        const [created] = await tx
-          .insert(spaces)
-          .values({
-            orgId: actor.orgId,
-            key: b.key,
-            name: b.name,
-            description: b.description || null,
-            icon: b.icon,
-            visibility: b.visibility,
-            ownerId: actor.userId,
-          })
-          .returning({ id: spaces.id });
-        const spaceId = created!.id;
+        const created = await tx.spaces.insert({
+          key: b.key,
+          name: b.name,
+          description: b.description || null,
+          icon: b.icon,
+          visibility: b.visibility,
+          ownerId: actor.userId,
+        });
+        const spaceId = created.id;
+        // Board, counter and starting columns (the old database trigger), from the workspace template.
+        await seedSpaceWork(tx, spaceId);
 
         // The creator is always the first space admin, whatever else was chosen.
         const byPrincipal = new Map<
@@ -320,10 +269,9 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         >();
         for (const m of b.members) byPrincipal.set(`${m.type}:${m.id}`, m);
         byPrincipal.set(`user:${actor.userId}`, { type: 'user', id: actor.userId, role: 'admin' });
-        await tx.insert(spaceMembers).values(
+        await tx.spaceMembers.insert(
           [...byPrincipal.values()].map((m) => ({
             spaceId,
-            orgId: actor.orgId,
             principalType: m.type,
             principalId: m.id,
             spaceRole: m.role,
@@ -366,7 +314,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: param, body: patchBody } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const before = await resolveSpace(tx, actor, req.params.id);
         if (!can(actor, 'space.edit', spaceCtx(before))) throw forbidden();
         if (before.status === 'archived') {
@@ -380,10 +328,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           ...(req.body.icon !== undefined ? { icon: req.body.icon } : {}),
           ...(req.body.visibility !== undefined ? { visibility: req.body.visibility } : {}),
         };
-        await tx
-          .update(spaces)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(and(eq(spaces.id, before.id), eq(spaces.orgId, actor.orgId)));
+        await tx.spaces.updateOne({ id: before.id }, { ...patch, updatedAt: new Date() });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -403,14 +348,11 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
   );
 
   async function setStatus(actor: Actor, id: string, status: 'active' | 'archived') {
-    return withTenant(deps.db, actor.orgId, async (tx) => {
+    return withTenantTx(deps.db, actor.orgId, async (tx) => {
       const row = await resolveSpace(tx, actor, id);
       if (!can(actor, 'space.edit', spaceCtx(row))) throw forbidden();
       if (row.status !== status) {
-        await tx
-          .update(spaces)
-          .set({ status, updatedAt: new Date() })
-          .where(and(eq(spaces.id, row.id), eq(spaces.orgId, actor.orgId)));
+        await tx.spaces.updateOne({ id: row.id }, { status, updatedAt: new Date() });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -441,7 +383,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         const row = await resolveSpace(tx, actor, req.params.id);
         if (!can(actor, 'space.delete', spaceCtx(row))) throw forbidden();
         if ((req.query.confirm ?? '').toUpperCase() !== row.key) {
@@ -455,13 +397,8 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           );
         }
         // Soft delete: the row stays so the key can never be reused.
-        await tx
-          .update(spaces)
-          .set({ deletedAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(spaces.id, row.id), eq(spaces.orgId, actor.orgId)));
-        await tx
-          .delete(spaceStars)
-          .where(and(eq(spaceStars.spaceId, row.id), eq(spaceStars.orgId, actor.orgId)));
+        await tx.spaces.updateOne({ id: row.id }, { deletedAt: new Date(), updatedAt: new Date() });
+        await tx.spaceStars.deleteMany({ spaceId: row.id });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -488,20 +425,9 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (!can(actor, 'space.view', spaceCtx(row))) throw forbidden();
         const want = req.body.starred ?? !row.starred;
         if (want) {
-          await tx
-            .insert(spaceStars)
-            .values({ spaceId: row.id, orgId: actor.orgId, userId: actor.userId })
-            .onConflictDoNothing();
+          await tx.spaceStars.insertIgnore({ spaceId: row.id, userId: actor.userId });
         } else {
-          await tx
-            .delete(spaceStars)
-            .where(
-              and(
-                eq(spaceStars.spaceId, row.id),
-                eq(spaceStars.userId, actor.userId),
-                eq(spaceStars.orgId, actor.orgId),
-              ),
-            );
+          await tx.spaceStars.deleteMany({ spaceId: row.id, userId: actor.userId });
         }
         return { starred: want };
       });

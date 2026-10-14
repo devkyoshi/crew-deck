@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -9,7 +8,6 @@ import {
   signInAs,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, organizations } from '../src/db/schema.js';
 import { expireTrials } from '../src/plans/jobs.js';
 
 const t = makeApp();
@@ -33,16 +31,16 @@ async function workspace(
   const { org, slug, owner } = await createOrg(`pl${plan ?? 'int'}`);
   const db = adminDb();
   try {
-    await db.db
-      .update(organizations)
-      .set({
+    await db.db.global.organizations.updateOne(
+      { id: org.id },
+      {
         planKey: plan,
         onTrial: extra.onTrial ?? false,
         trialEndsAt: extra.trialEndsAt ?? null,
-        limitOverrides: extra.overrides ?? {},
+        limitOverrides: (extra.overrides ?? {}) as Record<string, number>,
         domainRestricted: extra.domainRestricted ?? true,
-      })
-      .where(eq(organizations.id, org.id));
+      },
+    );
   } finally {
     await db.close();
   }
@@ -210,8 +208,7 @@ describe('locked features', () => {
     const db = adminDb();
     try {
       for (const o of [free, biz]) {
-        await db.db.insert(auditLogs).values({
-          orgId: o.org.id,
+        await db.db.global.forOrg(o.org.id).auditLogs.insert({
           actorId: o.owner.id,
           action: 'test.old_entry',
           targetType: 'settings',
@@ -234,10 +231,7 @@ describe('locked features', () => {
     // The row is still stored.
     const check = adminDb();
     try {
-      const rows = await check.db
-        .select()
-        .from(auditLogs)
-        .where(eq(auditLogs.action, 'test.old_entry'));
+      const rows = await check.db.global.all.auditLogs.find({ action: 'test.old_entry' });
       expect(rows.length).toBeGreaterThanOrEqual(2);
     } finally {
       await check.close();
@@ -292,28 +286,23 @@ describe('locked features', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('a workspace cannot change its own plan, status or limits through the database either', async () => {
+  it('a workspace cannot change its own plan, status or limits, or reach platform data, through its scope', async () => {
     const o = await workspace('free');
     const app = (await import('./helpers.js')).appDb();
     try {
-      await expect(
-        app.db.transaction(async (tx) => {
-          await tx.execute(sql`select set_config('app.current_org', ${o.org.id}, true)`);
-          await tx.execute(
-            sql`update organizations set plan_key = 'business' where id = ${o.org.id}`,
-          );
-        }),
-      ).rejects.toThrow();
-      await expect(
-        app.db.transaction(async (tx) => {
-          await tx.execute(sql`select set_config('app.current_org', ${o.org.id}, true)`);
-          await tx.execute(
-            sql`update organizations set status = 'active', limit_overrides = '{}' where id = ${o.org.id}`,
-          );
-        }),
-      ).rejects.toThrow();
-      await expect(app.db.execute(sql`select * from platform_admins`)).rejects.toThrow();
-      await expect(app.db.execute(sql`select * from signup_requests`)).rejects.toThrow();
+      const tenant = app.db.tenant(o.org.id);
+      // Branding is the only thing a tenant may write on its organization; everything else is dropped.
+      await tenant.updateBranding({
+        planKey: 'business',
+        status: 'active',
+        limitOverrides: {},
+      } as never);
+      const org = (await tenant.organization())!;
+      expect(org.planKey).toBe('free');
+      // Platform collections are not reachable from a tenant scope at all.
+      for (const name of ['platformAdmins', 'signupRequests', 'platformSettings', 'platformAudit']) {
+        expect((tenant as unknown as Record<string, unknown>)[name]).toBeUndefined();
+      }
     } finally {
       await app.close();
     }
@@ -385,9 +374,9 @@ describe('trials', () => {
     expect(await expireTrials(t.db)).not.toContain(o.org.id);
     const db = adminDb();
     try {
-      const [row] = await db.db.select().from(organizations).where(eq(organizations.id, o.org.id));
+      const row = await db.db.global.organizations.findOne({ id: o.org.id });
       expect(row).toMatchObject({ planKey: 'free', onTrial: false });
-      const logs = await db.db.select().from(auditLogs).where(eq(auditLogs.orgId, o.org.id));
+      const logs = await db.db.global.all.auditLogs.find({ orgId: o.org.id });
       expect(logs.filter((l) => l.action === 'plan.trial_ended')).toHaveLength(1);
     } finally {
       await db.close();

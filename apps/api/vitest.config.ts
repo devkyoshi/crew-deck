@@ -7,17 +7,10 @@ try {
   /* no .env file */
 }
 
-/** Tests run against <db>_test so they never pollute the development database. */
-function testUrl(url: string | undefined) {
-  if (!url) return url;
-  const u = new URL(url);
-  if (!u.pathname.endsWith('_test')) u.pathname = `${u.pathname}_test`;
-  return u.toString();
-}
-
-// Set in the main process so global setup and every worker see the test database.
-process.env.DATABASE_URL = testUrl(process.env.DATABASE_URL);
-process.env.DATABASE_ADMIN_URL = testUrl(process.env.DATABASE_ADMIN_URL);
+// Tests run against <db>_test so they never pollute the development database. Set in the main process
+// so global setup and every worker see the test database.
+const base = process.env.MONGODB_DB ?? 'crewdeck';
+process.env.MONGODB_DB = base.endsWith('_test') ? base : `${base}_test`;
 
 export default defineConfig({
   test: {

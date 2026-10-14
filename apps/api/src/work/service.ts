@@ -1,26 +1,20 @@
-import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { ALLOWED_CHILDREN, type ItemType } from '@crew-deck/shared';
-import type { Tx } from '../db/client.js';
-import {
-  boards,
-  labels,
-  memberships,
-  spaceCounters,
-  spaceStatuses,
-  spaces,
-  users,
-  workItemLabels,
-  workItems,
-} from '../db/schema.js';
+import type { TenantDb } from '../db/client.js';
+import type {
+  LabelDoc,
+  SpaceStatusDoc,
+  StatusCategory,
+  UserDoc,
+  WorkItemDoc,
+} from '../db/types.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { Actor } from '../permissions/can.js';
-import { effectiveRoleSql } from '../spaces/access.js';
+import { effectiveRole, type SpaceView } from '../spaces/access.js';
 import { resolveSpace } from '../routes/spaces.js';
 import { docToText } from './doc.js';
 
-export type SpaceRow = Awaited<ReturnType<typeof resolveSpace>>;
+export type SpaceRow = SpaceView;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KEY = /^([A-Za-z][A-Za-z0-9]{1,9})-(\d+)$/;
@@ -34,75 +28,114 @@ export function assertWritable(space: { status: 'active' | 'archived' }) {
   }
 }
 
-export async function loadBoard(tx: Tx, spaceId: string) {
-  const [board] = await tx.select().from(boards).where(eq(boards.spaceId, spaceId));
+export async function loadBoard(t: TenantDb, spaceId: string) {
+  const board = await t.boards.findOne({ spaceId });
   if (!board) throw notFound('Board');
   return board;
 }
 
 // ---- Items ----------------------------------------------------------------------------------------------
 
-const assigneeU = alias(users, 'assignee_u');
-const reporterU = alias(users, 'reporter_u');
-const parentW = alias(workItems, 'parent_w');
+/**
+ * A work item with everything the board and detail views show, joined in application code (the old
+ * SQL joined statuses, people, the parent and labels in one query).
+ */
+export interface ItemRow extends WorkItemDoc {
+  statusName: string;
+  statusCategory: StatusCategory;
+  statusColor: string;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+  assigneeAvatar: string | null;
+  reporterName: string | null;
+  reporterEmail: string | null;
+  reporterAvatar: string | null;
+  parentNumber: number | null;
+  parentTitle: string | null;
+  parentType: ItemType | null;
+  parentDeletedAt: Date | null;
+  labels: { id: string; name: string; color: string }[];
+  childCount: number;
+  childDone: number;
+}
 
-export const itemSelect = {
-  id: workItems.id,
-  number: workItems.number,
-  spaceId: workItems.spaceId,
-  type: workItems.type,
-  parentId: workItems.parentId,
-  title: workItems.title,
-  description: workItems.description,
-  statusId: workItems.statusId,
-  priority: workItems.priority,
-  assigneeId: workItems.assigneeId,
-  reporterId: workItems.reporterId,
-  estimate: workItems.estimate,
-  dueDate: workItems.dueDate,
-  rank: workItems.rank,
-  resolvedAt: workItems.resolvedAt,
-  createdAt: workItems.createdAt,
-  updatedAt: workItems.updatedAt,
-  statusName: spaceStatuses.name,
-  statusCategory: spaceStatuses.category,
-  statusColor: spaceStatuses.color,
-  assigneeName: assigneeU.name,
-  assigneeEmail: assigneeU.email,
-  assigneeAvatar: assigneeU.avatarUrl,
-  reporterName: reporterU.name,
-  reporterEmail: reporterU.email,
-  reporterAvatar: reporterU.avatarUrl,
-  parentNumber: parentW.number,
-  parentTitle: parentW.title,
-  parentType: parentW.type,
-  parentDeletedAt: parentW.deletedAt,
-  labels: sql<{ id: string; name: string; color: string }[]>`(
-    select coalesce(json_agg(json_build_object('id', l.id, 'name', l.name, 'color', l.color)
-      order by lower(l.name)), '[]'::json)
-    from work_item_labels wl join labels l on l.id = wl.label_id
-    where wl.work_item_id = ${workItems.id})`,
-  childCount: sql<number>`(select count(*)::int from work_items c
-    where c.parent_id = ${workItems.id} and c.deleted_at is null)`,
-  childDone: sql<number>`(select count(*)::int from work_items c
-    join space_statuses cs on cs.id = c.status_id
-    where c.parent_id = ${workItems.id} and c.deleted_at is null and cs.category = 'done')`,
-};
+/** Joins statuses, people, parents, labels and subtask counts onto a batch of item documents. */
+export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<ItemRow[]> {
+  if (docs.length === 0) return [];
+  const ids = docs.map((d) => d.id);
+  const statusIds = [...new Set(docs.map((d) => d.statusId))];
+  const parentIds = [...new Set(docs.map((d) => d.parentId).filter((x): x is string => !!x))];
+  const labelIds = [...new Set(docs.flatMap((d) => d.labelIds ?? []))];
+  const peopleIds = docs.flatMap((d) => [d.reporterId, ...(d.assigneeId ? [d.assigneeId] : [])]);
 
-/** The base query every item read shares: status, people and parent are joined in. */
-export function itemQuery(tx: Tx) {
-  return tx
-    .select(itemSelect)
-    .from(workItems)
-    .innerJoin(spaceStatuses, eq(spaceStatuses.id, workItems.statusId))
-    .leftJoin(assigneeU, eq(assigneeU.id, workItems.assigneeId))
-    .innerJoin(reporterU, eq(reporterU.id, workItems.reporterId))
-    .leftJoin(parentW, eq(parentW.id, workItems.parentId));
+  const [statuses, people, parents, labels, children] = await Promise.all([
+    t.spaceStatuses.find({ id: { $in: statusIds } }),
+    t.users(peopleIds),
+    parentIds.length ? t.workItems.find({ id: { $in: parentIds } }) : Promise.resolve([]),
+    labelIds.length ? t.labels.find({ id: { $in: labelIds } }) : Promise.resolve([] as LabelDoc[]),
+    t.workItems.find(
+      { parentId: { $in: ids }, deletedAt: null },
+      { projection: { parentId: 1, statusId: 1 } },
+    ),
+  ]);
+  const statusById = new Map(statuses.map((s) => [s.id, s]));
+  const parentById = new Map(parents.map((p) => [p.id, p]));
+  const labelById = new Map(labels.map((l) => [l.id, l]));
+
+  const childStatusIds = [...new Set(children.map((c) => c.statusId))].filter((id) => !statusById.has(id));
+  if (childStatusIds.length) {
+    for (const s of await t.spaceStatuses.find({ id: { $in: childStatusIds } })) {
+      statusById.set(s.id, s);
+    }
+  }
+  const childCount = new Map<string, number>();
+  const childDone = new Map<string, number>();
+  for (const c of children) {
+    const pid = c.parentId!;
+    childCount.set(pid, (childCount.get(pid) ?? 0) + 1);
+    if (statusById.get(c.statusId)?.category === 'done') childDone.set(pid, (childDone.get(pid) ?? 0) + 1);
+  }
+
+  const person = (u: UserDoc | undefined) => ({
+    name: u?.name ?? null,
+    email: u?.email ?? null,
+    avatar: u?.avatarUrl ?? null,
+  });
+
+  return docs.map((d) => {
+    const s = statusById.get(d.statusId);
+    const a = person(d.assigneeId ? people.get(d.assigneeId) : undefined);
+    const rep = person(people.get(d.reporterId));
+    const parent = d.parentId ? parentById.get(d.parentId) : undefined;
+    return {
+      ...d,
+      statusName: s?.name ?? '',
+      statusCategory: s?.category ?? 'todo',
+      statusColor: s?.color ?? 'slate',
+      assigneeName: a.name,
+      assigneeEmail: a.email,
+      assigneeAvatar: a.avatar,
+      reporterName: rep.name,
+      reporterEmail: rep.email,
+      reporterAvatar: rep.avatar,
+      parentNumber: parent?.number ?? null,
+      parentTitle: parent?.title ?? null,
+      parentType: parent?.type ?? null,
+      parentDeletedAt: parent?.deletedAt ?? null,
+      labels: (d.labelIds ?? [])
+        .map((id) => labelById.get(id))
+        .filter((l): l is LabelDoc => !!l)
+        .map((l) => ({ id: l.id, name: l.name, color: l.color }))
+        .sort((x, y) => x.name.toLowerCase().localeCompare(y.name.toLowerCase())),
+      childCount: childCount.get(d.id) ?? 0,
+      childDone: childDone.get(d.id) ?? 0,
+    };
+  });
 }
 
 type Person = { id: string; name: string | null; email: string; avatarUrl: string | null };
 
-export function presentItem(row: Awaited<ReturnType<typeof loadItemRows>>[number], spaceKey: string) {
+export function presentItem(row: ItemRow, spaceKey: string) {
   const person = (
     id: string | null,
     name: string | null,
@@ -150,88 +183,73 @@ export function presentItem(row: Awaited<ReturnType<typeof loadItemRows>>[number
   };
 }
 
-export const loadItemRows = (tx: Tx, where: SQL | undefined) => itemQuery(tx).where(where);
+/** Loads items matching a filter (live items only unless the filter says otherwise) with their joins. */
+export async function loadItemRows(
+  t: TenantDb,
+  filter: Record<string, unknown>,
+  opts: { sort?: Record<string, 1 | -1>; limit?: number } = {},
+): Promise<ItemRow[]> {
+  const docs = await t.workItems.find(filter, {
+    sort: opts.sort ?? { rank: 1, id: 1 },
+    limit: opts.limit,
+  });
+  return hydrateItems(t, docs);
+}
 
 /**
  * Finds an item by id or by key (`ENG-142`), checking the caller can see its space. Anything hidden,
  * deleted or in another tenant is a 404, so keys and ids cannot be probed.
  */
-export async function resolveItem(tx: Tx, actor: Actor, ref: string) {
+export async function resolveItem(t: TenantDb, actor: Actor, ref: string) {
   let itemId: string | null = null;
   let space: SpaceRow | null = null;
   if (UUID.test(ref)) {
-    const [hit] = await tx
-      .select({ id: workItems.id, spaceId: workItems.spaceId })
-      .from(workItems)
-      .where(and(eq(workItems.id, ref), eq(workItems.orgId, actor.orgId), isNull(workItems.deletedAt)));
+    const hit = await t.workItems.findOne({ id: ref, deletedAt: null }, { projection: { id: 1, spaceId: 1 } });
     if (!hit) throw notFound('Work item');
     itemId = hit.id;
-    space = await resolveSpace(tx, actor, hit.spaceId).catch(() => null);
+    space = await resolveSpace(t, actor, hit.spaceId).catch(() => null);
   } else {
     const m = KEY.exec(ref);
     if (!m) throw notFound('Work item');
-    space = await resolveSpace(tx, actor, m[1]!.toUpperCase()).catch(() => null);
+    space = await resolveSpace(t, actor, m[1]!.toUpperCase()).catch(() => null);
     if (space) {
-      const [hit] = await tx
-        .select({ id: workItems.id })
-        .from(workItems)
-        .where(
-          and(
-            eq(workItems.spaceId, space.id),
-            eq(workItems.number, Number(m[2])),
-            eq(workItems.orgId, actor.orgId),
-            isNull(workItems.deletedAt),
-          ),
-        );
+      const hit = await t.workItems.findOne(
+        { spaceId: space.id, number: Number(m[2]), deletedAt: null },
+        { projection: { id: 1 } },
+      );
       itemId = hit?.id ?? null;
     }
   }
   if (!space || !itemId) throw notFound('Work item');
-  const [row] = await loadItemRows(tx, eq(workItems.id, itemId));
+  const [row] = await loadItemRows(t, { id: itemId });
   if (!row) throw notFound('Work item');
   return { row, space };
 }
 
-/** Hands out the next key number. The row lock serialises creates, so numbers are gap-free per space. */
-export async function nextNumber(tx: Tx, spaceId: string) {
-  const [row] = await tx
-    .update(spaceCounters)
-    .set({ lastNumber: sql`${spaceCounters.lastNumber} + 1` })
-    .where(eq(spaceCounters.spaceId, spaceId))
-    .returning({ n: spaceCounters.lastNumber });
+/** Hands out the next key number atomically, so numbers are unique and gap-free per space. */
+export async function nextNumber(t: TenantDb, spaceId: string) {
+  const row = await t.spaceCounters.findOneAndUpdate({ spaceId }, { $inc: { lastNumber: 1 } });
   if (!row) throw notFound('Space');
-  return row.n;
+  return row.lastNumber;
 }
 
 // ---- Ranks ----------------------------------------------------------------------------------------------
 
-const C = sql.raw(' COLLATE "C"');
-
 /** A rank after every live item already in the column. */
-export async function rankAtEnd(tx: Tx, spaceId: string, statusId: string) {
-  const [last] = await tx
-    .select({ rank: workItems.rank })
-    .from(workItems)
-    .where(
-      and(
-        eq(workItems.spaceId, spaceId),
-        eq(workItems.statusId, statusId),
-        isNull(workItems.deletedAt),
-      ),
-    )
-    .orderBy(sql`${workItems.rank}${C} desc`)
-    .limit(1);
+export async function rankAtEnd(t: TenantDb, spaceId: string, statusId: string) {
+  const last = await t.workItems.findOne(
+    { spaceId, statusId, deletedAt: null },
+    { sort: { rank: -1 }, projection: { rank: 1 } },
+  );
   return generateKeyBetween(last?.rank ?? null, null);
 }
 
-/** `count` ranks after the last live item in the column, in order. */
-export async function ranksAtEnd(tx: Tx, spaceId: string, statusId: string, count: number) {
-  const [last] = await tx
-    .select({ rank: workItems.rank })
-    .from(workItems)
-    .where(and(eq(workItems.spaceId, spaceId), eq(workItems.statusId, statusId)))
-    .orderBy(sql`${workItems.rank}${C} desc`)
-    .limit(1);
+/** `count` ranks after the last item (live or not) in the column, in order. */
+export async function ranksAtEnd(t: TenantDb, spaceId: string, statusId: string, count: number) {
+  const last = await t.workItems.findOne(
+    { spaceId, statusId },
+    { sort: { rank: -1 }, projection: { rank: 1 } },
+  );
   return generateNKeysBetween(last?.rank ?? null, null, count);
 }
 
@@ -252,14 +270,14 @@ export function decodeCursor(cursor: string): [string, string] {
   throw new AppError(400, 'bad_cursor', 'That page marker is not valid');
 }
 
-/** Rows after a cursor, in (rank, id) order. */
-export const afterCursor = (cursor: string | undefined) => {
+/** Filter for rows after a cursor, in (rank, id) order. Mongo compares strings byte-wise by default. */
+export const afterCursor = (cursor: string | undefined): Record<string, unknown> | undefined => {
   if (!cursor) return undefined;
   const [rank, id] = decodeCursor(cursor);
-  return sql`(${workItems.rank}, ${workItems.id}) > (${rank}::text${C}, ${id}::uuid)`;
+  return { $or: [{ rank: { $gt: rank } }, { rank, id: { $gt: id } }] };
 };
 
-export const byRank = [sql`${workItems.rank}${C} asc`, asc(workItems.id)] as const;
+export const byRank = { rank: 1, id: 1 } as const;
 
 // ---- Hierarchy ------------------------------------------------------------------------------------------
 
@@ -295,45 +313,30 @@ export function validateHierarchy(
 // ---- People ---------------------------------------------------------------------------------------------
 
 /** An assignee must be an active member who can actually open the space. */
-export async function assertAssignable(tx: Tx, orgId: string, space: SpaceRow, userId: string) {
+export async function assertAssignable(t: TenantDb, _orgId: string, space: SpaceRow, userId: string) {
   const bad = () =>
     new AppError(422, 'invalid_assignee', 'Choose someone who has access to this space', {
       assigneeId: 'Choose someone who has access to this space',
     });
-  const [m] = await tx
-    .select({ role: memberships.orgRole })
-    .from(memberships)
-    .where(
-      and(
-        eq(memberships.orgId, orgId),
-        eq(memberships.userId, userId),
-        eq(memberships.status, 'active'),
-      ),
-    );
+  const m = await t.memberships.findOne({ userId, status: 'active' });
   if (!m) throw bad();
-  if (space.visibility === 'open' || m.role === 'owner' || m.role === 'admin') return;
-  const [access] = await tx
-    .select({ role: effectiveRoleSql(userId, orgId) })
-    .from(spaces)
-    .where(eq(spaces.id, space.id));
-  if (!access?.role) throw bad();
+  if (space.visibility === 'open' || m.orgRole === 'owner' || m.orgRole === 'admin') return;
+  if (!(await effectiveRole(t, userId, space.id))) throw bad();
 }
 
 // ---- Statuses -------------------------------------------------------------------------------------------
 
-export const listStatuses = (tx: Tx, spaceId: string) =>
-  tx
-    .select({
-      id: spaceStatuses.id,
-      name: spaceStatuses.name,
-      category: spaceStatuses.category,
-      position: spaceStatuses.position,
-      color: spaceStatuses.color,
-      wipLimit: spaceStatuses.wipLimit,
-    })
-    .from(spaceStatuses)
-    .where(eq(spaceStatuses.spaceId, spaceId))
-    .orderBy(asc(spaceStatuses.position), asc(spaceStatuses.createdAt));
+export const listStatuses = async (t: TenantDb, spaceId: string) => {
+  const rows = await t.spaceStatuses.find({ spaceId }, { sort: { position: 1, createdAt: 1 } });
+  return rows.map(({ id, name, category, position, color, wipLimit }) => ({
+    id,
+    name,
+    category,
+    position,
+    color,
+    wipLimit,
+  }));
+};
 
 /** `resolved_at` follows the Done category: set when an item enters it, cleared when it leaves. */
 export function resolvedAtFor(
@@ -363,51 +366,46 @@ export function ifMatch(req: { headers: Record<string, unknown> }): Date {
 export const stale = () =>
   new AppError(412, 'stale', 'Someone else changed this item. Reload it to see the latest.');
 
-/** SQL: this row still has the updated_at the caller last saw (millisecond precision, like JSON dates). */
-export const matchesVersion = (expected: Date) =>
-  sql`date_trunc('milliseconds', ${workItems.updatedAt}) = ${expected.toISOString()}::timestamptz`;
+/** Filter fragment: this item still has the updated_at the caller last saw (millisecond precision). */
+export const matchesVersion = (expected: Date) => ({ updatedAt: expected });
 
-export async function statusIn(tx: Tx, space: { id: string }, statusId: string) {
-  const [s] = await tx
-    .select({ id: spaceStatuses.id, category: spaceStatuses.category })
-    .from(spaceStatuses)
-    .where(and(eq(spaceStatuses.id, statusId), eq(spaceStatuses.spaceId, space.id)));
+export async function statusIn(t: TenantDb, space: { id: string }, statusId: string) {
+  const s: SpaceStatusDoc | null = await t.spaceStatuses.findOne({ id: statusId, spaceId: space.id });
   if (!s) {
     throw new AppError(422, 'invalid_status', 'That status does not exist in this space', {
       statusId: 'Choose a status from this space',
     });
   }
-  return s;
+  return { id: s.id, category: s.category };
 }
 
-export async function liveParent(tx: Tx, space: { id: string }, parentId: string) {
-  const [p] = await tx
-    .select({ id: workItems.id, type: workItems.type })
-    .from(workItems)
-    .where(
-      and(eq(workItems.id, parentId), eq(workItems.spaceId, space.id), isNull(workItems.deletedAt)),
-    );
+export async function liveParent(t: TenantDb, space: { id: string }, parentId: string) {
+  const p = await t.workItems.findOne(
+    { id: parentId, spaceId: space.id, deletedAt: null },
+    { projection: { id: 1, type: 1 } },
+  );
   if (!p) {
     throw new AppError(422, 'invalid_parent', 'That parent does not exist in this space', {
       parentId: 'Choose an item from this space',
     });
   }
-  return p;
+  return { id: p.id, type: p.type };
 }
 
 /**
- * Takes the space's counter row lock. Creates, moves and bulk changes in one space queue up behind
- * it, so two people dropping cards into the same gap each see the other's committed result and
- * never compute the same rank.
+ * Serialises changes within one space. Every create, move and bulk change writes the space's counter
+ * document, so two concurrent transactions conflict and one retries after the other commits. They
+ * therefore see each other's committed result and never compute the same rank. Only effective inside
+ * a transaction (`withTenantTx`).
  */
-export async function lockSpace(tx: Tx, spaceId: string) {
-  await tx.execute(sql`select 1 from space_counters where space_id = ${spaceId} for update`);
+export async function lockSpace(t: TenantDb, spaceId: string) {
+  await t.spaceCounters.updateOne({ spaceId }, { $inc: { lockVersion: 1 } } as never);
 }
 
 /** Labels may only come from the item's own space, and an item holds at most 20. */
 export async function setItemLabels(
-  tx: Tx,
-  orgId: string,
+  t: TenantDb,
+  _orgId: string,
   space: { id: string },
   itemId: string,
   labelIds: string[],
@@ -419,22 +417,14 @@ export async function setItemLabels(
     });
   }
   if (unique.length) {
-    const found = await tx
-      .select({ id: labels.id })
-      .from(labels)
-      .where(and(eq(labels.spaceId, space.id), inArray(labels.id, unique)));
-    if (found.length !== unique.length) {
+    const found = await t.labels.count({ spaceId: space.id, id: { $in: unique } });
+    if (found !== unique.length) {
       throw new AppError(422, 'invalid_label', 'One of those labels does not exist in this space', {
         labelIds: 'Choose labels from this space',
       });
     }
   }
-  await tx.delete(workItemLabels).where(eq(workItemLabels.workItemId, itemId));
-  if (unique.length) {
-    await tx
-      .insert(workItemLabels)
-      .values(unique.map((labelId) => ({ workItemId: itemId, labelId, orgId, spaceId: space.id })));
-  }
+  await t.workItems.updateOne({ id: itemId }, { labelIds: unique });
 }
 
 // ---- Rank maintenance ---------------------------------------------------------------------------------------
@@ -444,18 +434,17 @@ export const MAX_RANK_LENGTH = 40;
 export const needsRebalance = (rank: string) => rank.length > MAX_RANK_LENGTH;
 
 /**
- * Rewrites every live rank in one column as short, evenly spaced keys, keeping the exact order.
- * Items are touched in rank order and their `updated_at` is left alone (nobody edited anything).
+ * Rewrites every rank in one column as short, evenly spaced keys, keeping the exact order.
+ * Items are touched in rank order and their `updatedAt` is left alone (nobody edited anything).
  */
-export async function rebalanceColumn(tx: Tx, spaceId: string, statusId: string) {
-  const rows = await tx
-    .select({ id: workItems.id })
-    .from(workItems)
-    .where(and(eq(workItems.spaceId, spaceId), eq(workItems.statusId, statusId)))
-    .orderBy(...byRank);
+export async function rebalanceColumn(t: TenantDb, spaceId: string, statusId: string) {
+  const rows = await t.workItems.find(
+    { spaceId, statusId },
+    { sort: byRank, projection: { id: 1 } },
+  );
   const keys = generateNKeysBetween(null, null, rows.length);
   for (const [i, row] of rows.entries()) {
-    await tx.update(workItems).set({ rank: keys[i]! }).where(eq(workItems.id, row.id));
+    await t.workItems.updateOne({ id: row.id }, { rank: keys[i]! });
   }
   return rows.length;
 }
@@ -479,10 +468,11 @@ export function itemPermissions(
   };
 }
 
-/** Spaces and columns with a rank long enough to need rewriting. */
-export async function longRankColumns(tx: Tx, orgId: string) {
-  return tx
-    .selectDistinct({ spaceId: workItems.spaceId, statusId: workItems.statusId })
-    .from(workItems)
-    .where(and(eq(workItems.orgId, orgId), sql`length(${workItems.rank}) > ${MAX_RANK_LENGTH}`));
+/** Columns with a rank long enough to need rewriting. */
+export async function longRankColumns(t: TenantDb) {
+  const rows = await t.workItems.aggregate<{ _id: { spaceId: string; statusId: string } }>([
+    { $match: { rank: { $regex: `^.{${MAX_RANK_LENGTH + 1},}$` } } },
+    { $group: { _id: { spaceId: '$spaceId', statusId: '$statusId' } } },
+  ]);
+  return rows.map((r) => r._id);
 }

@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -9,7 +8,6 @@ import {
   tenantIds,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, spaceAccessRequests, spaceMembers } from '../src/db/schema.js';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -88,10 +86,7 @@ async function mkGroup(userIds: string[]) {
 async function audit(action: string, targetId: string) {
   const a = adminDb();
   try {
-    return await a.db
-      .select()
-      .from(auditLogs)
-      .where(and(eq(auditLogs.action, action), eq(auditLogs.targetId, targetId)));
+    return await a.db.global.all.auditLogs.find({ action, targetId });
   } finally {
     await a.close();
   }
@@ -534,18 +529,12 @@ describe('access requests', () => {
 
     const db = adminDb();
     try {
-      const rows = await db.db
-        .select()
-        .from(spaceAccessRequests)
-        .where(eq(spaceAccessRequests.userId, dave.id));
+      const rows = await db.db.global.all.spaceAccessRequests.find({ userId: dave.id });
       // Only the genuine request exists.
       expect(rows.filter((r) => r.spaceId === priv.id)).toHaveLength(1);
       expect(rows.some((r) => r.spaceId === open.id)).toBe(false);
       expect(
-        await db.db
-          .select()
-          .from(spaceAccessRequests)
-          .where(eq(spaceAccessRequests.userId, alice.id)),
+        await db.db.global.all.spaceAccessRequests.find({ userId: alice.id }),
       ).toHaveLength(0);
     } finally {
       await db.close();
@@ -560,10 +549,7 @@ describe('access requests', () => {
     await request(priv.key.toLowerCase(), bobC);
     const db = adminDb();
     try {
-      const rows = await db.db
-        .select()
-        .from(spaceAccessRequests)
-        .where(eq(spaceAccessRequests.spaceId, priv.id));
+      const rows = await db.db.global.all.spaceAccessRequests.find({ spaceId: priv.id });
       expect(rows.map((r) => r.userId)).toEqual([bob.id]);
     } finally {
       await db.close();
@@ -579,10 +565,7 @@ describe('access requests', () => {
     const db2 = adminDb();
     try {
       expect(
-        await db2.db
-          .select()
-          .from(spaceAccessRequests)
-          .where(eq(spaceAccessRequests.spaceId, archived.id)),
+        await db2.db.global.all.spaceAccessRequests.find({ spaceId: archived.id }),
       ).toHaveLength(0);
     } finally {
       await db2.close();
@@ -613,10 +596,7 @@ describe('access requests', () => {
     const db = adminDb();
     try {
       expect(
-        await db.db
-          .select()
-          .from(spaceAccessRequests)
-          .where(eq(spaceAccessRequests.spaceId, priv.id)),
+        await db.db.global.all.spaceAccessRequests.find({ spaceId: priv.id }),
       ).toHaveLength(0);
     } finally {
       await db.close();
@@ -924,41 +904,20 @@ describe('per-space audit log', () => {
   });
 });
 
-describe('database guarantees', () => {
-  it('allows one pending request per person per space, and no cross-tenant rows', async () => {
+describe('integrity (unique index)', () => {
+  it('allows one pending request per person per space', async () => {
     const priv = await mk(aliceC, { visibility: 'private' });
     const db = adminDb();
     try {
-      await db.db
-        .insert(spaceAccessRequests)
-        .values({ orgId: ids.acme, spaceId: priv.id, userId: dave.id });
-      await expect(
-        db.db
-          .insert(spaceAccessRequests)
-          .values({ orgId: ids.acme, spaceId: priv.id, userId: dave.id }),
-      ).rejects.toThrow();
+      const requests = db.db.global.forOrg(ids.acme).spaceAccessRequests;
+      await requests.insert({ spaceId: priv.id, userId: dave.id });
+      await expect(requests.insert({ spaceId: priv.id, userId: dave.id })).rejects.toMatchObject({
+        code: 11000,
+      });
       // A decided request does not block a new pending one.
-      await db.db
-        .update(spaceAccessRequests)
-        .set({ status: 'declined' })
-        .where(eq(spaceAccessRequests.spaceId, priv.id));
-      await db.db
-        .insert(spaceAccessRequests)
-        .values({ orgId: ids.acme, spaceId: priv.id, userId: dave.id });
-      // Wrong tenant for the space, or for the person.
-      await expect(
-        db.db
-          .insert(spaceAccessRequests)
-          .values({ orgId: ids.globex, spaceId: priv.id, userId: globexOwner.id }),
-      ).rejects.toThrow();
-      await expect(
-        db.db
-          .insert(spaceAccessRequests)
-          .values({ orgId: ids.acme, spaceId: priv.id, userId: globexOwner.id }),
-      ).rejects.toThrow();
-      expect(
-        await db.db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, priv.id)),
-      ).toHaveLength(1);
+      await requests.updateMany({ spaceId: priv.id }, { status: 'declined' });
+      await requests.insert({ spaceId: priv.id, userId: dave.id });
+      expect(await db.db.global.all.spaceMembers.find({ spaceId: priv.id })).toHaveLength(1);
     } finally {
       await db.close();
     }

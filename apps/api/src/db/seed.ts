@@ -1,14 +1,50 @@
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { modulesFor, WORKSPACE_TEMPLATES, type ModuleKey, type WorkType } from '@crew-deck/shared';
 import { hashPassword } from '../auth/password.js';
 import { sha256 } from '../lib/crypto.js';
-import { createDb } from './client.js';
-import { sql } from 'drizzle-orm';
-import { invitations, memberships, organizations, users } from './schema.js';
+import { createDb, type Db, type TenantDb } from './client.js';
+import { ensureIndexes } from './indexes.js';
+import { ensurePlans } from './reference.js';
+import type { CrmRole, OrgRole } from './types.js';
 
-/** Dev-only fixtures. Skipped when NODE_ENV=production. */
-export const DEV_PASSWORD = process.env.SEED_PASSWORD ?? 'dev-password-123';
+/**
+ * Dev-only fixtures: workspaces of different kinds and one login per role, so every screen can be seen
+ * the way each person sees it. Skipped when NODE_ENV=production.
+ *
+ * Every dev account uses DEV_PASSWORD. The API does not enforce a minimum length when signing in, so the
+ * short dev password works here; real sign-ups still require 10 characters.
+ */
+export const DEV_PASSWORD = process.env.SEED_PASSWORD ?? 'dev@1234';
 export const DEV_INVITE_TOKEN = 'dev-invite-acme-token-0001';
 
+export interface DevPerson {
+  handle: string;
+  name: string;
+  title: string;
+  role: OrgRole;
+  crmRole?: CrmRole;
+  /** Deactivated in this workspace (cannot sign in there). */
+  deactivated?: boolean;
+}
+
+export interface DevWorkspace {
+  name: string;
+  slug: string;
+  domain: string;
+  workType: WorkType;
+  /** null = internal workspace with no plan limits. */
+  plan: string | null;
+  onTrial?: boolean;
+  suspended?: boolean;
+  /** Modules switched on beyond the template, so the demo data is visible. */
+  extraModules?: ModuleKey[];
+  ownerEmail: string;
+  ownerName: string;
+  people: DevPerson[];
+}
+
+/** Compat: the two original tenants, now part of a larger set. */
 export const DEMO_TENANTS = [
   {
     name: 'Acme Inc',
@@ -26,84 +62,251 @@ export const DEMO_TENANTS = [
   },
 ];
 
-const DEV_PEOPLE: { handle: string; name: string; title: string; role: 'admin' | 'member' }[] = [
-  { handle: 'admin', name: 'Ada Admin', title: 'Operations', role: 'admin' },
-  { handle: 'member', name: 'Mia Member', title: 'Engineer', role: 'member' },
-  { handle: 'member2', name: 'Max Member', title: 'Designer', role: 'member' },
+export const DEV_WORKSPACES: DevWorkspace[] = [
+  {
+    name: 'Acme Inc',
+    slug: 'acme',
+    domain: 'acme.test',
+    workType: 'software',
+    plan: 'business',
+    extraModules: ['crm'],
+    ownerEmail: 'owner@acme.test',
+    ownerName: 'Alice Acme',
+    people: [
+      { handle: 'admin', name: 'Ada Admin', title: 'Operations', role: 'admin' },
+      { handle: 'member', name: 'Mia Member', title: 'Engineer', role: 'member' },
+      { handle: 'member2', name: 'Max Member', title: 'Designer', role: 'member' },
+      { handle: 'viewer', name: 'Vera Viewer', title: 'Auditor', role: 'member', crmRole: 'none' },
+      {
+        handle: 'deactivated',
+        name: 'Dan Deactivated',
+        title: 'Former contractor',
+        role: 'member',
+        deactivated: true,
+      },
+    ],
+  },
+  {
+    name: 'Globex Corp',
+    slug: 'globex',
+    domain: 'globex.test',
+    workType: 'sales',
+    plan: null,
+    ownerEmail: 'owner@globex.test',
+    ownerName: 'Gary Globex',
+    people: [
+      { handle: 'admin', name: 'Gina Admin', title: 'Sales Operations', role: 'admin' },
+      { handle: 'member', name: 'Gus Member', title: 'Account Executive', role: 'member' },
+      { handle: 'member2', name: 'Gwen Member', title: 'SDR', role: 'member' },
+    ],
+  },
+  {
+    name: 'Buildwell Construction',
+    slug: 'buildwell',
+    domain: 'buildwell.test',
+    workType: 'construction',
+    plan: 'team',
+    ownerEmail: 'owner@buildwell.test',
+    ownerName: 'Bella Buildwell',
+    people: [
+      { handle: 'foreman', name: 'Frank Foreman', title: 'Site Foreman', role: 'admin' },
+      { handle: 'worker', name: 'Wes Worker', title: 'Carpenter', role: 'member' },
+      { handle: 'worker2', name: 'Willa Worker', title: 'Electrician', role: 'member' },
+      { handle: 'inspector', name: 'Ivy Inspector', title: 'Site Inspector', role: 'member' },
+    ],
+  },
+  {
+    name: 'Brightly Marketing',
+    slug: 'brightly',
+    domain: 'brightly.test',
+    workType: 'marketing',
+    plan: 'free',
+    ownerEmail: 'owner@brightly.test',
+    ownerName: 'Bo Brightly',
+    people: [
+      { handle: 'member', name: 'Maya Marketer', title: 'Content Lead', role: 'member' },
+      { handle: 'member2', name: 'Milo Marketer', title: 'Designer', role: 'member' },
+    ],
+  },
+  {
+    name: 'Suspended Co',
+    slug: 'suspended',
+    domain: 'suspended.test',
+    workType: 'other',
+    plan: 'free',
+    suspended: true,
+    ownerEmail: 'owner@suspended.test',
+    ownerName: 'Sam Suspended',
+    people: [],
+  },
 ];
 
-/** Idempotent. Must run on the admin (owner) connection, since it writes across tenants. */
-export async function seed(adminUrl: string) {
-  const { db, close } = createDb(adminUrl);
+/** One person who belongs to several workspaces, to try the workspace switcher. */
+export const MULTI_USER = {
+  email: 'multi@crewdeck.test',
+  name: 'Morgan Multi',
+  title: 'Consultant',
+  memberships: [
+    { slug: 'acme', role: 'member' as OrgRole },
+    { slug: 'globex', role: 'admin' as OrgRole },
+    { slug: 'buildwell', role: 'member' as OrgRole },
+    { slug: 'brightly', role: 'owner' as OrgRole },
+  ],
+};
+
+export const PLATFORM_ADMIN = { email: 'platform@crewdeck.test', name: 'Platform Admin' };
+
+/** Finds or creates a user, optionally resetting their password. Returns the user's id. */
+async function upsertUser(
+  db: Db,
+  u: { email: string; name: string; title?: string; passwordHash: string | null },
+) {
+  const email = u.email.toLowerCase();
+  const existing = await db.global.users.findOne({ email });
+  if (existing) {
+    await db.global.users.updateOne(
+      { id: existing.id },
+      {
+        name: u.name,
+        status: 'active',
+        ...(u.title ? { jobTitle: u.title } : {}),
+        ...(u.passwordHash ? { passwordHash: u.passwordHash } : {}),
+      },
+    );
+    return existing.id;
+  }
+  const row = await db.global.users.insert({
+    email,
+    name: u.name,
+    jobTitle: u.title ?? null,
+    status: 'active',
+    passwordHash: u.passwordHash,
+  });
+  return row.id;
+}
+
+async function upsertMembership(
+  t: TenantDb,
+  userId: string,
+  role: OrgRole,
+  extra: { crmRole?: CrmRole; deactivated?: boolean } = {},
+) {
+  const existing = await t.memberships.findOne({ userId });
+  const set = {
+    orgRole: role,
+    status: extra.deactivated ? ('deactivated' as const) : ('active' as const),
+    deactivatedAt: extra.deactivated ? new Date() : null,
+    ...(extra.crmRole ? { crmRole: extra.crmRole } : {}),
+  };
+  if (existing) await t.memberships.updateOne({ userId }, set);
+  else await t.memberships.insert({ userId, ...set });
+}
+
+/** Idempotent. Creates indexes and plans, then (outside production) the dev workspaces and logins. */
+export async function seed(uri: string, dbName: string) {
+  const { db, close } = await createDb(uri, dbName);
   const dev = process.env.NODE_ENV !== 'production';
   const passwordHash = dev ? await hashPassword(DEV_PASSWORD) : null;
   try {
-    for (const t of DEMO_TENANTS) {
-      const [org] = await db
-        .insert(organizations)
-        .values({ name: t.name, slug: t.slug, domain: t.domain })
-        .onConflictDoUpdate({ target: organizations.slug, set: { name: t.name } })
-        .returning();
-      const [user] = await db
-        .insert(users)
-        .values({ email: t.ownerEmail, name: t.ownerName, status: 'active', passwordHash })
-        .onConflictDoUpdate({
-          target: users.email,
-          set: { name: t.ownerName, ...(passwordHash ? { passwordHash } : {}) },
-        })
-        .returning();
-      await db
-        .insert(memberships)
-        .values({ orgId: org!.id, userId: user!.id, orgRole: 'owner' })
-        .onConflictDoNothing();
-      // A few extra people so the demo workspace is not empty (development only).
-      if (dev) {
-        for (const p of DEV_PEOPLE) {
-          const email = `${p.handle}@${t.domain}`;
-          const [person] = await db
-            .insert(users)
-            .values({ email, name: p.name, jobTitle: p.title, status: 'active', passwordHash })
-            .onConflictDoUpdate({ target: users.email, set: { name: p.name, passwordHash } })
-            .returning();
-          await db
-            .insert(memberships)
-            .values({ orgId: org!.id, userId: person!.id, orgRole: p.role })
-            .onConflictDoNothing();
-        }
+    await ensureIndexes(db.handle);
+    await ensurePlans(db);
+    if (!dev) return;
+
+    const orgIds = new Map<string, string>();
+    for (const w of DEV_WORKSPACES) {
+      const template = WORKSPACE_TEMPLATES[w.workType];
+      const usage = template.suggestedUsage;
+      let org = await db.global.organizations.findOne({ slug: w.slug });
+      if (!org) {
+        org = await db.global.organizations.insert({
+          id: randomUUID(),
+          name: w.name,
+          slug: w.slug,
+          domain: w.domain,
+          workType: w.workType,
+          usage,
+          planKey: w.plan,
+          onTrial: w.onTrial ?? false,
+          status: w.suspended ? 'suspended' : 'active',
+          suspendedAt: w.suspended ? new Date() : null,
+          suspendedReason: w.suspended ? 'Seeded as suspended to try the platform console' : null,
+        });
+      } else {
+        await db.global.organizations.updateOne(
+          { id: org.id },
+          { name: w.name, workType: w.workType, usage, planKey: w.plan },
+        );
       }
-      if (dev && t.slug === 'acme') {
-        await db
-          .insert(invitations)
-          .values({
-            orgId: org!.id,
+      orgIds.set(w.slug, org.id);
+      const t = db.global.forOrg(org.id);
+      await t.tenantSettings.upsert(
+        {},
+        {
+          enabledModules: [...new Set([...modulesFor(w.workType, usage), ...(w.extraModules ?? [])])],
+          updatedAt: new Date(),
+        },
+        { timezone: 'UTC' },
+      );
+
+      const ownerId = await upsertUser(db, {
+        email: w.ownerEmail,
+        name: w.ownerName,
+        passwordHash,
+      });
+      await upsertMembership(t, ownerId, 'owner');
+      for (const p of w.people) {
+        const id = await upsertUser(db, {
+          email: `${p.handle}@${w.domain}`,
+          name: p.name,
+          title: p.title,
+          passwordHash,
+        });
+        await upsertMembership(t, id, p.role, { crmRole: p.crmRole, deactivated: p.deactivated });
+      }
+      if (w.slug === 'acme') {
+        if (!(await t.invitations.exists({ email: 'newbie@acme.test', acceptedAt: null }))) {
+          await t.invitations.insert({
             email: 'newbie@acme.test',
             orgRole: 'member',
             tokenHash: sha256(DEV_INVITE_TOKEN),
             expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000),
-            invitedBy: user!.id,
-          })
-          .onConflictDoNothing();
+            invitedBy: ownerId,
+          });
+        }
       }
-      console.log(`seeded ${t.slug}`);
+      console.log(`seeded ${w.slug}`);
     }
+
+    // The multi-workspace person.
+    const multiId = await upsertUser(db, {
+      email: MULTI_USER.email,
+      name: MULTI_USER.name,
+      title: MULTI_USER.title,
+      passwordHash,
+    });
+    for (const m of MULTI_USER.memberships) {
+      await upsertMembership(db.global.forOrg(orgIds.get(m.slug)!), multiId, m.role);
+    }
+
     // A platform admin for the console at /platform (development only; production uses create-platform-admin).
-    if (dev) {
-      await db.execute(
-        sql`insert into platform_admins (email, name, password_hash) values ('platform@crewdeck.test', 'Platform Admin', ${passwordHash}) on conflict (email) do update set password_hash = excluded.password_hash`,
-      );
-      // The demo workspace shows the Business plan so every feature is visible.
-      await db.execute(
-        sql`update organizations set plan_key = 'business' where slug = 'acme' and plan_key is null`,
-      );
-      console.log('seeded platform admin');
+    const admin = await db.global.platformAdmins.findOne({ email: PLATFORM_ADMIN.email });
+    if (admin) {
+      await db.global.platformAdmins.updateOne({ id: admin.id }, { passwordHash: passwordHash! });
+    } else {
+      await db.global.platformAdmins.insert({
+        email: PLATFORM_ADMIN.email,
+        name: PLATFORM_ADMIN.name,
+        passwordHash: passwordHash!,
+      });
     }
+    console.log('seeded platform admin and the multi-workspace user');
   } finally {
     await close();
   }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const url = process.env.DATABASE_ADMIN_URL;
-  if (!url) throw new Error('DATABASE_ADMIN_URL is required');
-  await seed(url);
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('MONGODB_URI is required');
+  await seed(uri, process.env.MONGODB_DB ?? 'crewdeck');
 }

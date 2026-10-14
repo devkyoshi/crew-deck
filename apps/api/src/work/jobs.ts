@@ -1,6 +1,6 @@
 import type { Redis } from 'ioredis';
 import type { Db } from '../db/client.js';
-import { withTenant } from '../db/client.js';
+import { withTenantTx } from '../db/client.js';
 import { createTenantQueue, createTenantWorker, type TenantJobData } from '../lib/redis.js';
 import { lockSpace, rebalanceColumn } from './service.js';
 
@@ -14,7 +14,7 @@ export type EnqueueRebalance = (job: RebalanceJob) => Promise<void> | void;
 
 /** Rewrites one column's ranks inside the tenant's context, under the same lock moves use. */
 export async function runRebalance(db: Db, job: RebalanceJob) {
-  return withTenant(db, job.orgId, async (tx) => {
+  return withTenantTx(db, job.orgId, async (tx) => {
     await lockSpace(tx, job.spaceId);
     return rebalanceColumn(tx, job.spaceId, job.statusId);
   });

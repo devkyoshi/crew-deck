@@ -54,7 +54,7 @@ This folder turns `docs/Work Items and Kanban Boards Build Brief.md` (the "work-
 
 ## Hard facts about the repo (verified before this pack was written)
 
-- API: Fastify 5, zod 4, Drizzle on postgres.js, hand-written SQL migrations, Redis sessions, BullMQ, Vitest.
+- API: Fastify 5, zod 4, MongoDB (driver, tenant-scoped repositories), Redis sessions, BullMQ, Vitest.
 - Web: Next 16, React 19, Tailwind 4, shadcn "new-york", TanStack Query and Table, dnd-kit, cmdk, sonner, react-hook-form. **Tiptap is not installed** (add it in W3). **`fractional-indexing` is not installed.** The CRM board (ADR-034) uses a floating-point midpoint `position`, which is not what the brief asks for. Work items need string ranks (brief section 2), so add the `fractional-indexing` package in W2 and record an ADR explaining why work items differ from CRM deals. The CRM `deal-board.tsx` is still the reference for the dnd-kit wiring and accessibility (ADR-036).
 - No work-item, status, board, sprint, comment or attachment code exists. No file storage code exists. `storage_mb` is defined in plans but not enforced.
 - Uncommitted work at the time of writing (not part of this module): sign-up name field (`0010_signup_name` migration, `routes/signup.ts`) and new auth components. Do not revert or mix it into work-item commits.

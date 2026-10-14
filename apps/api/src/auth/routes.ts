@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { devLoginEnabled } from '../config.js';
 import { AppError } from '../lib/errors.js';
@@ -17,6 +16,7 @@ import { MIN_PASSWORD_LENGTH, verifyPassword } from './password.js';
 import {
   acceptInvitation,
   emailMatchesOrg,
+  findOrgById,
   findOrgBySlug,
   findPendingInvitation,
   findUsableInvitation,
@@ -171,10 +171,10 @@ export async function authRoutes(
   );
 
   async function orgById(id: string): Promise<Org> {
-    const rows = await db.execute<Org>(sql`select * from auth_org_by_id(${id})`);
-    if (!rows[0]) throw new AppError(404, 'tenant_not_found', 'Workspace not found');
-    assertOrgActive(rows[0]);
-    return rows[0];
+    const org = await findOrgById(db, id);
+    if (!org) throw new AppError(404, 'tenant_not_found', 'Workspace not found');
+    assertOrgActive(org);
+    return org;
   }
 
   // ---- Google SSO --------------------------------------------------------------------------

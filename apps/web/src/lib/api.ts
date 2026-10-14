@@ -28,6 +28,11 @@ export interface Me {
     logoUrl: string | null;
     accentColor: string | null;
     domainRestricted: boolean;
+    /** What the workspace is for (see WORK_TYPES in @crew-deck/shared), if it was chosen. */
+    workType: string | null;
+    usage: string[];
+    /** Product modules switched on for this workspace. */
+    modules: string[];
   };
   plan: {
     key: string | null;
@@ -40,7 +45,7 @@ export interface Me {
   impersonatedBy: string | null;
   orgRole: 'owner' | 'admin' | 'member';
   permissions: string[];
-  orgs: { id: string; name: string; slug: string; orgRole: string }[];
+  orgs: { id: string; name: string; slug: string; orgRole: string; workType?: string | null }[];
 }
 
 export interface Providers {

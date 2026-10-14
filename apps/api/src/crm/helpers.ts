@@ -1,19 +1,12 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { loadSettings } from '../checkin/service.js';
-import type { Tx } from '../db/client.js';
-import {
-  crmPipelines,
-  crmRecordTags,
-  crmStages,
-  crmTags,
-  memberships,
-  users,
-  type CrmRecordType,
-} from '../db/schema.js';
+import type { TenantDb } from '../db/client.js';
+import type { CrmPipelineDoc, CrmRecordType } from '../db/types.js';
 import { AppError, forbidden } from '../lib/errors.js';
 import { assertWithinLimit, countCrmRecords, loadPlan } from '../plans/index.js';
 import { can, type Action, type Actor } from '../permissions/can.js';
+
+export type { CrmRecordType };
 
 export const TAG_COLORS = ['blue', 'orange', 'pink', 'green', 'violet', 'amber'] as const;
 export const uuid = z.string().uuid();
@@ -42,7 +35,7 @@ export const currencyCode = z
   .regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code, for example USD');
 
 /** Every CRM route starts here: the module must be on for the workspace, and the caller needs the role. */
-export async function crmGuard(tx: Tx, actor: Actor, need: 'view' | 'edit' | 'admin') {
+export async function crmGuard(tx: TenantDb, actor: Actor, need: 'view' | 'edit' | 'admin') {
   const settings = await loadSettings(tx, actor.orgId);
   if (!settings.crmEnabled) {
     throw new AppError(404, 'module_disabled', 'The CRM is switched off for this workspace');
@@ -53,16 +46,13 @@ export async function crmGuard(tx: Tx, actor: Actor, need: 'view' | 'edit' | 'ad
 
 /** An owner or assignee must be an active member of the workspace (or empty). */
 export async function assertActiveMember(
-  tx: Tx,
-  orgId: string,
+  tx: TenantDb,
+  _orgId: string,
   userId: string | null | undefined,
   field = 'ownerId',
 ) {
   if (!userId) return;
-  const [m] = await tx
-    .select({ status: memberships.status })
-    .from(memberships)
-    .where(and(eq(memberships.orgId, orgId), eq(memberships.userId, userId)));
+  const m = await tx.memberships.findOne({ userId });
   if (!m || m.status !== 'active') {
     throw new AppError(400, 'validation_error', 'That person is not an active member', {
       [field]: 'Choose an active member',
@@ -73,70 +63,49 @@ export async function assertActiveMember(
 export type TagView = { id: string; name: string; color: string };
 
 /** Tags for a set of records of one type, keyed by record id. */
-export async function loadTags(tx: Tx, orgId: string, type: CrmRecordType, ids: string[]) {
+export async function loadTags(tx: TenantDb, _orgId: string, type: CrmRecordType, ids: string[]) {
   const out = new Map<string, TagView[]>();
   if (ids.length === 0) return out;
-  const rows = await tx
-    .select({
-      recordId: crmRecordTags.recordId,
-      id: crmTags.id,
-      name: crmTags.name,
-      color: crmTags.color,
-    })
-    .from(crmRecordTags)
-    .innerJoin(
-      crmTags,
-      and(eq(crmTags.id, crmRecordTags.tagId), eq(crmTags.orgId, crmRecordTags.orgId)),
-    )
-    .where(
-      and(
-        eq(crmRecordTags.orgId, orgId),
-        eq(crmRecordTags.recordType, type),
-        inArray(crmRecordTags.recordId, ids),
-      ),
-    )
-    .orderBy(asc(sql`lower(${crmTags.name})`));
-  for (const r of rows) {
-    const list = out.get(r.recordId) ?? [];
-    list.push({ id: r.id, name: r.name, color: r.color });
-    out.set(r.recordId, list);
+  const links = await tx.crmRecordTags.find({ recordType: type, recordId: { $in: ids } });
+  const tags = await tx.crmTags.find({ id: { $in: [...new Set(links.map((l) => l.tagId))] } });
+  const byId = new Map(tags.map((t) => [t.id, t]));
+  for (const l of links) {
+    const t = byId.get(l.tagId);
+    if (!t) continue;
+    const list = out.get(l.recordId) ?? [];
+    list.push({ id: t.id, name: t.name, color: t.color });
+    out.set(l.recordId, list);
   }
+  for (const list of out.values()) list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   return out;
+}
+
+/** Ids of records of one type that carry a tag (for the "filter by tag" query). */
+export async function recordIdsWithTag(tx: TenantDb, type: CrmRecordType, tagId: string) {
+  const links = await tx.crmRecordTags.find({ recordType: type, tagId });
+  return links.map((l) => l.recordId);
 }
 
 /** Replaces a record's tags. Every tag must exist in the workspace. */
 export async function setTags(
-  tx: Tx,
-  orgId: string,
+  tx: TenantDb,
+  _orgId: string,
   type: CrmRecordType,
   recordId: string,
   tagIds: string[],
 ) {
   const wanted = [...new Set(tagIds)];
   if (wanted.length) {
-    const found = await tx
-      .select({ id: crmTags.id })
-      .from(crmTags)
-      .where(and(eq(crmTags.orgId, orgId), inArray(crmTags.id, wanted)));
-    if (found.length !== wanted.length) {
+    const found = await tx.crmTags.count({ id: { $in: wanted } });
+    if (found !== wanted.length) {
       throw new AppError(400, 'validation_error', 'One of the tags does not exist', {
         tagIds: 'Unknown tag',
       });
     }
   }
-  await tx
-    .delete(crmRecordTags)
-    .where(
-      and(
-        eq(crmRecordTags.orgId, orgId),
-        eq(crmRecordTags.recordType, type),
-        eq(crmRecordTags.recordId, recordId),
-      ),
-    );
+  await tx.crmRecordTags.deleteMany({ recordType: type, recordId });
   if (wanted.length) {
-    await tx
-      .insert(crmRecordTags)
-      .values(wanted.map((tagId) => ({ orgId, tagId, recordType: type, recordId })));
+    await tx.crmRecordTags.insert(wanted.map((tagId) => ({ tagId, recordType: type, recordId })));
   }
 }
 
@@ -150,37 +119,19 @@ export const DEFAULT_STAGES = [
 ];
 
 /** The workspace's default pipeline, created with the standard stages the first time it is needed. */
-export async function ensureDefaultPipeline(tx: Tx, orgId: string) {
-  const [existing] = await tx
-    .select()
-    .from(crmPipelines)
-    .where(and(eq(crmPipelines.orgId, orgId), eq(crmPipelines.isDefault, true)));
+export async function ensureDefaultPipeline(tx: TenantDb, _orgId?: string): Promise<CrmPipelineDoc> {
+  const existing = await tx.crmPipelines.findOne({ isDefault: true });
   if (existing) return existing;
   // The partial unique index makes a concurrent first use safe: the loser's insert does nothing.
-  await tx
-    .insert(crmPipelines)
-    .values({ orgId, name: 'Sales pipeline', isDefault: true })
-    .onConflictDoNothing();
-  const [pipeline] = await tx
-    .select()
-    .from(crmPipelines)
-    .where(and(eq(crmPipelines.orgId, orgId), eq(crmPipelines.isDefault, true)));
-  const have = await tx
-    .select({ id: crmStages.id })
-    .from(crmStages)
-    .where(and(eq(crmStages.orgId, orgId), eq(crmStages.pipelineId, pipeline!.id)))
-    .limit(1);
-  if (have.length === 0) {
-    await tx
-      .insert(crmStages)
-      .values(
-        DEFAULT_STAGES.map((s, i) => ({ ...s, orgId, pipelineId: pipeline!.id, position: i + 1 })),
-      );
+  await tx.crmPipelines.insertIgnore({ name: 'Sales pipeline', isDefault: true });
+  const pipeline = (await tx.crmPipelines.findOne({ isDefault: true }))!;
+  if (!(await tx.crmStages.exists({ pipelineId: pipeline.id }))) {
+    await tx.crmStages.insert(
+      DEFAULT_STAGES.map((s, i) => ({ ...s, pipelineId: pipeline.id, position: i + 1 })),
+    );
   }
-  return pipeline!;
+  return pipeline;
 }
-
-export const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 /** Spreadsheet cells that start with these characters can run as formulas when opened. */
 export function csvCell(v: unknown): string {
@@ -191,17 +142,19 @@ export function csvCell(v: unknown): string {
 }
 export const BOM = String.fromCharCode(0xfeff);
 
-export async function ownerLabel(tx: Tx, userId: string | null) {
+/** Display names ("name or email") for a set of owners, keyed by user id. */
+export async function ownerNames(tx: TenantDb, ids: (string | null | undefined)[]) {
+  const people = await tx.users(ids.filter((x): x is string => !!x));
+  return new Map([...people].map(([id, u]) => [id, u.name ?? u.email]));
+}
+
+export async function ownerLabel(tx: TenantDb, userId: string | null) {
   if (!userId) return null;
-  const [u] = await tx
-    .select({ name: users.name, email: users.email })
-    .from(users)
-    .where(eq(users.id, userId));
-  return u ? (u.name ?? u.email) : null;
+  return (await ownerNames(tx, [userId])).get(userId) ?? null;
 }
 
 /** Creating `adding` more CRM records must fit the plan's record limit. */
-export async function crmCapacity(tx: Tx, orgId: string, adding = 1) {
+export async function crmCapacity(tx: TenantDb, orgId: string, adding = 1) {
   if (adding <= 0) return;
   assertWithinLimit(
     await loadPlan(tx, orgId),

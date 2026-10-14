@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Globe, Kanban, Lock, Timer, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { DEFAULT_STATUSES, WORKSPACE_TEMPLATES, isWorkType } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -62,6 +63,12 @@ export function CreateSpaceWizard() {
   const router = useRouter();
   const qc = useQueryClient();
   const me = useMe();
+  // New spaces start with the columns that fit the kind of work this workspace does.
+  const startingColumns = (
+    isWorkType(me.org.workType) ? WORKSPACE_TEMPLATES[me.org.workType].statuses : DEFAULT_STATUSES
+  )
+    .map((s) => s.name)
+    .join(' → ');
   const [step, setStep] = useState(0);
   const [keyTouched, setKeyTouched] = useState(false);
   const [people, setPeople] = useState<PickedPerson[]>([]);
@@ -277,6 +284,9 @@ export function CreateSpaceWizard() {
                 <div className="font-medium">Kanban</div>
                 <p className="text-muted-foreground text-xs">
                   Continuous flow. Work moves across columns as it progresses.
+                </p>
+                <p className="text-muted-foreground text-[11px]" data-testid="starting-columns">
+                  Starts with: {startingColumns}
                 </p>
               </button>
               <div

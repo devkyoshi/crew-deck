@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -9,7 +8,6 @@ import {
   tenantIds,
   uniqueEmail,
 } from './helpers.js';
-import { auditLogs, spaceMembers, spaceStars, spaces } from '../src/db/schema.js';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -51,10 +49,7 @@ const patch = (id: string, cookie: string, payload: object, slug = 'acme') =>
 async function auditFor(action: string, targetId: string) {
   const a = adminDb();
   try {
-    return await a.db
-      .select()
-      .from(auditLogs)
-      .where(and(eq(auditLogs.action, action), eq(auditLogs.targetId, targetId)));
+    return await a.db.global.all.auditLogs.find({ action, targetId });
   } finally {
     await a.close();
   }
@@ -614,12 +609,8 @@ describe('deleting', () => {
     }
     const a = adminDb();
     try {
-      expect(await a.db.select().from(spaceStars).where(eq(spaceStars.spaceId, s.id))).toHaveLength(
-        0,
-      );
-      expect(
-        (await a.db.select().from(spaces).where(eq(spaces.id, s.id)))[0]!.deletedAt,
-      ).not.toBeNull();
+      expect(await a.db.global.all.spaceStars.find({ spaceId: s.id })).toHaveLength(0);
+      expect((await a.db.global.all.spaces.get(s.id))!.deletedAt).not.toBeNull();
     } finally {
       await a.close();
     }
@@ -701,28 +692,35 @@ describe('starring', () => {
   });
 });
 
-describe('database guarantees', () => {
-  it('rejects members that cross tenants and duplicate keys, even for deleted spaces', async () => {
+describe('integrity (unique index and application checks)', () => {
+  it('rejects members that cross tenants and duplicate or malformed keys, even for deleted spaces', async () => {
     const s = await mk(aliceC);
+    // A person from the other workspace cannot be added to an acme space.
+    const cross = await call({
+      method: 'POST',
+      url: `/spaces/${s.id}/members`,
+      slug: 'acme',
+      cookie: aliceC,
+      payload: { members: [{ type: 'user', id: globexOwner.id, role: 'member' }] },
+    });
+    expect(cross.statusCode).toBe(400);
     const a = adminDb();
     try {
+      // The unique index refuses a second space with the same key in the workspace.
       await expect(
-        a.db.insert(spaceMembers).values({
-          spaceId: s.id,
-          orgId: ids.globex,
-          principalType: 'user',
-          principalId: globexOwner.id,
-          spaceRole: 'member',
-        }),
-      ).rejects.toThrow();
-      await expect(
-        a.db.insert(spaces).values({ orgId: ids.acme, key: s.key, name: 'dupe' }),
-      ).rejects.toThrow();
-      await expect(
-        a.db.insert(spaces).values({ orgId: ids.acme, key: 'bad key', name: 'x' }),
-      ).rejects.toThrow();
+        a.db.tenant(ids.acme).spaces.insert({ key: s.key, name: 'dupe' }),
+      ).rejects.toMatchObject({ code: 11000 });
     } finally {
       await a.close();
     }
+    // A malformed key never gets that far: the API validates it.
+    const bad = await call({
+      method: 'POST',
+      url: '/spaces',
+      slug: 'acme',
+      cookie: aliceC,
+      payload: { key: 'bad key', name: 'x' },
+    });
+    expect(bad.statusCode).toBe(400);
   });
 });

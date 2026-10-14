@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { emailEnabled, loadConfig } from './config.js';
-import { createDb } from './db/client.js';
+import { createDb, ensureIndexes } from './db/client.js';
+import { ensurePlans } from './db/reference.js';
 import { startAutoCloseJobs } from './checkin/jobs.js';
 import { createInviteEmailQueue, startInviteEmailWorker } from './email/queue.js';
 import { createBrevoSender, createLogSender } from './email/sender.js';
@@ -9,7 +10,9 @@ import { startTrialExpiry } from './plans/jobs.js';
 import { startRebalanceJobs } from './work/jobs.js';
 
 const config = loadConfig();
-const { db, close } = createDb(config.DATABASE_URL);
+const { db, close } = await createDb(config.MONGODB_URI, config.MONGODB_DB);
+await ensureIndexes(db.handle);
+await ensurePlans(db);
 const redis = createRedis(config.REDIS_URL);
 const queue = createInviteEmailQueue(redis);
 const sender = emailEnabled(config)

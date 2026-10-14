@@ -223,23 +223,48 @@ test('a board of 500 items loads quickly and still drags', async ({ page }) => {
   await signInAsOwner(page);
   const sp = await setup(page, []);
   // Insert the cards straight into the database: this test is about the board, not item creation.
-  const { default: postgres } = await import('postgres');
-  const sql = postgres(
-    process.env.DATABASE_ADMIN_URL ?? 'postgres://crew_admin:crew_admin_dev@localhost:5433/crewdeck',
-  );
-  try {
-    await sql`
-      insert into work_items (org_id, space_id, number, type, title, status_id, reporter_id, rank)
-      select s.org_id, s.id, g.n, 'task', 'Card ' || g.n,
-        (select id from space_statuses where space_id = s.id order by position offset (g.n % 3) limit 1),
-        (select user_id from memberships where org_id = s.org_id and org_role = 'owner' limit 1),
-        'a' || lpad(g.n::text, 6, '0')
-      from spaces s, generate_series(1, 500) as g(n)
-      where s.key = ${sp.key} and s.org_id = (select id from organizations where slug = 'acme')`;
-    await sql`update space_counters set last_number = 500 where space_id = ${sp.id}`;
-  } finally {
-    await sql.end();
-  }
+  const { randomUUID } = await import('node:crypto');
+  const { orgIdOf, withDb } = await import('./db');
+  await withDb(async (db) => {
+    const orgId = await orgIdOf(db, 'acme');
+    const space = await db.collection('spaces').findOne({ orgId, key: sp.key });
+    const statuses = await db
+      .collection('space_statuses')
+      .find({ spaceId: space!.id })
+      .sort({ position: 1 })
+      .toArray();
+    const owner = await db.collection('memberships').findOne({ orgId, orgRole: 'owner' });
+    const now = new Date();
+    await db.collection('work_items').insertMany(
+      Array.from({ length: 500 }, (_, i) => {
+        const n = i + 1;
+        return {
+          id: randomUUID(),
+          orgId,
+          spaceId: space!.id,
+          number: n,
+          type: 'task',
+          parentId: null,
+          title: `Card ${n}`,
+          description: null,
+          statusId: statuses[n % 3]!.id,
+          priority: 'medium',
+          assigneeId: null,
+          reporterId: owner!.userId,
+          estimate: null,
+          dueDate: null,
+          sprintId: null,
+          rank: `a${String(n).padStart(6, '0')}`,
+          labelIds: [],
+          resolvedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        };
+      }),
+    );
+    await db.collection('space_counters').updateOne({ spaceId: space!.id }, { $set: { lastNumber: 500 } });
+  });
   const started = Date.now();
   await page.goto(`/spaces/${sp.key}/board`);
   await expect(column(page, 'To Do').getByRole('article').first()).toBeVisible();

@@ -54,3 +54,5 @@ export const ALLOWED_CHILDREN: Record<ItemType, readonly ItemType[]> = {
   bug: ['subtask'],
   subtask: [],
 };
+
+export * from './workspace';

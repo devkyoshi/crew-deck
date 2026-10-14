@@ -4,7 +4,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { completeInvite } from './helpers';
 const ADMIN = {
   email: 'owner@acme.test',
-  password: process.env.SEED_PASSWORD ?? 'dev-password-123',
+  password: process.env.SEED_PASSWORD ?? 'dev@1234',
 };
 const NEW_PASSWORD = 'a-long-enough-password';
 

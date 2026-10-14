@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
@@ -13,50 +12,40 @@ import {
   DEFAULT_STAGES,
   ensureDefaultPipeline,
   idParam,
-  likeEscape,
   loadTags,
+  ownerNames,
   setTags,
   uuid,
 } from '../crm/helpers.js';
-import { withTenant, type Tx } from '../db/client.js';
-import {
-  crmCompanies,
-  crmContacts,
-  crmDeals,
-  crmPipelines,
-  crmStages,
-  users,
-} from '../db/schema.js';
+import { CI, withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertWithinLimit, countPipelines, loadPlan } from '../plans/index.js';
-import { offsetOf, pageQuery } from '../lib/pagination.js';
+import { containsRegex, offsetOf, pageQuery } from '../lib/pagination.js';
 import type { Actor } from '../permissions/can.js';
 
 const title = z.string().trim().min(1, 'Enter a title').max(160);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD');
+
+type Filter = Record<string, unknown>;
 
 export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   // ---- Pipelines and stages -------------------------------------------------------------------
-  async function pipelineView(tx: Tx, orgId: string) {
-    const pipelines = await tx
-      .select()
-      .from(crmPipelines)
-      .where(eq(crmPipelines.orgId, orgId))
-      .orderBy(desc(crmPipelines.isDefault), asc(sql`lower(${crmPipelines.name})`));
-    const stages = await tx
-      .select()
-      .from(crmStages)
-      .where(eq(crmStages.orgId, orgId))
-      .orderBy(asc(crmStages.position), asc(crmStages.id));
-    const counts = await tx
-      .select({ stageId: crmDeals.stageId, n: sql<number>`count(*)::int` })
-      .from(crmDeals)
-      .where(and(eq(crmDeals.orgId, orgId), isNull(crmDeals.deletedAt)))
-      .groupBy(crmDeals.stageId);
-    const countOf = new Map(counts.map((c) => [c.stageId, c.n]));
+  async function pipelineView(tx: TenantDb, _orgId?: string) {
+    const pipelines = await tx.crmPipelines.find({});
+    pipelines.sort(
+      (a, b) =>
+        Number(b.isDefault) - Number(a.isDefault) ||
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+    );
+    const stages = await tx.crmStages.find({}, { sort: { position: 1, id: 1 } });
+    const counts = await tx.crmDeals.aggregate<{ _id: string; n: number }>([
+      { $match: { deletedAt: null } },
+      { $group: { _id: '$stageId', n: { $sum: 1 } } },
+    ]);
+    const countOf = new Map(counts.map((c) => [c._id, c.n]));
     return pipelines.map((p) => ({
       id: p.id,
       name: p.name,
@@ -77,7 +66,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.get('/crm/pipelines', { preHandler: requireAuth }, async (req) => {
     const actor = actorOf(req);
-    return withTenant(deps.db, actor.orgId, async (tx) => {
+    return withTenantTx(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'view');
       await ensureDefaultPipeline(tx, actor.orgId);
       return { items: await pipelineView(tx, actor.orgId) };
@@ -92,7 +81,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
         await ensureDefaultPipeline(tx, actor.orgId);
         assertWithinLimit(
@@ -100,27 +89,19 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
           'pipelines',
           await countPipelines(tx, actor.orgId),
         );
-        const [p] = await tx
-          .insert(crmPipelines)
-          .values({ orgId: actor.orgId, name: req.body.name })
-          .returning({ id: crmPipelines.id });
-        await tx.insert(crmStages).values(
-          DEFAULT_STAGES.map((s, i) => ({
-            ...s,
-            orgId: actor.orgId,
-            pipelineId: p!.id,
-            position: i + 1,
-          })),
+        const p = await tx.crmPipelines.insert({ name: req.body.name });
+        await tx.crmStages.insert(
+          DEFAULT_STAGES.map((s, i) => ({ ...s, pipelineId: p.id, position: i + 1 })),
         );
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'crm.pipeline_created',
           targetType: 'crm_pipeline',
-          targetId: p!.id,
+          targetId: p.id,
           after: { name: req.body.name },
         });
-        return (await pipelineView(tx, actor.orgId)).find((x) => x.id === p!.id)!;
+        return (await pipelineView(tx, actor.orgId)).find((x) => x.id === p.id)!;
       });
     },
   );
@@ -133,14 +114,10 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const done = await tx
-          .update(crmPipelines)
-          .set({ name: req.body.name })
-          .where(and(eq(crmPipelines.id, req.params.id), eq(crmPipelines.orgId, actor.orgId)))
-          .returning({ id: crmPipelines.id });
-        if (!done.length) throw notFound('Pipeline');
+        const done = await tx.crmPipelines.updateOne({ id: req.params.id }, { name: req.body.name });
+        if (!done) throw notFound('Pipeline');
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -159,28 +136,16 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const [p] = await tx
-          .select()
-          .from(crmPipelines)
-          .where(and(eq(crmPipelines.id, req.params.id), eq(crmPipelines.orgId, actor.orgId)));
+        const p = await tx.crmPipelines.get(req.params.id);
         if (!p) throw notFound('Pipeline');
         if (p.isDefault)
           throw new AppError(409, 'default_pipeline', 'The default pipeline cannot be deleted');
-        const used = await tx
-          .select({ id: crmDeals.id })
-          .from(crmDeals)
-          .where(and(eq(crmDeals.orgId, actor.orgId), eq(crmDeals.pipelineId, p.id)))
-          .limit(1);
-        if (used.length)
+        if (await tx.crmDeals.exists({ pipelineId: p.id }))
           throw new AppError(409, 'pipeline_in_use', 'Move or delete this pipeline’s deals first');
-        await tx
-          .delete(crmStages)
-          .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, p.id)));
-        await tx
-          .delete(crmPipelines)
-          .where(and(eq(crmPipelines.id, p.id), eq(crmPipelines.orgId, actor.orgId)));
+        await tx.crmStages.deleteMany({ pipelineId: p.id });
+        await tx.crmPipelines.deleteOne({ id: p.id });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -202,6 +167,12 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
   });
   const notBoth = (v: { isWon?: boolean; isLost?: boolean }) => !(v.isWon && v.isLost);
 
+  async function renumber(tx: TenantDb, ids: string[]) {
+    for (const [i, id] of ids.entries()) {
+      await tx.crmStages.updateOne({ id }, { position: i + 1 });
+    }
+  }
+
   r.post(
     '/crm/pipelines/:id/stages',
     {
@@ -213,34 +184,23 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const [p] = await tx
-          .select()
-          .from(crmPipelines)
-          .where(and(eq(crmPipelines.id, req.params.id), eq(crmPipelines.orgId, actor.orgId)));
+        const p = await tx.crmPipelines.get(req.params.id);
         if (!p) throw notFound('Pipeline');
         // New stages go before the closing (won / lost) stages so the board keeps its shape.
-        const stages = await tx
-          .select()
-          .from(crmStages)
-          .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, p.id)))
-          .orderBy(asc(crmStages.position));
+        const stages = await tx.crmStages.find({ pipelineId: p.id }, { sort: { position: 1 } });
         const closing = req.body.isWon || req.body.isLost;
         const firstClosing = stages.findIndex((s) => s.isWon || s.isLost);
         const at = closing || firstClosing === -1 ? stages.length : firstClosing;
         const order = stages.map((s) => s.id);
-        const [created] = await tx
-          .insert(crmStages)
-          .values({
-            orgId: actor.orgId,
-            pipelineId: p.id,
-            ...req.body,
-            position: stages.length + 1,
-          })
-          .returning({ id: crmStages.id });
-        order.splice(at, 0, created!.id);
-        await renumber(tx, actor.orgId, order);
+        const created = await tx.crmStages.insert({
+          pipelineId: p.id,
+          ...req.body,
+          position: stages.length + 1,
+        });
+        order.splice(at, 0, created.id);
+        await renumber(tx, order);
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -254,15 +214,6 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
   );
 
-  async function renumber(tx: Tx, orgId: string, ids: string[]) {
-    for (const [i, id] of ids.entries()) {
-      await tx
-        .update(crmStages)
-        .set({ position: i + 1 })
-        .where(and(eq(crmStages.id, id), eq(crmStages.orgId, orgId)));
-    }
-  }
-
   r.patch(
     '/crm/stages/:id',
     {
@@ -274,21 +225,15 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const [s] = await tx
-          .select()
-          .from(crmStages)
-          .where(and(eq(crmStages.id, req.params.id), eq(crmStages.orgId, actor.orgId)));
+        const s = await tx.crmStages.get(req.params.id);
         if (!s) throw notFound('Stage');
         const next = { ...req.body };
-        // Setting one flag clears the other, so the check constraint never trips.
+        // Setting one flag clears the other, so a stage is never both won and lost.
         if (next.isWon) next.isLost = false;
         if (next.isLost) next.isWon = false;
-        await tx
-          .update(crmStages)
-          .set(next)
-          .where(and(eq(crmStages.id, s.id), eq(crmStages.orgId, actor.orgId)));
+        await tx.crmStages.updateOne({ id: s.id }, next);
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -308,33 +253,15 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const [s] = await tx
-          .select()
-          .from(crmStages)
-          .where(and(eq(crmStages.id, req.params.id), eq(crmStages.orgId, actor.orgId)));
+        const s = await tx.crmStages.get(req.params.id);
         if (!s) throw notFound('Stage');
-        const used = await tx
-          .select({ id: crmDeals.id })
-          .from(crmDeals)
-          .where(and(eq(crmDeals.orgId, actor.orgId), eq(crmDeals.stageId, s.id)))
-          .limit(1);
-        if (used.length)
+        if (await tx.crmDeals.exists({ stageId: s.id }))
           throw new AppError(409, 'stage_in_use', 'Move this stage’s deals to another stage first');
-        await tx
-          .delete(crmStages)
-          .where(and(eq(crmStages.id, s.id), eq(crmStages.orgId, actor.orgId)));
-        const rest = await tx
-          .select({ id: crmStages.id })
-          .from(crmStages)
-          .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, s.pipelineId)))
-          .orderBy(asc(crmStages.position));
-        await renumber(
-          tx,
-          actor.orgId,
-          rest.map((x) => x.id),
-        );
+        await tx.crmStages.deleteOne({ id: s.id });
+        const rest = await tx.crmStages.find({ pipelineId: s.pipelineId }, { sort: { position: 1 } });
+        await renumber(tx, rest.map((x) => x.id));
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -356,12 +283,9 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const current = await tx
-          .select({ id: crmStages.id })
-          .from(crmStages)
-          .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, req.params.id)));
+        const current = await tx.crmStages.find({ pipelineId: req.params.id });
         if (!current.length) throw notFound('Pipeline');
         const wanted = req.body.stageIds;
         const same =
@@ -375,7 +299,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
             'The order must list every stage exactly once',
             { stageIds: 'List every stage once' },
           );
-        await renumber(tx, actor.orgId, wanted);
+        await renumber(tx, wanted);
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -403,96 +327,82 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     tagIds: z.array(uuid).max(20).optional(),
   });
 
+  /** Deals matching a filter, with stage, company, contact and owner names joined in. */
   async function dealRows(
-    tx: Tx,
+    tx: TenantDb,
     actor: Actor,
-    where: SQL | undefined,
+    filter: Filter,
     limit = 20,
-    offset = 0,
-    order: SQL[] = [desc(crmDeals.createdAt), asc(crmDeals.id)],
+    skip = 0,
+    sort: Record<string, 1 | -1> = { createdAt: -1, id: 1 },
+    collate = false,
   ) {
-    const rows = await tx
-      .select({
-        id: crmDeals.id,
-        title: crmDeals.title,
-        pipelineId: crmDeals.pipelineId,
-        stageId: crmDeals.stageId,
-        stageName: crmStages.name,
-        probability: crmStages.probability,
-        status: crmDeals.status,
-        value: sql<number>`${crmDeals.value}::float8`,
-        currency: crmDeals.currency,
-        expectedClose: crmDeals.expectedClose,
-        position: crmDeals.position,
-        closedAt: crmDeals.closedAt,
-        companyId: crmDeals.companyId,
-        companyName: crmCompanies.name,
-        contactId: crmDeals.contactId,
-        contactName: crmContacts.name,
-        ownerId: crmDeals.ownerId,
-        ownerName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
-        createdAt: crmDeals.createdAt,
-      })
-      .from(crmDeals)
-      .innerJoin(
-        crmStages,
-        and(eq(crmStages.id, crmDeals.stageId), eq(crmStages.orgId, crmDeals.orgId)),
-      )
-      .leftJoin(
-        crmCompanies,
-        and(eq(crmCompanies.id, crmDeals.companyId), eq(crmCompanies.orgId, crmDeals.orgId)),
-      )
-      .leftJoin(
-        crmContacts,
-        and(eq(crmContacts.id, crmDeals.contactId), eq(crmContacts.orgId, crmDeals.orgId)),
-      )
-      .leftJoin(users, eq(users.id, crmDeals.ownerId))
-      .where(and(eq(crmDeals.orgId, actor.orgId), isNull(crmDeals.deletedAt), where))
-      .orderBy(...order)
-      .limit(limit)
-      .offset(offset);
-    const tags = await loadTags(
-      tx,
-      actor.orgId,
-      'deal',
-      rows.map((x) => x.id),
+    const docs = await tx.crmDeals.find(
+      { ...filter, deletedAt: null },
+      { sort, skip, limit, ...(collate ? { collation: CI } : {}) },
     );
-    return rows.map((x) => ({ ...x, tags: tags.get(x.id) ?? [] }));
+    const [stages, companies, contacts, owners, tags] = await Promise.all([
+      tx.crmStages.find({ id: { $in: [...new Set(docs.map((d) => d.stageId))] } }),
+      tx.crmCompanies.find({
+        id: { $in: [...new Set(docs.map((d) => d.companyId).filter((x): x is string => !!x))] },
+      }),
+      tx.crmContacts.find({
+        id: { $in: [...new Set(docs.map((d) => d.contactId).filter((x): x is string => !!x))] },
+      }),
+      ownerNames(tx, docs.map((d) => d.ownerId)),
+      loadTags(tx, actor.orgId, 'deal', docs.map((d) => d.id)),
+    ]);
+    const stageById = new Map(stages.map((s) => [s.id, s]));
+    const companyName = new Map(companies.map((c) => [c.id, c.name]));
+    const contactName = new Map(contacts.map((c) => [c.id, c.name]));
+    return docs.map((x) => {
+      const stage = stageById.get(x.stageId);
+      return {
+        id: x.id,
+        title: x.title,
+        pipelineId: x.pipelineId,
+        stageId: x.stageId,
+        stageName: stage?.name ?? '',
+        probability: stage?.probability ?? 0,
+        status: x.status,
+        value: Number(x.value),
+        currency: x.currency,
+        expectedClose: x.expectedClose,
+        position: x.position,
+        closedAt: x.closedAt,
+        companyId: x.companyId,
+        companyName: x.companyId ? (companyName.get(x.companyId) ?? null) : null,
+        contactId: x.contactId,
+        contactName: x.contactId ? (contactName.get(x.contactId) ?? null) : null,
+        ownerId: x.ownerId,
+        ownerName: x.ownerId ? (owners.get(x.ownerId) ?? null) : null,
+        createdAt: x.createdAt,
+        tags: tags.get(x.id) ?? [],
+      };
+    });
+  }
+
+  /** A deal search matches its title or its company's name. */
+  async function searchFilter(tx: TenantDb, q: string | undefined): Promise<Filter> {
+    if (!q) return {};
+    const rx = containsRegex(q);
+    const companies = await tx.crmCompanies.find({ name: rx, deletedAt: null }, { projection: { id: 1 } });
+    return { $or: [{ title: rx }, { companyId: { $in: companies.map((c) => c.id) } }] };
   }
 
   async function assertLinks(
-    tx: Tx,
-    orgId: string,
+    tx: TenantDb,
+    _orgId: string,
     b: { companyId?: string | null; contactId?: string | null },
   ) {
     if (b.companyId) {
-      const [c] = await tx
-        .select({ id: crmCompanies.id })
-        .from(crmCompanies)
-        .where(
-          and(
-            eq(crmCompanies.id, b.companyId),
-            eq(crmCompanies.orgId, orgId),
-            isNull(crmCompanies.deletedAt),
-          ),
-        );
-      if (!c)
+      if (!(await tx.crmCompanies.exists({ id: b.companyId, deletedAt: null })))
         throw new AppError(400, 'validation_error', 'That company does not exist', {
           companyId: 'Choose an existing company',
         });
     }
     if (b.contactId) {
-      const [c] = await tx
-        .select({ id: crmContacts.id })
-        .from(crmContacts)
-        .where(
-          and(
-            eq(crmContacts.id, b.contactId),
-            eq(crmContacts.orgId, orgId),
-            isNull(crmContacts.deletedAt),
-          ),
-        );
-      if (!c)
+      if (!(await tx.crmContacts.exists({ id: b.contactId, deletedAt: null })))
         throw new AppError(400, 'validation_error', 'That contact does not exist', {
           contactId: 'Choose an existing contact',
         });
@@ -505,12 +415,9 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     closedAt: s.isWon || s.isLost ? new Date() : null,
   });
 
-  const nextPosition = async (tx: Tx, orgId: string, stageId: string) => {
-    const [top] = await tx
-      .select({ p: sql<number>`coalesce(max(${crmDeals.position}), 0)::float8` })
-      .from(crmDeals)
-      .where(and(eq(crmDeals.orgId, orgId), eq(crmDeals.stageId, stageId)));
-    return (top?.p ?? 0) + 1000;
+  const nextPosition = async (tx: TenantDb, stageId: string) => {
+    const top = await tx.crmDeals.findOne({ stageId }, { sort: { position: -1 } });
+    return (top?.position ?? 0) + 1000;
   };
 
   r.get(
@@ -535,36 +442,27 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
       const q = req.query;
       return withTenant(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'view');
-        const filters = and(
-          q.q
-            ? or(ilike(crmDeals.title, likeEscape(q.q)), ilike(crmCompanies.name, likeEscape(q.q)))
-            : undefined,
-          q.pipelineId ? eq(crmDeals.pipelineId, q.pipelineId) : undefined,
-          q.stageId ? eq(crmDeals.stageId, q.stageId) : undefined,
-          q.status ? eq(crmDeals.status, q.status) : undefined,
-          q.ownerId ? eq(crmDeals.ownerId, q.ownerId) : undefined,
-          q.companyId ? eq(crmDeals.companyId, q.companyId) : undefined,
+        const filters: Filter = await searchFilter(tx, q.q);
+        if (q.pipelineId) filters.pipelineId = q.pipelineId;
+        if (q.stageId) filters.stageId = q.stageId;
+        if (q.status) filters.status = q.status;
+        if (q.ownerId) filters.ownerId = q.ownerId;
+        if (q.companyId) filters.companyId = q.companyId;
+        const col = { created: 'createdAt', value: 'value', close: 'expectedClose', title: 'title' }[
+          q.sort
+        ];
+        const dir = q.dir === 'asc' ? 1 : -1;
+        const items = await dealRows(
+          tx,
+          actor,
+          filters,
+          q.pageSize,
+          offsetOf(q),
+          { [col]: dir, id: 1 },
+          q.sort === 'title',
         );
-        const col = {
-          created: crmDeals.createdAt,
-          value: crmDeals.value,
-          close: crmDeals.expectedClose,
-          title: crmDeals.title,
-        }[q.sort];
-        const dir = q.dir === 'asc' ? asc : desc;
-        const items = await dealRows(tx, actor, filters, q.pageSize, offsetOf(q), [
-          dir(col),
-          asc(crmDeals.id),
-        ]);
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(crmDeals)
-          .leftJoin(
-            crmCompanies,
-            and(eq(crmCompanies.id, crmDeals.companyId), eq(crmCompanies.orgId, crmDeals.orgId)),
-          )
-          .where(and(eq(crmDeals.orgId, actor.orgId), isNull(crmDeals.deletedAt), filters));
-        return { items, total: count?.n ?? 0, page: q.page, pageSize: q.pageSize };
+        const total = await tx.crmDeals.count({ ...filters, deletedAt: null });
+        return { items, total, page: q.page, pageSize: q.pageSize };
       });
     },
   );
@@ -584,24 +482,16 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const q = req.query;
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'view');
         const def = await ensureDefaultPipeline(tx, actor.orgId);
         const pipelines = await pipelineView(tx, actor.orgId);
         const pipeline = pipelines.find((p) => p.id === (q.pipelineId ?? def.id));
         if (!pipeline) throw notFound('Pipeline');
-        const filters = and(
-          eq(crmDeals.pipelineId, pipeline.id),
-          q.q
-            ? or(ilike(crmDeals.title, likeEscape(q.q)), ilike(crmCompanies.name, likeEscape(q.q)))
-            : undefined,
-          q.ownerId ? eq(crmDeals.ownerId, q.ownerId) : undefined,
-        );
+        const filters: Filter = { ...(await searchFilter(tx, q.q)), pipelineId: pipeline.id };
+        if (q.ownerId) filters.ownerId = q.ownerId;
         // A board column shows the 100 most recently placed cards; the total still counts them all.
-        const deals = await dealRows(tx, actor, filters, 1000, 0, [
-          asc(crmDeals.position),
-          asc(crmDeals.id),
-        ]);
+        const deals = await dealRows(tx, actor, filters, 1000, 0, { position: 1, id: 1 });
         const columns = pipeline.stages.map((s) => {
           const mine = deals.filter((d) => d.stageId === s.id);
           const totals: Record<string, number> = {};
@@ -621,47 +511,31 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'view');
-      const [deal] = await dealRows(tx, actor, eq(crmDeals.id, req.params.id), 1);
+      const [deal] = await dealRows(tx, actor, { id: req.params.id }, 1);
       if (!deal) throw notFound('Deal');
-      const stages = await tx
-        .select({
-          id: crmStages.id,
-          name: crmStages.name,
-          isWon: crmStages.isWon,
-          isLost: crmStages.isLost,
-        })
-        .from(crmStages)
-        .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, deal.pipelineId)))
-        .orderBy(asc(crmStages.position));
+      const stages = (
+        await tx.crmStages.find({ pipelineId: deal.pipelineId }, { sort: { position: 1 } })
+      ).map((s) => ({ id: s.id, name: s.name, isWon: s.isWon, isLost: s.isLost }));
       return { ...deal, stages };
     });
   });
 
   r.post('/crm/deals', { preHandler: requireAuth, schema: { body: dealBody } }, async (req) => {
     const actor = actorOf(req);
-    return withTenant(deps.db, actor.orgId, async (tx) => {
+    return withTenantTx(deps.db, actor.orgId, async (tx) => {
       await crmGuard(tx, actor, 'edit');
       await crmCapacity(tx, actor.orgId);
       const b = req.body;
       await assertLinks(tx, actor.orgId, b);
       await assertActiveMember(tx, actor.orgId, b.ownerId);
       const pipeline = b.pipelineId
-        ? (
-            await tx
-              .select()
-              .from(crmPipelines)
-              .where(and(eq(crmPipelines.id, b.pipelineId), eq(crmPipelines.orgId, actor.orgId)))
-          )[0]
+        ? await tx.crmPipelines.get(b.pipelineId)
         : await ensureDefaultPipeline(tx, actor.orgId);
       if (!pipeline)
         throw new AppError(400, 'validation_error', 'That pipeline does not exist', {
           pipelineId: 'Choose a pipeline',
         });
-      const stages = await tx
-        .select()
-        .from(crmStages)
-        .where(and(eq(crmStages.orgId, actor.orgId), eq(crmStages.pipelineId, pipeline.id)))
-        .orderBy(asc(crmStages.position));
+      const stages = await tx.crmStages.find({ pipelineId: pipeline.id }, { sort: { position: 1 } });
       const stage = b.stageId
         ? stages.find((s) => s.id === b.stageId)
         : stages.find((s) => !s.isWon && !s.isLost);
@@ -669,34 +543,30 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
         throw new AppError(400, 'validation_error', 'That stage is not in the pipeline', {
           stageId: 'Choose a stage',
         });
-      const [row] = await tx
-        .insert(crmDeals)
-        .values({
-          orgId: actor.orgId,
-          pipelineId: pipeline.id,
-          stageId: stage.id,
-          companyId: b.companyId ?? null,
-          contactId: b.contactId ?? null,
-          title: b.title,
-          value: String(b.value ?? 0),
-          currency: b.currency ?? 'USD',
-          expectedClose: b.expectedClose ?? null,
-          ownerId: b.ownerId ?? actor.userId,
-          position: await nextPosition(tx, actor.orgId, stage.id),
-          createdBy: actor.userId,
-          ...closing(stage),
-        })
-        .returning({ id: crmDeals.id });
-      if (b.tagIds) await setTags(tx, actor.orgId, 'deal', row!.id, b.tagIds);
+      const row = await tx.crmDeals.insert({
+        pipelineId: pipeline.id,
+        stageId: stage.id,
+        companyId: b.companyId ?? null,
+        contactId: b.contactId ?? null,
+        title: b.title,
+        value: b.value ?? 0,
+        currency: b.currency ?? 'USD',
+        expectedClose: b.expectedClose ?? null,
+        ownerId: b.ownerId ?? actor.userId,
+        position: await nextPosition(tx, stage.id),
+        createdBy: actor.userId,
+        ...closing(stage),
+      });
+      if (b.tagIds) await setTags(tx, actor.orgId, 'deal', row.id, b.tagIds);
       await writeAudit(tx, {
         orgId: actor.orgId,
         actorId: actor.userId,
         action: 'crm.deal_created',
         targetType: 'crm_deal',
-        targetId: row!.id,
+        targetId: row.id,
         after: { title: b.title, value: b.value ?? 0 },
       });
-      const [out] = await dealRows(tx, actor, eq(crmDeals.id, row!.id), 1);
+      const [out] = await dealRows(tx, actor, { id: row.id }, 1);
       return out!;
     });
   });
@@ -716,28 +586,15 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
-        const { tagIds: tags, value, ...rest } = req.body;
-        const [before] = await tx
-          .select()
-          .from(crmDeals)
-          .where(
-            and(
-              eq(crmDeals.id, req.params.id),
-              eq(crmDeals.orgId, actor.orgId),
-              isNull(crmDeals.deletedAt),
-            ),
-          );
+        const { tagIds: tags, ...patch } = req.body;
+        const before = await tx.crmDeals.findOne({ id: req.params.id, deletedAt: null });
         if (!before) throw notFound('Deal');
-        await assertLinks(tx, actor.orgId, rest);
-        await assertActiveMember(tx, actor.orgId, rest.ownerId);
-        const patch = { ...rest, ...(value !== undefined ? { value: String(value) } : {}) };
+        await assertLinks(tx, actor.orgId, patch);
+        await assertActiveMember(tx, actor.orgId, patch.ownerId);
         if (Object.keys(patch).length) {
-          await tx
-            .update(crmDeals)
-            .set({ ...patch, updatedAt: new Date() })
-            .where(and(eq(crmDeals.id, before.id), eq(crmDeals.orgId, actor.orgId)));
+          await tx.crmDeals.updateOne({ id: before.id }, { ...patch, updatedAt: new Date() });
         }
         if (tags) await setTags(tx, actor.orgId, 'deal', before.id, tags);
         await writeAudit(tx, {
@@ -751,7 +608,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
           ),
           after: patch,
         });
-        const [out] = await dealRows(tx, actor, eq(crmDeals.id, before.id), 1);
+        const [out] = await dealRows(tx, actor, { id: before.id }, 1);
         return out!;
       });
     },
@@ -762,27 +619,20 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'admin');
-        const gone = await tx
-          .update(crmDeals)
-          .set({ deletedAt: new Date() })
-          .where(
-            and(
-              eq(crmDeals.id, req.params.id),
-              eq(crmDeals.orgId, actor.orgId),
-              isNull(crmDeals.deletedAt),
-            ),
-          )
-          .returning({ id: crmDeals.id, title: crmDeals.title });
-        if (!gone.length) throw notFound('Deal');
+        const gone = await tx.crmDeals.findOneAndUpdate(
+          { id: req.params.id, deletedAt: null },
+          { deletedAt: new Date() },
+        );
+        if (!gone) throw notFound('Deal');
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'crm.deal_deleted',
           targetType: 'crm_deal',
-          targetId: gone[0]!.id,
-          before: { title: gone[0]!.title },
+          targetId: gone.id,
+          before: { title: gone.title },
         });
       });
       return { ok: true };
@@ -801,45 +651,23 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
-        const [deal] = await tx
-          .select()
-          .from(crmDeals)
-          .where(
-            and(
-              eq(crmDeals.id, req.params.id),
-              eq(crmDeals.orgId, actor.orgId),
-              isNull(crmDeals.deletedAt),
-            ),
-          );
+        const deal = await tx.crmDeals.findOne({ id: req.params.id, deletedAt: null });
         if (!deal) throw notFound('Deal');
-        const [stage] = await tx
-          .select()
-          .from(crmStages)
-          .where(
-            and(
-              eq(crmStages.id, req.body.stageId),
-              eq(crmStages.orgId, actor.orgId),
-              eq(crmStages.pipelineId, deal.pipelineId),
-            ),
-          );
+        const stage = await tx.crmStages.findOne({
+          id: req.body.stageId,
+          pipelineId: deal.pipelineId,
+        });
         if (!stage)
           throw new AppError(400, 'validation_error', 'That stage is not in this deal’s pipeline', {
             stageId: 'Choose a stage in the same pipeline',
           });
 
-        const column = await tx
-          .select({ id: crmDeals.id, position: crmDeals.position })
-          .from(crmDeals)
-          .where(
-            and(
-              eq(crmDeals.orgId, actor.orgId),
-              eq(crmDeals.stageId, stage.id),
-              isNull(crmDeals.deletedAt),
-            ),
-          )
-          .orderBy(asc(crmDeals.position), asc(crmDeals.id));
+        const column = await tx.crmDeals.find(
+          { stageId: stage.id, deletedAt: null },
+          { sort: { position: 1, id: 1 }, projection: { id: 1, position: 1 } },
+        );
         const others = column.filter((c) => c.id !== deal.id);
         let position: number;
         const beforeIdx = req.body.beforeDealId
@@ -863,15 +691,12 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
         const state = changedStage
           ? closing(stage)
           : { status: deal.status, closedAt: deal.closedAt };
-        await tx
-          .update(crmDeals)
-          .set({ stageId: stage.id, position, ...state, updatedAt: new Date() })
-          .where(and(eq(crmDeals.id, deal.id), eq(crmDeals.orgId, actor.orgId)));
+        await tx.crmDeals.updateOne(
+          { id: deal.id },
+          { stageId: stage.id, position, ...state, updatedAt: new Date() },
+        );
         if (changedStage) {
-          const [from] = await tx
-            .select({ name: crmStages.name })
-            .from(crmStages)
-            .where(and(eq(crmStages.id, deal.stageId), eq(crmStages.orgId, actor.orgId)));
+          const from = await tx.crmStages.get(deal.stageId);
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -886,7 +711,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
             },
           });
         }
-        const [out] = await dealRows(tx, actor, eq(crmDeals.id, deal.id), 1);
+        const [out] = await dealRows(tx, actor, { id: deal.id }, 1);
         return out!;
       });
     },

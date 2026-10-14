@@ -1,0 +1,182 @@
+import type { FastifyInstance } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import {
+  isWorkType,
+  modulesFor,
+  USAGE_KEYS,
+  WORK_TYPES,
+  WORKSPACE_TEMPLATES,
+  type WorkType,
+} from '@crew-deck/shared';
+import { writeAudit } from '../audit/service.js';
+import { actorOf } from '../auth/actor.js';
+import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
+import { findOrgBySlug, listUserOrgs } from '../auth/service.js';
+import { withTenantTx } from '../db/client.js';
+import { AppError, forbidden } from '../lib/errors.js';
+import { provisionWorkspace } from '../onboarding/provision.js';
+import {
+  emailDomainOf,
+  isFreeEmailDomain,
+  slugMessage,
+  slugProblem,
+} from '../onboarding/rules.js';
+import { getPlatformSettings } from '../onboarding/settings.js';
+import { can } from '../permissions/can.js';
+
+/** How many workspaces one person may own, so the form cannot be used to flood the platform. */
+export const MAX_OWNED_WORKSPACES = 10;
+
+const slug = z.string().trim().toLowerCase().max(40);
+const usageSchema = z.array(z.enum(USAGE_KEYS as [string, ...string[]])).max(20);
+
+export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
+  const { db, config, sessions } = deps;
+  const requireAuth = makeRequireAuth(deps);
+  const r = app.withTypeProvider<ZodTypeProvider>();
+
+  // Every workspace this person belongs to, for the switcher and the "my workspaces" page.
+  r.get('/workspaces', { preHandler: requireAuth }, async (req) => {
+    const orgs = await listUserOrgs(db, req.user!.id);
+    const full = await db.global.organizations.find({ id: { $in: orgs.map((o) => o.id) } });
+    const typeOf = new Map(full.map((o) => [o.id, o.workType]));
+    const owned = orgs.filter((o) => o.orgRole === 'owner').length;
+    return {
+      items: orgs.map((o) => ({
+        ...o,
+        workType: typeOf.get(o.id) ?? null,
+        current: o.id === req.org!.id,
+        url: config.TENANT_ORIGIN_TEMPLATE.replace('{slug}', o.slug),
+      })),
+      canCreate: owned < MAX_OWNED_WORKSPACES,
+    };
+  });
+
+  r.get(
+    '/workspaces/check',
+    { preHandler: requireAuth, schema: { querystring: z.object({ slug }) } },
+    async (req) => {
+      const problem = slugProblem(req.query.slug);
+      const state = problem ?? ((await findOrgBySlug(db, req.query.slug)) ? 'taken' : 'ok');
+      return { available: state === 'ok', reason: state === 'ok' ? null : slugMessage[state] };
+    },
+  );
+
+  // A signed-in person starts another workspace. They become its owner; their account is reused.
+  r.post(
+    '/workspaces',
+    {
+      preHandler: requireAuth,
+      schema: {
+        body: z.object({
+          company: z.string().trim().min(2, 'Enter a name').max(80),
+          slug,
+          workType: z.enum(WORK_TYPES),
+          usage: usageSchema.optional(),
+        }),
+      },
+    },
+    async (req) => {
+      if (req.impersonatedBy) throw forbidden('Impersonated sessions cannot create workspaces');
+      const s = await getPlatformSettings(db);
+      if (!s.signupsEnabled) {
+        throw new AppError(403, 'signups_closed', 'New workspaces are closed right now.');
+      }
+      const user = req.user!;
+      const owned = (await listUserOrgs(db, user.id)).filter((o) => o.orgRole === 'owner');
+      if (owned.length >= MAX_OWNED_WORKSPACES) {
+        throw new AppError(
+          409,
+          'workspace_limit',
+          `You can own up to ${MAX_OWNED_WORKSPACES} workspaces`,
+        );
+      }
+      const b = req.body;
+      const problem = slugProblem(b.slug);
+      if (problem) {
+        throw new AppError(400, 'validation_error', slugMessage[problem], {
+          slug: slugMessage[problem],
+        });
+      }
+      if (await findOrgBySlug(db, b.slug)) {
+        throw new AppError(409, 'slug_taken', slugMessage.taken, { slug: slugMessage.taken });
+      }
+      const domain = emailDomainOf(user.email);
+      const out = await provisionWorkspace(db, {
+        name: b.company,
+        slug: b.slug,
+        domain,
+        ownerEmail: user.email,
+        ownerName: user.name,
+        timezone: user.timezone,
+        plan: 'business',
+        trialDays: s.trialDays,
+        domainRestricted: !isFreeEmailDomain(domain),
+        via: 'signup',
+        ownerMode: 'verified',
+        createdBy: user.email,
+        workType: b.workType,
+        usage: b.usage,
+      });
+      const sid = await sessions.create(out.orgId, out.userId!);
+      const ticket = await sessions.createTicket(out.orgId, sid);
+      const origin = config.TENANT_ORIGIN_TEMPLATE.replace('{slug}', out.slug);
+      return {
+        ok: true,
+        slug: out.slug,
+        url: `${origin}/api/v1/auth/sso/complete?ticket=${encodeURIComponent(ticket)}`,
+      };
+    },
+  );
+
+  // ---- What the workspace is for ------------------------------------------------------------------
+  r.get('/settings/workspace', { preHandler: requireAuth }, async (req) => {
+    const actor = actorOf(req);
+    const org = req.org!;
+    const settings = await db.tenant(actor.orgId).tenantSettings.findOne({});
+    return {
+      workType: org.work_type,
+      usage: org.usage,
+      modules: settings?.enabledModules ?? ['members', 'spaces', 'checkin'],
+      template:
+        org.work_type && isWorkType(org.work_type) ? WORKSPACE_TEMPLATES[org.work_type] : null,
+    };
+  });
+
+  r.put(
+    '/settings/workspace',
+    {
+      preHandler: requireAuth,
+      schema: { body: z.object({ workType: z.enum(WORK_TYPES), usage: usageSchema }) },
+    },
+    async (req) => {
+      const actor = actorOf(req);
+      if (!can(actor, 'settings.manage')) throw forbidden();
+      const b = req.body;
+      return withTenantTx(db, actor.orgId, async (t) => {
+        const before = await t.organization();
+        await db.global.organizations.updateOne(
+          { id: actor.orgId },
+          { workType: b.workType, usage: b.usage },
+        );
+        // Switching on what the team now plans to use never switches anything off.
+        const current = (await t.tenantSettings.findOne({}))?.enabledModules ?? [];
+        const modules = [
+          ...new Set([...current, ...modulesFor(b.workType as WorkType, b.usage)]),
+        ];
+        await t.tenantSettings.upsert({}, { enabledModules: modules, updatedAt: new Date() });
+        await writeAudit(t, {
+          orgId: actor.orgId,
+          actorId: actor.userId,
+          action: 'settings.workspace_updated',
+          targetType: 'settings',
+          targetId: actor.orgId,
+          before: { workType: before?.workType ?? null, usage: before?.usage ?? [] },
+          after: { workType: b.workType, usage: b.usage },
+        });
+        return { workType: b.workType, usage: b.usage, modules };
+      });
+    },
+  );
+}

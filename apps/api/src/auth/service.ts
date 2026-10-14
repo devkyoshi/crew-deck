@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { withTenant, type Db } from '../db/client.js';
-import { groupMembers, groups, invitations, memberships, users } from '../db/schema.js';
+import type { OrganizationDoc } from '../db/types.js';
 import { AppError } from '../lib/errors.js';
 import { sha256 } from '../lib/crypto.js';
 import { hasFeature, loadPlan } from '../plans/index.js';
@@ -19,7 +18,23 @@ export type Org = {
   logo_url: string | null;
   accent_color: string | null;
   domain_restricted: boolean;
+  work_type: string | null;
+  usage: string[];
 };
+
+export const toOrg = (o: OrganizationDoc): Org => ({
+  id: o.id,
+  name: o.name,
+  slug: o.slug,
+  domain: o.domain,
+  status: o.status,
+  suspended_reason: o.suspendedReason,
+  logo_url: o.logoUrl,
+  accent_color: o.accentColor,
+  domain_restricted: o.domainRestricted,
+  work_type: o.workType,
+  usage: o.usage ?? [],
+});
 
 export interface AuthUser {
   id: string;
@@ -47,9 +62,17 @@ export function tenantSlugFromHost(host: string | undefined, baseDomain: string)
   return /^[a-z0-9][a-z0-9-]*$/.test(slug) ? slug : null;
 }
 
+// Sign-in happens before a tenant is known, so these lookups use the global scope on purpose.
+// Each takes a narrow key and returns the minimum needed, never a list.
+
 export async function findOrgBySlug(db: Db, slug: string): Promise<Org | null> {
-  const rows = await db.execute<Org>(sql`select * from auth_org_by_slug(${slug})`);
-  return rows[0] ?? null;
+  const o = await db.global.organizations.findOne({ slug: slug.toLowerCase() });
+  return o ? toOrg(o) : null;
+}
+
+export async function findOrgById(db: Db, id: string): Promise<Org | null> {
+  const o = await db.global.organizations.findOne({ id });
+  return o ? toOrg(o) : null;
 }
 
 type LookupUser = {
@@ -61,11 +84,24 @@ type LookupUser = {
   org_role: OrgRole;
 };
 
-export async function lookupUserByEmail(db: Db, orgId: string, email: string) {
-  const rows = await db.execute<LookupUser>(
-    sql`select * from auth_user_by_email(${orgId}, ${email})`,
-  );
-  return rows[0] ?? null;
+/** A member of the workspace by email. The status is the effective one: a deactivated membership wins. */
+export async function lookupUserByEmail(
+  db: Db,
+  orgId: string,
+  email: string,
+): Promise<LookupUser | null> {
+  const u = await db.global.users.findOne({ email: email.toLowerCase() });
+  if (!u) return null;
+  const m = await db.global.all.memberships.findOne({ orgId, userId: u.id });
+  if (!m) return null;
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    status: m.status === 'deactivated' ? 'deactivated' : u.status,
+    password_hash: u.passwordHash,
+    org_role: m.orgRole,
+  };
 }
 
 export async function loadAuthUser(
@@ -73,33 +109,47 @@ export async function loadAuthUser(
   orgId: string,
   userId: string,
 ): Promise<AuthUser | null> {
-  const rows = await withTenant(db, orgId, (tx) =>
-    tx
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        avatarUrl: users.avatarUrl,
-        jobTitle: users.jobTitle,
-        timezone: users.timezone,
-        // Effective status: a deactivated membership wins over the global user status.
-        status: sql<
-          AuthUser['status']
-        >`case when ${memberships.status} = 'deactivated' then 'deactivated' else ${users.status} end`,
-        orgRole: memberships.orgRole,
-        crmRole: memberships.crmRole,
-      })
-      .from(users)
-      .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.orgId, orgId)))
-      .where(eq(users.id, userId)),
-  );
-  return rows[0] ?? null;
+  const t = db.tenant(orgId);
+  const m = await t.memberships.findOne({ userId });
+  if (!m) return null;
+  const u = (await t.users([userId])).get(userId);
+  if (!u) return null;
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    avatarUrl: u.avatarUrl,
+    jobTitle: u.jobTitle,
+    timezone: u.timezone,
+    // Effective status: a deactivated membership wins over the global user status.
+    status: m.status === 'deactivated' ? 'deactivated' : u.status,
+    orgRole: m.orgRole,
+    crmRole: m.crmRole,
+  };
 }
 
 export async function touchLastLogin(db: Db, orgId: string, userId: string) {
-  await withTenant(db, orgId, (tx) =>
-    tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId)),
-  );
+  await db.tenant(orgId).updateUser(userId, { lastLoginAt: new Date() });
+}
+
+/** The workspaces a person can switch between (active membership, active workspace). */
+export async function listUserOrgs(db: Db, userId: string) {
+  const ms = await db.global.all.memberships.find({ userId, status: 'active' });
+  if (ms.length === 0) return [];
+  const orgs = await db.global.organizations.find({
+    id: { $in: ms.map((m) => m.orgId) },
+    status: 'active',
+  });
+  const roleOf = new Map(ms.map((m) => [m.orgId, m.orgRole]));
+  return orgs
+    .map((o) => ({
+      id: o.id,
+      name: o.name,
+      slug: o.slug,
+      orgRole: roleOf.get(o.id)!,
+      workType: o.workType,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type InvitationRow = {
@@ -118,21 +168,32 @@ const invalidInvite = () =>
 
 /** Looks up a usable invitation by raw token. Same error for unknown, used, revoked and expired. */
 export async function findUsableInvitation(db: Db, token: string): Promise<InvitationRow> {
-  const rows = await db.execute<InvitationRow>(
-    sql`select * from auth_invitation_by_hash(${sha256(token)})`,
-  );
-  const inv = rows[0];
-  if (!inv || inv.accepted_at || inv.revoked_at || new Date(inv.expires_at) <= new Date()) {
-    throw invalidInvite();
-  }
-  return inv;
+  const i = await db.global.all.invitations.findOne({ tokenHash: sha256(token) });
+  if (!i || i.acceptedAt || i.revokedAt || i.expiresAt <= new Date()) throw invalidInvite();
+  return {
+    id: i.id,
+    org_id: i.orgId,
+    email: i.email,
+    org_role: i.orgRole,
+    expires_at: i.expiresAt,
+    accepted_at: i.acceptedAt,
+    revoked_at: i.revokedAt,
+    group_ids: i.groupIds,
+  };
 }
 
 export async function findPendingInvitation(db: Db, orgId: string, email: string) {
-  const rows = await db.execute<{ id: string; org_role: OrgRole; group_ids: string[] }>(
-    sql`select * from auth_pending_invitation(${orgId}, ${email})`,
+  const i = await db.global.all.invitations.findOne(
+    {
+      orgId,
+      email: email.toLowerCase(),
+      acceptedAt: null,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    },
+    { sort: { createdAt: -1 } },
   );
-  return rows[0] ?? null;
+  return i ? { id: i.id, org_role: i.orgRole, group_ids: i.groupIds } : null;
 }
 
 export interface AcceptProfile {
@@ -154,77 +215,61 @@ export async function acceptInvitation(
 ): Promise<string> {
   const passwordHash = profile.password ? await hashPassword(profile.password) : null;
 
-  return withTenant(db, org.id, async (tx) => {
-    // Free workspaces accept anyone; paid ones can lock invitations to the company domain.
-    const plan = await loadPlan(tx, org.id);
-    if (
-      org.domain_restricted &&
-      hasFeature(plan, 'domain_lock') &&
-      !emailMatchesOrg(invitation.email, org)
-    ) {
-      throw new AppError(403, 'domain_not_allowed', 'This email is not on the workspace domain');
-    }
-    // Atomic claim so one token cannot be accepted twice concurrently.
-    const claimed = await tx
-      .update(invitations)
-      .set({ acceptedAt: new Date() })
-      .where(
-        and(
-          eq(invitations.id, invitation.id),
-          eq(invitations.orgId, org.id),
-          sql`accepted_at is null`,
-        ),
-      )
-      .returning({ id: invitations.id });
-    if (claimed.length === 0) throw invalidInvite();
+  // Free workspaces accept anyone; paid ones can lock invitations to the company domain.
+  const plan = await withTenant(db, org.id, (t) => loadPlan(t, org.id));
+  if (
+    org.domain_restricted &&
+    hasFeature(plan, 'domain_lock') &&
+    !emailMatchesOrg(invitation.email, org)
+  ) {
+    throw new AppError(403, 'domain_not_allowed', 'This email is not on the workspace domain');
+  }
 
-    const existing = await tx.execute<{ id: string; password_hash: string | null }>(
-      sql`select * from auth_user_id_by_email(${invitation.email})`,
+  return db.globalTx(async (g) => {
+    const t = g.forOrg(org.id);
+    // Atomic claim so one token cannot be accepted twice concurrently.
+    const claimed = await t.invitations.updateOne(
+      { id: invitation.id, acceptedAt: null },
+      { acceptedAt: new Date() },
     );
-    let userId = existing[0]?.id;
+    if (claimed === 0) throw invalidInvite();
+
+    const existing = await g.users.findOne({ email: invitation.email.toLowerCase() });
+    let userId = existing?.id;
     if (userId) {
       // Pre-existing global identity joining a new tenant. Never overwrite their credentials.
-      await tx
-        .insert(memberships)
-        .values({ orgId: org.id, userId, orgRole: invitation.role })
-        .onConflictDoNothing();
-      await tx
-        .update(users)
-        .set({
+      await t.memberships.insertIgnore({ userId, orgRole: invitation.role });
+      await g.users.updateOne(
+        { id: userId },
+        {
           status: 'active',
           ...(profile.name ? { name: profile.name } : {}),
-          ...(existing[0]!.password_hash ? {} : { passwordHash }),
-        })
-        .where(eq(users.id, userId));
+          ...(existing!.passwordHash ? {} : { passwordHash }),
+        },
+      );
     } else {
       userId = randomUUID();
-      await tx.insert(users).values({
+      await g.users.insert({
         id: userId,
         email: invitation.email.toLowerCase(),
-        name: profile.name,
-        avatarUrl: profile.avatarUrl,
+        name: profile.name ?? null,
+        avatarUrl: profile.avatarUrl ?? null,
         timezone: profile.timezone ?? 'UTC',
         status: 'active',
         passwordHash,
       });
-      await tx.insert(memberships).values({ orgId: org.id, userId, orgRole: invitation.role });
+      await t.memberships.insert({ userId, orgRole: invitation.role });
     }
     // Groups chosen at invite time. Groups deleted since then are skipped.
     let joinedGroups: string[] = [];
     if (invitation.groupIds?.length) {
-      const still = await tx
-        .select({ id: groups.id })
-        .from(groups)
-        .where(and(eq(groups.orgId, org.id), inArray(groups.id, invitation.groupIds)));
-      joinedGroups = still.map((g) => g.id);
-      if (joinedGroups.length) {
-        await tx
-          .insert(groupMembers)
-          .values(joinedGroups.map((groupId) => ({ groupId, orgId: org.id, userId: userId! })))
-          .onConflictDoNothing();
+      const still = await t.groups.find({ id: { $in: invitation.groupIds } });
+      joinedGroups = still.map((x) => x.id);
+      for (const groupId of joinedGroups) {
+        await t.groupMembers.insertIgnore({ groupId, userId });
       }
     }
-    await writeAudit(tx, {
+    await writeAudit(t, {
       orgId: org.id,
       actorId: userId,
       action: 'invitation.accepted',

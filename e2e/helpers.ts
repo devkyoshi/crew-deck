@@ -1,12 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import postgres from 'postgres';
+import { addMember, withDb } from './db';
 import { expect, type Browser, type Page } from '@playwright/test';
 
-export const PASSWORD = process.env.SEED_PASSWORD ?? 'dev-password-123';
+export const PASSWORD = process.env.SEED_PASSWORD ?? 'dev@1234';
 export const rand = (n = 3) => randomBytes(n).toString('hex');
-
-const adminUrl = () =>
-  process.env.DATABASE_ADMIN_URL ?? 'postgres://crew_admin:crew_admin_dev@localhost:5433/crewdeck';
 
 export async function signInWithPassword(page: Page, email: string, password = PASSWORD) {
   await page.goto('/sign-in');
@@ -32,20 +29,8 @@ export async function asAnotherPerson<T>(browser: Browser, fn: (page: Page) => P
 /** Adds an active member to the acme workspace directly in the database (test setup only). */
 export async function createMember(name: string) {
   const email = `${name.toLowerCase().replace(/\W+/g, '-')}@acme.test`;
-  const sql = postgres(adminUrl());
-  try {
-    await sql`
-      with u as (
-        insert into users (email, name, status) values (${email}, ${name}, 'active')
-        on conflict (email) do update set name = excluded.name returning id
-      )
-      insert into memberships (org_id, user_id, org_role)
-      select o.id, u.id, 'member' from organizations o, u where o.slug = 'acme'
-      on conflict do nothing`;
-    return { email, name };
-  } finally {
-    await sql.end();
-  }
+  await withDb((db) => addMember(db, 'acme', email, name));
+  return { email, name };
 }
 
 /** Fills the page's first form once React has hydrated it (avoids typing into a not-yet-live input). */

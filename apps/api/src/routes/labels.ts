@@ -1,12 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { STATUS_COLORS } from '@crew-deck/shared';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { labels, workItemLabels } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWritable } from '../work/service.js';
@@ -29,19 +27,22 @@ export async function labelRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (tx) => {
       const space = await resolveSpace(tx, actor, req.params.id);
-      const rows = await tx
-        .select({
-          id: labels.id,
-          name: labels.name,
-          color: labels.color,
-          itemCount: sql<number>`(select count(*)::int from work_item_labels wl
-            join work_items w on w.id = wl.work_item_id
-            where wl.label_id = ${labels.id} and w.deleted_at is null)`,
-        })
-        .from(labels)
-        .where(eq(labels.spaceId, space.id))
-        .orderBy(asc(sql`lower(${labels.name})`));
-      return { items: rows };
+      const rows = await tx.labels.find({ spaceId: space.id }, { sort: { nameLower: 1 } });
+      // How many live items carry each label.
+      const counts = await tx.workItems.aggregate<{ _id: string; n: number }>([
+        { $match: { spaceId: space.id, deletedAt: null, labelIds: { $ne: [] } } },
+        { $unwind: '$labelIds' },
+        { $group: { _id: '$labelIds', n: { $sum: 1 } } },
+      ]);
+      const byLabel = new Map(counts.map((c) => [c._id, c.n]));
+      return {
+        items: rows.map((l) => ({
+          id: l.id,
+          name: l.name,
+          color: l.color,
+          itemCount: byLabel.get(l.id) ?? 0,
+        })),
+      };
     });
   });
 
@@ -57,19 +58,19 @@ export async function labelRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
           const space = await resolveSpace(tx, actor, req.params.id);
           if (!can(actor, 'label.create', spaceCtx(space))) throw forbidden();
           assertWritable(space);
-          const [n] = await tx.select({ n: count() }).from(labels).where(eq(labels.spaceId, space.id));
-          if ((n?.n ?? 0) >= MAX_LABELS) {
+          if ((await tx.labels.count({ spaceId: space.id })) >= MAX_LABELS) {
             throw new AppError(409, 'label_limit', `A space can have at most ${MAX_LABELS} labels`);
           }
-          const [created] = await tx
-            .insert(labels)
-            .values({ orgId: actor.orgId, spaceId: space.id, name: req.body.name, color: req.body.color })
-            .returning({ id: labels.id, name: labels.name, color: labels.color });
-          return { ...created!, itemCount: 0 };
+          const created = await tx.labels.insert({
+            spaceId: space.id,
+            name: req.body.name,
+            color: req.body.color,
+          });
+          return { id: created.id, name: created.name, color: created.color, itemCount: 0 };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -78,11 +79,8 @@ export async function labelRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
   );
 
-  async function loadLabel(tx: Tx, actor: Actor, id: string) {
-    const [label] = await tx
-      .select()
-      .from(labels)
-      .where(and(eq(labels.id, id), eq(labels.orgId, actor.orgId)));
+  async function loadLabel(tx: TenantDb, actor: Actor, id: string) {
+    const label = await tx.labels.get(id);
     if (!label) throw notFound('Label');
     const space = await resolveSpace(tx, actor, label.spaceId).catch(() => null);
     if (!space) throw notFound('Label');
@@ -107,17 +105,16 @@ export async function labelRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
           const label = await loadLabel(tx, actor, req.params.id);
-          const [updated] = await tx
-            .update(labels)
-            .set({
+          const updated = await tx.labels.findOneAndUpdate(
+            { id: label.id },
+            {
               ...(req.body.name !== undefined ? { name: req.body.name } : {}),
               ...(req.body.color !== undefined ? { color: req.body.color } : {}),
-            })
-            .where(eq(labels.id, label.id))
-            .returning({ id: labels.id, name: labels.name, color: labels.color });
-          return updated!;
+            },
+          );
+          return { id: updated!.id, name: updated!.name, color: updated!.color };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -131,14 +128,15 @@ export async function labelRoutes(app: FastifyInstance, deps: AuthDeps) {
     { preHandler: requireAuth, schema: { params: z.object({ id: z.string().uuid() }) } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const label = await loadLabel(tx, actor, req.params.id);
-        const [used] = await tx
-          .select({ n: count() })
-          .from(workItemLabels)
-          .where(eq(workItemLabels.labelId, label.id));
-        await tx.delete(labels).where(eq(labels.id, label.id));
-        return { deleted: true, removedFrom: used?.n ?? 0 };
+        // The label is embedded in items, so deleting it also removes it from every item (the old cascade).
+        const removedFrom = await tx.workItems.updateMany(
+          { labelIds: label.id },
+          { $pull: { labelIds: label.id } } as never,
+        );
+        await tx.labels.deleteOne({ id: label.id });
+        return { deleted: true, removedFrom };
       });
     },
   );

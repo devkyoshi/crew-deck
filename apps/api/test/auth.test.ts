@@ -1,3 +1,4 @@
+import { DEV_PASSWORD } from '../src/db/seed.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
@@ -81,11 +82,7 @@ describe('password login and sessions', () => {
   });
 
   it('gives owners the admin permissions', async () => {
-    const { cookie } = await login(
-      'acme',
-      'owner@acme.test',
-      process.env.SEED_PASSWORD ?? 'dev-password-123',
-    );
+    const { cookie } = await login('acme', 'owner@acme.test', DEV_PASSWORD);
     const me = await get('/me', 'acme', cookie);
     expect(me.json().permissions).toContain('member.invite');
   });

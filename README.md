@@ -10,8 +10,14 @@ open and private visibility, space roles, access requests, audit log, daily chec
 status board, a CRM (leads, contacts, companies, deals board, activities, CSV import and export),
 self-serve sign-up with email verification, Free / Team / Business plans with limits and feature gates,
 workspace branding, a platform admin console (suspend, plans, read-only audited impersonation),
-accessibility and hardening. See [docs/FEATURES.md](docs/FEATURES.md) and [docs/PRICING.md](docs/PRICING.md).
-**Not built yet:** payments, work items, boards and chat (later modules).
+work items on Kanban boards, workspace types ("what kind of work do you do?") with templates, people
+who belong to several workspaces, accessibility and hardening. See [docs/FEATURES.md](docs/FEATURES.md)
+and [docs/PRICING.md](docs/PRICING.md). **Not built yet:** see [docs/MISSING-FEATURES.md](docs/MISSING-FEATURES.md)
+(sprints, comments and attachments, list view, notifications, live updates, payments, chat, and the
+type-specific modules such as ticket queues and punch lists).
+
+**Data model:** a person (one account) belongs to any number of **workspaces** (companies), and each
+workspace holds any number of **spaces**. Data lives in **MongoDB**.
 
 ## Quick start
 
@@ -19,30 +25,41 @@ You need Node 22+, pnpm 9, Docker, and GNU Make (Git Bash or WSL on Windows).
 
 ```bash
 cp .env.example .env     # defaults work for local development
-make dev                 # starts Postgres and Redis, migrates, seeds, runs web and api
+make dev                 # starts MongoDB and Redis, creates indexes, seeds, runs web and api
 ```
 
 Then open **http://acme.localhost:3000** (any `*.localhost` address works in a browser with no setup).
 
-| Workspace           | Address                      | Sign in as                                                                            | Password           |
-| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------- | ------------------ |
-| Acme (demo content) | http://acme.localhost:3000   | `owner@acme.test` (owner), `admin@acme.test`, `member@acme.test`, `member2@acme.test` | `dev-password-123` |
-| Globex (empty)      | http://globex.localhost:3000 | `owner@globex.test`                                                                   | `dev-password-123` |
+Every dev account uses the password **`dev@1234`** (development only; `SEED_PASSWORD` overrides it).
+Each workspace is a different kind of business, and each role has its own login, so you can see the
+product the way each person sees it.
+
+| Workspace (kind of work)                  | Address                         | Sign in as (role)                                                                                                                                                             |
+| ----------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Acme Inc (software, Business plan)        | http://acme.localhost:3000      | `owner@acme.test` (owner), `admin@acme.test` (admin), `member@acme.test`, `member2@acme.test` (members), `viewer@acme.test` (member, viewer in ENG, no CRM), `deactivated@acme.test` (cannot sign in), plus demo people such as `priya@acme.test` |
+| Globex Corp (sales, internal plan)        | http://globex.localhost:3000    | `owner@globex.test`, `admin@globex.test`, `member@globex.test`, `member2@globex.test`                                                                                         |
+| Buildwell Construction (construction, Team) | http://buildwell.localhost:3000 | `owner@buildwell.test`, `foreman@buildwell.test` (admin), `worker@buildwell.test`, `worker2@buildwell.test`, `inspector@buildwell.test`                                      |
+| Brightly Marketing (marketing, Free)      | http://brightly.localhost:3000  | `owner@brightly.test`, `member@brightly.test`, `member2@brightly.test`                                                                                                        |
+| Suspended Co                              | http://suspended.localhost:3000 | `owner@suspended.test` (shows the suspended screen)                                                                                                                           |
+| Several workspaces                        | any of the above                | `multi@crewdeck.test`: member of Acme and Buildwell (viewer in RIVER), admin of Globex, owner of Brightly. Use the workspace switcher.                                        |
+| Platform console                          | http://localhost:3000/platform  | `platform@crewdeck.test`                                                                                                                                                      |
 
 The sign-in page also has a **development-only** box that signs you in as any existing person without
 a password. It does not exist in production builds. `http://localhost:3000` shows a workspace picker.
 
-The Acme demo workspace has people, four teams, five spaces (open, private and archived), group-based
-access, stars, a pending access request, sites, holidays, managers, today's check-in statuses, two
-weeks of check-in history and an audit trail, so every screen has something to show.
+The Acme demo workspace has people, four teams, five spaces (open, private and archived), work items,
+group-based access, stars, a pending access request, sites, holidays, managers, today's check-in
+statuses, two weeks of check-in history, a full CRM and an audit trail. Globex has a CRM and a follow-up
+board, Buildwell has job and punch-list boards with construction columns, sites and attendance, and
+Brightly has a campaign board, so every screen has something to show.
 
 ## Everyday commands
 
 | Command                                       | What it does                                                                      |
 | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | `make dev`                                    | Containers up, migrate, seed (with demo content), run web (:3000) and api (:4000) |
-| `make db-reset`                               | Wipe the local database, then migrate and seed again                              |
-| `make migrate` / `make rollback`              | Apply pending migrations / revert the latest one                                  |
+| `make db-reset`                               | Wipe the local database, then create indexes and seed again                       |
+| `make migrate`                                | Create the MongoDB indexes and the plan catalogue (idempotent)                    |
 | `make demo`                                   | Add the demo workspace content to the current database                            |
 | `make test`                                   | API tests (they use their own `crewdeck_test` database)                           |
 | `make lint` / `make typecheck` / `make build` | Static checks and a production build                                              |
@@ -56,17 +73,21 @@ apps/api        Fastify API: auth, members, invitations, groups, spaces, access 
 apps/web        Next.js app (App Router), Tailwind, shadcn/ui
 packages/shared zod schemas and types shared by both apps
 e2e/            Playwright tests (flows, keyboard, accessibility, demo walk-through)
-infra/          Postgres role setup used by docker compose
 docs/           BRIEF.md (the build brief), DECISIONS.md (architecture decisions), CHANGELOG.md,
-                DEPLOYMENT.md
+                DEPLOYMENT.md, MISSING-FEATURES.md (what is suggested but not built yet)
 ```
 
 ## How it works
 
-- **Multi-tenancy.** One database, one schema. Every business table carries `org_id` and is protected
-  by Postgres row-level security. The API connects as a restricted role that cannot bypass it, and runs
-  every request inside a transaction that sets `app.current_org`. Repositories also filter by `org_id`.
-  Composite foreign keys make cross-tenant links impossible. The tenant comes from the subdomain.
+- **Multi-tenancy.** One MongoDB database. Every tenant document carries `orgId`. Route code only ever
+  gets a `TenantDb` (`apps/api/src/db/client.ts`), whose repositories add the tenant to every filter and
+  stamp it on every insert; a filter naming another tenant matches nothing. Crossing tenants needs the
+  explicit `db.global` scope (sign-in, platform console, background jobs, seeds). Links between
+  documents are checked by the API, since MongoDB has no foreign keys. The tenant comes from the
+  subdomain. Multi-document changes run in MongoDB transactions (a single-node replica set locally).
+- **Workspace types.** Sign-up asks what kind of work the team does and how it plans to use the product.
+  The answer picks a template (`packages/shared/src/workspace.ts`): modules to switch on, and the columns
+  new spaces start with (a construction workspace gets Planned / On site / Inspection / Complete).
 - **Permissions** live in one module, `apps/api/src/permissions/can.ts`. Routes call it; the UI only
   mirrors it. A test runs every row of the brief's permission matrix for all six roles through the real API.
 - **Check-in** treats a "day" as the person's own local date. Teammates see status only; exact times go to
@@ -74,8 +95,8 @@ docs/           BRIEF.md (the build brief), DECISIONS.md (architecture decisions
 - **Sessions** are random ids in Redis (httpOnly, SameSite=Lax cookies, Secure in production), scoped to
   the tenant host. Deactivating someone ends their access on their next request.
 - **The browser only talks to its own origin.** Next proxies `/api` to the API, so cookies stay per tenant.
-- **Everything that changes access is audited**, in the same transaction as the change. The audit table
-  is append-only for the application role.
+- **Everything that changes access is audited**, in the same transaction as the change. The audit log
+  is append-only through the tenant scope.
 
 The reasoning behind these choices is written down in [docs/DECISIONS.md](docs/DECISIONS.md).
 
@@ -83,7 +104,7 @@ The reasoning behind these choices is written down in [docs/DECISIONS.md](docs/D
 
 | Layer   | What                                                                                                                                                                                       | How big                                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| API     | Permissions (allowed and denied), cross-tenant isolation for every module, rules (last owner, last space admin, unique keys), audit, email, performance with 5,000 people and 1,500 spaces | 234 tests, on a fresh database each run |
+| API     | Permissions (allowed and denied), cross-tenant isolation for every module and collection, rules (last owner, last space admin, unique keys), audit, email, workspace types, multi-workspace, every dev login, performance with 5,000 people and 1,500 spaces | 426 tests, on a fresh database each run |
 | Browser | Real user flows, keyboard-only operation, axe accessibility scans (WCAG 2.1 A and AA, light and dark), and a walk through every screen that fails on any console error or failed request   | 41 tests                                |
 
 CI (`.github/workflows/ci.yml`) runs lint, type-check, the API tests and a production build, and
@@ -105,7 +126,11 @@ Deploying it somewhere real: see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Known limits
 
-- New workspaces are created by seed or SQL until tenant onboarding (Phase 9) is built.
+- MongoDB has no foreign keys or check constraints. Integrity between documents (same-tenant links,
+  valid status for an item, times in order) is enforced by the API and covered by tests, not by the
+  database. Unique indexes still guarantee keys, item numbers and one pending request per person.
+- Sessions are per workspace address, so opening another workspace from the switcher asks you to sign in
+  there (creating a new workspace signs you in automatically).
 - Google sign-in and Brevo email are covered by tests with fakes; they have not been exercised against
   the real services because they need credentials.
 - Indirect changes can leave a space without an active admin (for example deleting the only admin group).

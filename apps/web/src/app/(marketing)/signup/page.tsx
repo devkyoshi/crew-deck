@@ -12,11 +12,17 @@ import {
   Pencil,
   Sparkles,
 } from 'lucide-react';
+import { USAGE_OPTIONS, WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/shared/notice';
 import { useWizard } from '@/components/auth/wizard';
+import {
+  UsagePicker,
+  WorkTypePicker,
+  workTypeLabel,
+} from '@/components/workspace/work-type-picker';
 import {
   bigInput,
   FieldGroup,
@@ -33,10 +39,12 @@ import { api, ApiError } from '@/lib/api';
 import { FriendlyAvatarsIllustration } from '@/components/illustrations/jira-illustrations';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-const STEPS = ['you', 'company', 'review', 'sent'] as const;
+const STEPS = ['you', 'company', 'work', 'usage', 'review', 'sent'] as const;
 const SHELL_STEPS: ShellStep[] = [
   { id: 'you', code: 'You', label: 'Personal details', hint: 'Just a bit about you' },
   { id: 'company', code: 'Company', label: 'Company info', hint: 'Tell us about your business' },
+  { id: 'work', code: 'Work', label: 'Kind of work', hint: 'What does your team do?' },
+  { id: 'usage', code: 'Usage', label: 'How you will use it', hint: 'Pick what fits your team' },
   { id: 'review', code: 'Review', label: 'Review details', hint: 'Confirm and submit' },
   { id: 'sent', code: 'Email', label: 'Email verification', hint: 'Check your inbox' },
 ];
@@ -47,6 +55,8 @@ interface Answers {
   company: string;
   slug: string;
   slugTouched: boolean;
+  workType: WorkType | null;
+  usage: string[];
   sentAt: number | null;
   devLink: string | null;
 }
@@ -56,6 +66,8 @@ const INITIAL: Answers = {
   company: '',
   slug: '',
   slugTouched: false,
+  workType: null,
+  usage: [],
   sentAt: null,
   devLink: null,
 };
@@ -108,7 +120,7 @@ function SignUpWizard() {
   useEffect(() => {
     if (w.ready && w.step === 'you') document.getElementById('name')?.focus();
   }, [w.ready]);
-  const a = w.data;
+  const a = { ...INITIAL, ...w.data };
   const domain = config.data?.baseDomain ?? 'localhost';
   const trial = config.data?.trialDays ?? 14;
 
@@ -188,6 +200,7 @@ function SignUpWizard() {
         }
       }
     }
+    if (step === 'work' && !a.workType) next.workType = 'Choose the kind of work your team does';
     setErrors(next);
     if (Object.keys(next).length) return fail();
     w.next({ email: a.email.trim().toLowerCase(), name: a.name.trim(), company: a.company.trim() });
@@ -199,7 +212,14 @@ function SignUpWizard() {
     setErrors({});
     try {
       const res = await api<{ ok: boolean; devLink?: string }>('/signup', {
-        body: { email: a.email, company: a.company, slug: a.slug, name: a.name || undefined },
+        body: {
+          email: a.email,
+          company: a.company,
+          slug: a.slug,
+          name: a.name || undefined,
+          workType: a.workType ?? undefined,
+          usage: a.usage,
+        },
       });
       setNow(Date.now());
       w.next({ sentAt: Date.now(), devLink: res.devLink ?? null });
@@ -207,7 +227,7 @@ function SignUpWizard() {
       if (err instanceof ApiError && err.fields && Object.keys(err.fields).length) {
         // A problem with an earlier answer sends you back to fix it.
         setErrors(err.fields);
-        w.go(err.fields.email ? 'you' : 'company');
+        w.go(err.fields.email ? 'you' : err.fields.workType || err.fields.usage ? 'work' : 'company');
       } else {
         setFormError(
           err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
@@ -415,6 +435,42 @@ function SignUpWizard() {
         </form>
       )}
 
+      {w.step === 'work' && (
+        <form onSubmit={enter('work')} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title="What kind of work do you do?"
+            lead="This helps us suggest the right columns, modules and templates for your team. You can change it later."
+          />
+          <WorkTypePicker
+            value={a.workType}
+            onChange={(type) => {
+              clear('workType');
+              // Choosing a kind of work pre-selects what teams like yours usually need.
+              w.set({ workType: type, usage: [...WORKSPACE_TEMPLATES[type].suggestedUsage] });
+            }}
+          />
+          {errors.workType && (
+            <p role="alert" className="text-destructive mt-3 text-sm">
+              {errors.workType}
+            </p>
+          )}
+          <StepFooter next="Continue" onBack={w.back} />
+        </form>
+      )}
+
+      {w.step === 'usage' && (
+        <form onSubmit={enter('usage')} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title="How does your team plan to use it?"
+            lead="Tick everything that applies. We switch on the matching modules, and the rest can be added any time."
+          />
+          <UsagePicker type={a.workType} value={a.usage} onChange={(usage) => w.set({ usage })} showAll />
+          <StepFooter next="Continue" onBack={w.back} />
+        </form>
+      )}
+
       {w.step === 'review' && (
         <form
           onSubmit={(e) => {
@@ -436,6 +492,19 @@ function SignUpWizard() {
             <FieldGroup title="Workspace">
               <ReviewRow label="Company" value={a.company} onEdit={() => w.go('company')} />
               <ReviewRow label="Address" value={`${a.slug}.${domain}`} onEdit={() => w.go('company')} />
+              <ReviewRow label="Kind of work" value={workTypeLabel(a.workType)} onEdit={() => w.go('work')} />
+              <ReviewRow
+                label="Usage"
+                value={
+                  a.usage.length
+                    ? a.usage
+                        .map((k) => USAGE_OPTIONS.find((o) => o.key === k)?.label ?? k)
+                        .slice(0, 2)
+                        .join(', ') + (a.usage.length > 2 ? ` +${a.usage.length - 2}` : '')
+                    : 'Nothing selected'
+                }
+                onEdit={() => w.go('usage')}
+              />
             </FieldGroup>
             <p className="text-muted-foreground flex items-start gap-2.5 text-[13px] leading-relaxed">
               <Sparkles className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />

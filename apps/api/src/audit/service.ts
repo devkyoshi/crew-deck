@@ -1,6 +1,4 @@
-import { and, desc, eq, gte, lt, sql, type SQL } from 'drizzle-orm';
-import type { Tx } from '../db/client.js';
-import { auditLogs, users } from '../db/schema.js';
+import type { TenantDb } from '../db/client.js';
 import { offsetOf } from '../lib/pagination.js';
 
 export const AUDIT_TARGET_TYPES = [
@@ -31,10 +29,12 @@ export interface AuditEntry {
   after?: Record<string, unknown> | null;
 }
 
-/** Writes inside the caller's tenant transaction, so the change and its audit entry commit together. */
-export async function writeAudit(tx: Tx, e: AuditEntry) {
-  await tx.insert(auditLogs).values({
-    orgId: e.orgId,
+/**
+ * Appends an audit entry. Pass the transaction's TenantDb so the change and its entry commit together.
+ * The audit log is append-only: repositories expose insert here and nothing in the app updates or deletes it.
+ */
+export async function writeAudit(t: TenantDb, e: AuditEntry) {
+  await t.auditLogs.insert({
     actorId: e.actorId,
     action: e.action,
     targetType: e.targetType,
@@ -57,39 +57,36 @@ export interface AuditFilters {
 }
 
 /** One query for the org-wide and per-space audit views. Always scoped to the tenant. */
-export async function listAudit(tx: Tx, f: AuditFilters) {
-  const conds: (SQL | undefined)[] = [eq(auditLogs.orgId, f.orgId)];
-  if (f.actor) conds.push(eq(auditLogs.actorId, f.actor));
-  if (f.action) conds.push(eq(auditLogs.action, f.action));
-  if (f.targetType) conds.push(eq(auditLogs.targetType, f.targetType));
-  if (f.target) conds.push(eq(auditLogs.targetId, f.target));
-  if (f.from) conds.push(gte(auditLogs.createdAt, f.from));
+export async function listAudit(t: TenantDb, f: AuditFilters) {
+  const filter: Record<string, unknown> = {};
+  if (f.actor) filter.actorId = f.actor;
+  if (f.action) filter.action = f.action;
+  if (f.targetType) filter.targetType = f.targetType;
+  if (f.target) filter.targetId = f.target;
+  const range: Record<string, Date> = {};
+  if (f.from) range.$gte = f.from;
   // "to" is a date: include the whole day.
-  if (f.to) conds.push(lt(auditLogs.createdAt, new Date(f.to.getTime() + 24 * 3600 * 1000)));
-  const where = and(...conds);
+  if (f.to) range.$lt = new Date(f.to.getTime() + 24 * 3600 * 1000);
+  if (f.from || f.to) filter.createdAt = range;
 
-  const items = await tx
-    .select({
-      id: auditLogs.id,
-      action: auditLogs.action,
-      targetType: auditLogs.targetType,
-      targetId: auditLogs.targetId,
-      before: auditLogs.before,
-      after: auditLogs.after,
-      createdAt: auditLogs.createdAt,
-      actorId: auditLogs.actorId,
-      actorName: users.name,
-      actorEmail: users.email,
-    })
-    .from(auditLogs)
-    .leftJoin(users, eq(users.id, auditLogs.actorId))
-    .where(where)
-    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-    .limit(f.pageSize)
-    .offset(offsetOf(f));
-  const [count] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(auditLogs)
-    .where(where);
-  return { items, total: count?.n ?? 0, page: f.page, pageSize: f.pageSize };
+  const rows = await t.auditLogs.find(filter, {
+    sort: { createdAt: -1, id: -1 },
+    skip: offsetOf(f),
+    limit: f.pageSize,
+  });
+  const total = await t.auditLogs.count(filter);
+  const people = await t.users(rows.map((r) => r.actorId).filter((x): x is string => !!x));
+  const items = rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    targetType: r.targetType,
+    targetId: r.targetId,
+    before: r.before,
+    after: r.after,
+    createdAt: r.createdAt,
+    actorId: r.actorId,
+    actorName: r.actorId ? (people.get(r.actorId)?.name ?? null) : null,
+    actorEmail: r.actorId ? (people.get(r.actorId)?.email ?? null) : null,
+  }));
+  return { items, total, page: f.page, pageSize: f.pageSize };
 }

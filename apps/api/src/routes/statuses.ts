@@ -1,15 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { MAX_STATUSES, STATUS_CATEGORIES, STATUS_COLORS } from '@crew-deck/shared';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { spaceStatuses, workItems } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, forbidden, isUniqueViolation, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
-import { assertWritable, listStatuses, ranksAtEnd, resolvedAtFor } from '../work/service.js';
+import type { SpaceRow } from '../work/service.js';
+import {
+  assertWritable,
+  byRank,
+  listStatuses,
+  lockSpace,
+  ranksAtEnd,
+  resolvedAtFor,
+} from '../work/service.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
 
 const nameSchema = z.string().trim().min(1, 'Enter a name').max(40, 'Use 40 characters or fewer');
@@ -27,30 +33,48 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   /** Loads a status and its space, 404ing for anything the caller cannot see. */
-  async function loadStatus(tx: Tx, actor: Actor, id: string) {
-    const [status] = await tx
-      .select()
-      .from(spaceStatuses)
-      .where(and(eq(spaceStatuses.id, id), eq(spaceStatuses.orgId, actor.orgId)));
+  async function loadStatus(tx: TenantDb, actor: Actor, id: string) {
+    const status = await tx.spaceStatuses.get(id);
     if (!status) throw notFound('Status');
     const space = await resolveSpace(tx, actor, status.spaceId).catch(() => null);
     if (!space) throw notFound('Status');
     return { status, space };
   }
 
-  const guardManage = (actor: Actor, space: Awaited<ReturnType<typeof resolveSpace>>) => {
+  const guardManage = (actor: Actor, space: SpaceRow) => {
     if (!can(actor, 'status.manage', spaceCtx(space))) throw forbidden();
     assertWritable(space);
   };
 
   /** Statuses must keep at least one entry in each category. */
-  async function categoryCount(tx: Tx, spaceId: string, category: string) {
-    const [row] = await tx
-      .select({ n: count() })
-      .from(spaceStatuses)
-      .where(and(eq(spaceStatuses.spaceId, spaceId), eq(spaceStatuses.category, category as 'todo')));
-    return row?.n ?? 0;
-  }
+  const categoryCount = (tx: TenantDb, spaceId: string, category: string) =>
+    tx.spaceStatuses.count({ spaceId, category: category as 'todo' });
+
+  const liveCount = (tx: TenantDb, statusId: string) =>
+    tx.workItems.count({ statusId, deletedAt: null });
+
+  /** The API shape of a status document. */
+  const present = (s: {
+    id: string;
+    spaceId: string;
+    name: string;
+    category: string;
+    position: number;
+    color: string;
+    wipLimit: number | null;
+    createdAt: Date;
+    orgId: string;
+  }) => ({
+    id: s.id,
+    orgId: s.orgId,
+    spaceId: s.spaceId,
+    name: s.name,
+    category: s.category,
+    position: s.position,
+    color: s.color,
+    wipLimit: s.wipLimit,
+    createdAt: s.createdAt,
+  });
 
   r.get(
     '/spaces/:id/statuses',
@@ -60,12 +84,11 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
         const items = await listStatuses(tx, space.id);
-        const counts = await tx
-          .select({ statusId: workItems.statusId, n: count() })
-          .from(workItems)
-          .where(and(eq(workItems.spaceId, space.id), isNull(workItems.deletedAt)))
-          .groupBy(workItems.statusId);
-        const byStatus = new Map(counts.map((c) => [c.statusId, c.n]));
+        const counts = await tx.workItems.aggregate<{ _id: string; n: number }>([
+          { $match: { spaceId: space.id, deletedAt: null } },
+          { $group: { _id: '$statusId', n: { $sum: 1 } } },
+        ]);
+        const byStatus = new Map(counts.map((c) => [c._id, c.n]));
         return {
           items: items.map((s) => ({ ...s, itemCount: byStatus.get(s.id) ?? 0 })),
           max: MAX_STATUSES,
@@ -92,9 +115,10 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const b = req.body;
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
           const space = await resolveSpace(tx, actor, req.params.id);
           guardManage(actor, space);
+          await lockSpace(tx, space.id);
           const existing = await listStatuses(tx, space.id);
           if (existing.length >= MAX_STATUSES) {
             throw new AppError(
@@ -109,25 +133,19 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
             .filter((s) => order.indexOf(s.category) <= order.indexOf(b.category))
             .at(-1);
           const position = lastOfCategory ? lastOfCategory.position + 1 : 0;
-          await tx
-            .update(spaceStatuses)
-            .set({ position: sql`${spaceStatuses.position} + 1` })
-            .where(
-              and(eq(spaceStatuses.spaceId, space.id), sql`${spaceStatuses.position} >= ${position}`),
-            );
-          const [created] = await tx
-            .insert(spaceStatuses)
-            .values({
-              orgId: actor.orgId,
-              spaceId: space.id,
-              name: b.name,
-              category: b.category,
-              position,
-              color: b.color,
-              wipLimit: b.wipLimit ?? null,
-            })
-            .returning();
-          return { ...created!, itemCount: 0 };
+          await tx.spaceStatuses.updateMany(
+            { spaceId: space.id, position: { $gte: position } },
+            { $inc: { position: 1 } },
+          );
+          const created = await tx.spaceStatuses.insert({
+            spaceId: space.id,
+            name: b.name,
+            category: b.category,
+            position,
+            color: b.color,
+            wipLimit: b.wipLimit ?? null,
+          });
+          return { ...present(created), itemCount: 0 };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -158,7 +176,7 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const b = req.body;
       try {
-        return await withTenant(deps.db, actor.orgId, async (tx) => {
+        return await withTenantTx(deps.db, actor.orgId, async (tx) => {
           const { status, space } = await loadStatus(tx, actor, req.params.id);
           guardManage(actor, space);
           if (b.category && b.category !== status.category) {
@@ -171,34 +189,27 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
               );
             }
           }
-          const [updated] = await tx
-            .update(spaceStatuses)
-            .set({
+          const updated = await tx.spaceStatuses.findOneAndUpdate(
+            { id: status.id },
+            {
               ...(b.name !== undefined ? { name: b.name } : {}),
               ...(b.color !== undefined ? { color: b.color } : {}),
               ...(b.category !== undefined ? { category: b.category } : {}),
               ...(b.wipLimit !== undefined ? { wipLimit: b.wipLimit } : {}),
-            })
-            .where(eq(spaceStatuses.id, status.id))
-            .returning();
-          // Moving a status between categories changes what its items mean: keep resolved_at honest.
+            },
+          );
+          // Moving a status between categories changes what its items mean: keep resolvedAt honest.
           if (b.category && b.category !== status.category) {
             const now = new Date();
-            await tx
-              .update(workItems)
-              .set({ resolvedAt: b.category === 'done' ? now : null })
-              .where(
-                and(
-                  eq(workItems.statusId, status.id),
-                  b.category === 'done' ? isNull(workItems.resolvedAt) : undefined,
-                ),
-              );
+            await tx.workItems.updateMany(
+              {
+                statusId: status.id,
+                ...(b.category === 'done' ? { resolvedAt: null } : {}),
+              },
+              { resolvedAt: b.category === 'done' ? now : null },
+            );
           }
-          const [n] = await tx
-            .select({ n: count() })
-            .from(workItems)
-            .where(and(eq(workItems.statusId, status.id), isNull(workItems.deletedAt)));
-          return { ...updated!, itemCount: n?.n ?? 0 };
+          return { ...present(updated!), itemCount: await liveCount(tx, status.id) };
         });
       } catch (e) {
         if (isUniqueViolation(e)) throw nameTaken();
@@ -218,9 +229,10 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { status, space } = await loadStatus(tx, actor, req.params.id);
         guardManage(actor, space);
+        await lockSpace(tx, space.id);
         if ((await categoryCount(tx, space.id, status.category)) <= 1) {
           throw new AppError(
             422,
@@ -228,23 +240,17 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
             'Every space needs at least one status in each category',
           );
         }
-        const [live] = await tx
-          .select({ n: count() })
-          .from(workItems)
-          .where(and(eq(workItems.statusId, status.id), isNull(workItems.deletedAt)));
-        const [all] = await tx
-          .select({ n: count() })
-          .from(workItems)
-          .where(eq(workItems.statusId, status.id));
+        const live = await liveCount(tx, status.id);
+        const all = await tx.workItems.count({ statusId: status.id });
         let moved = 0;
-        if ((all?.n ?? 0) > 0) {
+        if (all > 0) {
           const others = (await listStatuses(tx, space.id)).filter((s) => s.id !== status.id);
           let target = others.find((s) => s.id === req.query.replace_with);
           if (req.query.replace_with && !target) {
             throw new AppError(422, 'invalid_replacement', 'Choose another status in this space');
           }
           if (!target) {
-            if ((live?.n ?? 0) > 0) {
+            if (live > 0) {
               throw new AppError(
                 422,
                 'replacement_required',
@@ -254,32 +260,29 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
             // Only deleted items remain; they still need a home to keep their history.
             target = others.find((s) => s.category === status.category) ?? others[0]!;
           }
-          const rows = await tx
-            .select({ id: workItems.id, resolvedAt: workItems.resolvedAt })
-            .from(workItems)
-            .where(eq(workItems.statusId, status.id))
-            .orderBy(sql`${workItems.rank} COLLATE "C" asc`, asc(workItems.id));
+          const rows = await tx.workItems.find(
+            { statusId: status.id },
+            { sort: byRank, projection: { id: 1, resolvedAt: 1 } },
+          );
           const ranks = await ranksAtEnd(tx, space.id, target.id, rows.length);
           const now = new Date();
           for (const [i, row] of rows.entries()) {
-            await tx
-              .update(workItems)
-              .set({
+            await tx.workItems.updateOne(
+              { id: row.id },
+              {
                 statusId: target.id,
                 rank: ranks[i]!,
                 resolvedAt: resolvedAtFor(target.category, row.resolvedAt, now),
                 updatedAt: now,
-              })
-              .where(eq(workItems.id, row.id));
+              },
+            );
           }
           moved = rows.length;
         }
-        await tx.delete(spaceStatuses).where(eq(spaceStatuses.id, status.id));
+        await tx.spaceStatuses.deleteOne({ id: status.id });
         const remaining = await listStatuses(tx, space.id);
         for (const [i, s] of remaining.entries()) {
-          if (s.position !== i) {
-            await tx.update(spaceStatuses).set({ position: i }).where(eq(spaceStatuses.id, s.id));
-          }
+          if (s.position !== i) await tx.spaceStatuses.updateOne({ id: s.id }, { position: i });
         }
         return { deleted: true, moved };
       });
@@ -297,7 +300,7 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
         guardManage(actor, space);
         const current = await listStatuses(tx, space.id);
@@ -310,10 +313,7 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
           throw new AppError(422, 'invalid_order', 'List every status in the space exactly once');
         }
         for (const [i, id] of ids.entries()) {
-          await tx
-            .update(spaceStatuses)
-            .set({ position: i })
-            .where(and(eq(spaceStatuses.id, id), eq(spaceStatuses.spaceId, space.id)));
+          await tx.spaceStatuses.updateOne({ id, spaceId: space.id }, { position: i });
         }
         return { items: await listStatuses(tx, space.id) };
       });

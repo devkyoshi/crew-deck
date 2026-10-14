@@ -1,12 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant } from '../db/client.js';
-import { organizations } from '../db/schema.js';
+import { withTenant, withTenantTx } from '../db/client.js';
 import { AppError, forbidden } from '../lib/errors.js';
 import { assertFeature, loadPlan, loadUsage } from '../plans/index.js';
 import { can } from '../permissions/can.js';
@@ -31,15 +29,7 @@ export async function planRoutes(app: FastifyInstance, deps: AuthDeps) {
     return withTenant(deps.db, actor.orgId, async (tx) => {
       const plan = await loadPlan(tx, actor.orgId);
       const isAdmin = can(actor, 'settings.manage');
-      const plans = await tx.execute<{
-        key: string;
-        name: string;
-        price_cents: number | null;
-        limits: object;
-        features: string[];
-      }>(
-        sql`select key, name, price_cents, limits, features from plans where public order by sort`,
-      );
+      const plans = (await tx.listPlans()).filter((p) => p.public);
       return {
         plan: {
           key: plan.key,
@@ -54,7 +44,7 @@ export async function planRoutes(app: FastifyInstance, deps: AuthDeps) {
         plans: plans.map((p) => ({
           key: p.key,
           name: p.name,
-          priceCents: p.price_cents,
+          priceCents: p.priceCents,
           limits: p.limits,
           features: p.features,
         })),
@@ -92,7 +82,7 @@ export async function planRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
       const b = req.body;
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const plan = await loadPlan(tx, actor.orgId);
         if (b.name !== undefined) assertFeature(plan, 'branding_name', 'Renaming the workspace');
         if (b.logoUrl !== undefined || b.accentColor !== undefined) {
@@ -106,11 +96,8 @@ export async function planRoutes(app: FastifyInstance, deps: AuthDeps) {
             accentColor: 'Choose a darker colour so buttons stay readable',
           });
         }
-        const [before] = await tx
-          .select()
-          .from(organizations)
-          .where(eq(organizations.id, actor.orgId));
-        await tx.update(organizations).set(b).where(eq(organizations.id, actor.orgId));
+        const before = await tx.organization();
+        await tx.updateBranding(b);
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -122,10 +109,7 @@ export async function planRoutes(app: FastifyInstance, deps: AuthDeps) {
           ),
           after: b,
         });
-        const [after] = await tx
-          .select()
-          .from(organizations)
-          .where(eq(organizations.id, actor.orgId));
+        const after = await tx.organization();
         return {
           name: after!.name,
           logoUrl: after!.logoUrl,

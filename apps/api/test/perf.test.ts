@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -33,48 +32,54 @@ beforeAll(async () => {
   const orgId = org.org.id;
   const domain = `${slug}.test`;
   const db = adminDb();
+  let member: Awaited<ReturnType<typeof ensureUser>>;
   try {
-    await db.db.execute(sql`
-      with u as (
-        insert into users (email, name, status, job_title, last_login_at)
-        select 'p' || g || '@' || ${domain}, 'Person ' || lpad(g::text, 5, '0'), 'active', 'Role ' || (g % 20),
-               now() - (g || ' minutes')::interval
-        from generate_series(1, 5000) g
-        returning id
-      )
-      insert into memberships (org_id, user_id, org_role) select ${orgId}, id, 'member' from u`);
-    await db.db.execute(sql`
-      insert into groups (org_id, name) select ${orgId}, 'Group ' || g from generate_series(1, 40) g`);
-    await db.db.execute(sql`
-      insert into group_members (group_id, org_id, user_id)
-      select (select id from groups where org_id = ${orgId} and name = 'Group 1'), ${orgId}, m.user_id
-      from (select user_id from memberships where org_id = ${orgId} and org_role = 'member' limit 2000) m`);
-    const [g] = await db.db.execute<{ id: string }>(
-      sql`select id from groups where org_id = ${orgId} and name = 'Group 1'`,
+    const tenant = db.db.global.forOrg(orgId);
+    const people = await db.db.global.users.insert(
+      Array.from({ length: 5000 }, (_, i) => ({
+        email: `p${i + 1}@${domain}`,
+        name: `Person ${String(i + 1).padStart(5, '0')}`,
+        status: 'active' as const,
+        jobTitle: `Role ${(i + 1) % 20}`,
+        lastLoginAt: new Date(Date.now() - (i + 1) * 60_000),
+      })),
     );
-    bigGroupId = g!.id;
-    await db.db.execute(sql`
-      insert into spaces (org_id, key, name, visibility, owner_id)
-      select ${orgId}, 'S' || lpad(g::text, 4, '0'), 'Space ' || lpad(g::text, 4, '0'),
-             case when g % 3 = 0 then 'private' else 'open' end, (select id from users where email = ${`owner@${domain}`})
-      from generate_series(1, 1500) g`);
+    await tenant.memberships.insert(people.map((u) => ({ userId: u.id, orgRole: 'member' as const })));
+    const groups = await tenant.groups.insert(
+      Array.from({ length: 40 }, (_, i) => ({ name: `Group ${i + 1}` })),
+    );
+    bigGroupId = groups[0]!.id;
+    await tenant.groupMembers.insert(
+      people.slice(0, 2000).map((u) => ({ groupId: bigGroupId, userId: u.id })),
+    );
+    const owner = await db.db.global.users.findOne({ email: `owner@${domain}` });
+    const spaces = await tenant.spaces.insert(
+      Array.from({ length: 1500 }, (_, i) => ({
+        key: `S${String(i + 1).padStart(4, '0')}`,
+        name: `Space ${String(i + 1).padStart(4, '0')}`,
+        visibility: ((i + 1) % 3 === 0 ? 'private' : 'open') as 'private' | 'open',
+        ownerId: owner!.id,
+      })),
+    );
     someSpaceKey = 'S0001';
+    member = await ensureUser({
+      orgId,
+      email: uniqueEmail('perf-mem', domain),
+      role: 'member',
+    });
+    // The member holds a role in every private space (500 of them), which stresses the role calculation.
+    await tenant.spaceMembers.insert(
+      spaces
+        .filter((sp) => sp.visibility === 'private')
+        .map((sp) => ({
+          spaceId: sp.id,
+          principalType: 'user' as const,
+          principalId: member.id,
+          spaceRole: 'member' as const,
+        })),
+    );
   } finally {
     await db.close();
-  }
-  const member = await ensureUser({
-    orgId,
-    email: uniqueEmail('perf-mem', domain),
-    role: 'member',
-  });
-  // The member holds a role in every private space (500 of them), which stresses the role calculation.
-  const db2 = adminDb();
-  try {
-    await db2.db.execute(sql`
-      insert into space_members (space_id, org_id, principal_type, principal_id, space_role)
-      select id, ${orgId}, 'user', ${member.id}, 'member' from spaces where org_id = ${orgId} and visibility = 'private'`);
-  } finally {
-    await db2.close();
   }
   adminC = await signInAs(t.app, slug, org.owner);
   memberC = await signInAs(t.app, slug, member);

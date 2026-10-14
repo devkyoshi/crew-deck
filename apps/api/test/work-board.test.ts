@@ -1,11 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { generateNKeysBetween } from 'fractional-indexing';
 import { adminDb, caller, ensureUser, makeApp, signInAs, tenantIds, uniqueEmail } from './helpers.js';
-import { spaceCounters, spaceStatuses, workItems } from '../src/db/schema.js';
 import { runRebalance } from '../src/work/jobs.js';
 import { rebalanceColumn } from '../src/work/service.js';
-import { withTenant } from '../src/db/client.js';
 
 const rebalanceJobs: { orgId: string; spaceId: string; statusId: string }[] = [];
 const t = makeApp({ enqueueRebalance: (job) => void rebalanceJobs.push(job) });
@@ -240,10 +237,9 @@ describe('moving cards', () => {
     // Two very close, already long ranks: a key between them is longer still.
     const admin = adminDb();
     try {
-      await withTenant(admin.db, ids.acme, async (tx) => {
-        await tx.update(workItems).set({ rank: 'a0' + 'V'.repeat(45) }).where(eq(workItems.id, a.id));
-        await tx.update(workItems).set({ rank: 'a0' + 'V'.repeat(44) + 'W' }).where(eq(workItems.id, bItem.id));
-      });
+      const items = admin.db.tenant(ids.acme).workItems;
+      await items.updateOne({ id: a.id }, { rank: 'a0' + 'V'.repeat(45) });
+      await items.updateOne({ id: bItem.id }, { rank: 'a0' + 'V'.repeat(44) + 'W' });
     } finally {
       await admin.close();
     }
@@ -456,25 +452,20 @@ describe('a large board', () => {
       for (const st of sts) {
         const perColumn = st.name === 'Done' ? 100 : 133;
         const ranks = generateNKeysBetween(null, null, perColumn);
-        await withTenant(admin.db, ids.acme, (tx) =>
-          tx.insert(workItems).values(
-            ranks.map((rank, i) => ({
-              orgId: ids.acme,
-              spaceId,
-              number: ++n,
-              type: 'task' as const,
-              title: `Bulk ${st.name} ${i}`,
-              statusId: st.id,
-              reporterId: owner.id,
-              rank,
-              resolvedAt: st.category === 'done' ? new Date() : null,
-            })),
-          ),
+        await admin.db.tenant(ids.acme).workItems.insert(
+          ranks.map((rank, i) => ({
+            spaceId,
+            number: ++n,
+            type: 'task' as const,
+            title: `Bulk ${st.name} ${i}`,
+            statusId: st.id,
+            reporterId: owner.id,
+            rank,
+            resolvedAt: st.category === 'done' ? new Date() : null,
+          })),
         );
       }
-      await withTenant(admin.db, ids.acme, (tx) =>
-        tx.update(spaceCounters).set({ lastNumber: n }).where(eq(spaceCounters.spaceId, spaceId)),
-      );
+      await admin.db.tenant(ids.acme).spaceCounters.updateOne({ spaceId }, { lastNumber: n });
     } finally {
       await admin.close();
     }
@@ -498,14 +489,10 @@ describe('rank rebalancing of existing data', () => {
     const admin = adminDb();
     try {
       // Force a tie, which a plain between-keys call cannot split.
-      await withTenant(admin.db, ids.acme, (tx) =>
-        tx.update(workItems).set({ rank: a.rank }).where(eq(workItems.id, b.id)),
-      );
-      const [row] = await withTenant(admin.db, ids.acme, async (tx) => {
-        await rebalanceColumn(tx, sp.id, todo.id);
-        return tx.select({ rank: workItems.rank }).from(workItems).where(eq(workItems.id, a.id));
-      });
-      expect(row).toBeTruthy();
+      const tenant = admin.db.tenant(ids.acme);
+      await tenant.workItems.updateOne({ id: b.id }, { rank: a.rank });
+      await rebalanceColumn(tenant, sp.id, todo.id);
+      expect(await tenant.workItems.get(a.id)).toBeTruthy();
     } finally {
       await admin.close();
     }
@@ -516,6 +503,5 @@ describe('rank rebalancing of existing data', () => {
     expect((await move(third, c.owner, { statusId: todo.id, afterItemId: a.id })).statusCode).toBe(200);
     const statusRows = await statuses(sp);
     expect(statusRows.length).toBeGreaterThan(0);
-    void spaceStatuses;
   });
 });

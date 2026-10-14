@@ -1,7 +1,5 @@
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/service.js';
-import { withTenant, type Db, type Tx } from '../db/client.js';
-import { tenantSettings, users, workDays } from '../db/schema.js';
+import { withTenantTx, type Db, type TenantDb } from '../db/client.js';
 import { isValidTimezone, zonedTimeToUtc } from '../lib/time.js';
 
 export type WorkSettings = {
@@ -26,12 +24,12 @@ export const DEFAULT_SETTINGS: WorkSettings = {
   crmEnabled: true,
 };
 
-/** Postgres returns time columns as HH:MM:SS; the API speaks HH:MM. */
+/** Times are stored as HH:MM; this keeps old HH:MM:SS values readable. */
 export const hhmm = (t: string) => t.slice(0, 5);
 
 /** The workspace's settings, or the defaults when nobody has changed them yet. */
-export async function loadSettings(tx: Tx, orgId: string): Promise<WorkSettings> {
-  const [row] = await tx.select().from(tenantSettings).where(eq(tenantSettings.orgId, orgId));
+export async function loadSettings(tx: TenantDb, _orgId?: string): Promise<WorkSettings> {
+  const row = await tx.tenantSettings.findOne({});
   if (!row) return DEFAULT_SETTINGS;
   return {
     timezone: row.timezone,
@@ -51,7 +49,7 @@ export const zoneFor = (userTz: string | null | undefined, settings: WorkSetting
 
 /** Workspaces that exist (the job runs outside any tenant). Ids only. */
 export async function listOrgIds(db: Db): Promise<string[]> {
-  const rows = await db.execute<{ id: string }>(sql`select id from auth_list_org_ids()`);
+  const rows = await db.global.organizations.find({}, { projection: { id: 1 } });
   return rows.map((r) => r.id);
 }
 
@@ -61,38 +59,28 @@ export async function listOrgIds(db: Db): Promise<string[]> {
  * check-in itself when someone checked in after it). Returns how many were closed.
  */
 export async function autoCloseOrg(db: Db, orgId: string, now = new Date()): Promise<number> {
-  return withTenant(db, orgId, async (tx) => {
+  return withTenantTx(db, orgId, async (tx) => {
     const settings = await loadSettings(tx, orgId);
-    const open = await tx
-      .select({
-        id: workDays.id,
-        userId: workDays.userId,
-        date: workDays.date,
-        checkinAt: workDays.checkinAt,
-        timezone: users.timezone,
-      })
-      .from(workDays)
-      .innerJoin(users, eq(users.id, workDays.userId))
-      .where(
-        and(eq(workDays.orgId, orgId), isNotNull(workDays.checkinAt), isNull(workDays.checkoutAt)),
-      );
+    const open = await tx.workDays.find({ checkinAt: { $ne: null }, checkoutAt: null });
+    const people = await tx.users(open.map((o) => o.userId));
 
     let closed = 0;
     for (const row of open) {
+      const person = people.get(row.userId);
+      if (!person) continue;
       const closeAt = zonedTimeToUtc(
         row.date,
         settings.autoCloseTime,
-        zoneFor(row.timezone, settings),
+        zoneFor(person.timezone, settings),
       );
       if (now < closeAt) continue;
       const stamp = row.checkinAt! > closeAt ? row.checkinAt! : closeAt;
-      const updated = await tx
-        .update(workDays)
-        .set({ checkoutAt: stamp, autoClosed: true, source: 'auto', updatedAt: now })
+      const updated = await tx.workDays.updateOne(
         // Guard against a person checking out at the same moment.
-        .where(and(eq(workDays.id, row.id), eq(workDays.orgId, orgId), isNull(workDays.checkoutAt)))
-        .returning({ id: workDays.id });
-      if (updated.length) {
+        { id: row.id, checkoutAt: null },
+        { checkoutAt: stamp, autoClosed: true, source: 'auto', updatedAt: now },
+      );
+      if (updated) {
         closed++;
         await writeAudit(tx, {
           orgId,

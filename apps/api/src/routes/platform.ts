@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Redis } from 'ioredis';
-import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { verifyPassword } from '../auth/password.js';
@@ -12,10 +11,12 @@ import { inviteEmail } from '../email/templates.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
 import { withTenant } from '../db/client.js';
+import type { OrganizationDoc } from '../db/types.js';
+import { getPlatformSettings } from '../onboarding/settings.js';
 import { provisionWorkspace } from '../onboarding/provision.js';
 import { emailDomainOf, slugMessage, slugProblem } from '../onboarding/rules.js';
 import { LIMIT_KEYS, loadPlan, loadUsage } from '../plans/index.js';
-import { offsetOf, pageQuery } from '../lib/pagination.js';
+import { containsRegex, offsetOf, pageQuery } from '../lib/pagination.js';
 import type { SendMail } from './signup.js';
 
 const COOKIE = 'cd_platform';
@@ -51,6 +52,23 @@ type TenantRow = {
   domain_restricted: boolean;
 };
 
+const toTenantRow = (o: OrganizationDoc): TenantRow => ({
+  id: o.id,
+  name: o.name,
+  slug: o.slug,
+  domain: o.domain,
+  status: o.status,
+  suspended_reason: o.suspendedReason,
+  suspended_at: o.suspendedAt,
+  plan_key: o.planKey,
+  on_trial: o.onTrial,
+  trial_ends_at: o.trialEndsAt,
+  limit_overrides: o.limitOverrides,
+  created_at: o.createdAt,
+  created_via: o.createdVia,
+  domain_restricted: o.domainRestricted,
+});
+
 const email = z.string().trim().toLowerCase().email().max(254);
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -77,18 +95,14 @@ export async function platformRoutes(
     const sid = req.cookies[COOKIE];
     const adminId = sid ? await redis.get(key(sid)) : null;
     if (!sid || !adminId) throw new AppError(401, 'unauthenticated', 'Sign in required');
-    const rows = await db.execute<PlatformAdmin>(
-      sql`select * from platform_admin_by_id(${adminId})`,
-    );
-    if (!rows[0]) throw new AppError(401, 'unauthenticated', 'Sign in required');
+    const admin = await db.global.platformAdmins.findOne({ id: adminId });
+    if (!admin) throw new AppError(401, 'unauthenticated', 'Sign in required');
     await redis.expire(key(sid), SESSION_SECONDS);
-    req.platformAdmin = rows[0];
+    req.platformAdmin = { id: admin.id, email: admin.email, name: admin.name };
   }
 
   const audit = (admin: PlatformAdmin, action: string, orgId: string | null, detail: object = {}) =>
-    db.execute(
-      sql`select platform_audit(${admin.id}, ${action}, ${orgId}, ${JSON.stringify(detail)}::jsonb)`,
-    );
+    db.global.platformAudit.insert({ adminId: admin.id, action, orgId, detail });
 
   const tenantOrigin = (slug: string) => config.TENANT_ORIGIN_TEMPLATE.replace('{slug}', slug);
 
@@ -108,13 +122,11 @@ export async function platformRoutes(
     },
     async (req, reply) => {
       if (req.tenantSlug) throw new AppError(404, 'not_found', 'Not found');
-      const rows = await db.execute<PlatformAdmin & { password_hash: string }>(
-        sql`select * from platform_admin_by_email(${req.body.email})`,
-      );
-      const admin = rows[0];
-      const ok = await verifyPassword(admin?.password_hash, req.body.password);
-      if (!admin || !ok)
+      const found = await db.global.platformAdmins.findOne({ email: req.body.email });
+      const ok = await verifyPassword(found?.passwordHash, req.body.password);
+      if (!found || !ok)
         throw new AppError(401, 'invalid_credentials', 'Invalid email or password');
+      const admin = { id: found.id, email: found.email, name: found.name };
       const sid = randomToken();
       await redis.set(key(sid), admin.id, 'EX', SESSION_SECONDS);
       setCookie(reply, sid);
@@ -136,23 +148,16 @@ export async function platformRoutes(
 
   // ---- Plans and settings ---------------------------------------------------------------------------
   r.get('/platform/plans', { preHandler: requirePlatformAdmin }, async () => {
-    const rows = await db.execute<{ key: string; name: string; public: boolean }>(
-      sql`select key, name, public from plans order by sort`,
-    );
+    const rows = await db.global.plans.find({}, { sort: { sort: 1 } });
     return { items: rows.map((p) => ({ key: p.key, name: p.name, public: p.public })) };
   });
 
   r.get('/platform/settings', { preHandler: requirePlatformAdmin }, async () => {
-    const rows = await db.execute<{
-      block_free_email_domains: boolean;
-      signups_enabled: boolean;
-      trial_days: number;
-    }>(sql`select * from platform_settings_get()`);
-    const s = rows[0]!;
+    const s = await getPlatformSettings(db);
     return {
-      blockFreeEmailDomains: s.block_free_email_domains,
-      signupsEnabled: s.signups_enabled,
-      trialDays: s.trial_days,
+      blockFreeEmailDomains: s.blockFreeEmailDomains,
+      signupsEnabled: s.signupsEnabled,
+      trialDays: s.trialDays,
     };
   });
 
@@ -170,8 +175,10 @@ export async function platformRoutes(
     },
     async (req) => {
       const b = req.body;
-      await db.execute(
-        sql`select platform_settings_set(${b.blockFreeEmailDomains}, ${b.signupsEnabled}, ${b.trialDays})`,
+      await getPlatformSettings(db);
+      await db.global.platformSettings.updateOne(
+        { id: 'singleton' },
+        { ...b, updatedAt: new Date() },
       );
       await audit(req.platformAdmin!, 'platform.settings_changed', null, b);
       return b;
@@ -192,51 +199,71 @@ export async function platformRoutes(
     },
     async (req) => {
       const q = req.query;
-      const rows = await db.execute<{
-        id: string;
-        name: string;
-        slug: string;
-        domain: string;
-        status: string;
-        suspended_reason: string | null;
-        plan_key: string | null;
-        on_trial: boolean;
-        trial_ends_at: Date | null;
-        created_at: Date;
-        created_via: string;
-        member_count: number;
-        last_login_at: Date | null;
-        total: string;
-      }>(
-        sql`select * from platform_list_tenants(${q.q ?? null}, ${q.status ?? null}, ${q.pageSize}, ${offsetOf(q)})`,
+      const filter: Record<string, unknown> = {};
+      if (q.status) filter.status = q.status;
+      if (q.q) {
+        const rx = containsRegex(q.q);
+        filter.$or = [{ name: rx }, { slug: rx }, { domain: rx }];
+      }
+      const total = await db.global.organizations.count(filter);
+      const orgs = await db.global.organizations.find(filter, {
+        sort: { createdAt: -1, id: 1 },
+        skip: offsetOf(q),
+        limit: q.pageSize,
+      });
+      const items = await Promise.all(
+        orgs.map(async (t) => {
+          const members = await db.global.all.memberships.find({ orgId: t.id });
+          const people = await db.global.users.find({ id: { $in: members.map((m) => m.userId) } });
+          const logins = people.map((u) => u.lastLoginAt).filter((d): d is Date => d !== null);
+          return {
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            domain: t.domain,
+            status: t.status,
+            suspendedReason: t.suspendedReason,
+            planKey: t.planKey,
+            onTrial: t.onTrial,
+            trialEndsAt: t.trialEndsAt,
+            createdAt: t.createdAt,
+            createdVia: t.createdVia,
+            workType: t.workType,
+            memberCount: members.filter((m) => m.status === 'active').length,
+            lastLoginAt: logins.length
+              ? new Date(Math.max(...logins.map((d) => d.getTime())))
+              : null,
+          };
+        }),
       );
-      return {
-        items: rows.map((t) => ({
-          id: t.id,
-          name: t.name,
-          slug: t.slug,
-          domain: t.domain,
-          status: t.status,
-          suspendedReason: t.suspended_reason,
-          planKey: t.plan_key,
-          onTrial: t.on_trial,
-          trialEndsAt: t.trial_ends_at,
-          createdAt: t.created_at,
-          createdVia: t.created_via,
-          memberCount: t.member_count,
-          lastLoginAt: t.last_login_at,
-        })),
-        total: Number(rows[0]?.total ?? 0),
-        page: q.page,
-        pageSize: q.pageSize,
-      };
+      return { items, total, page: q.page, pageSize: q.pageSize };
     },
   );
 
+  /** Newest platform audit entries, with the acting admin's email. */
+  async function auditList(orgId: string | null, limit: number) {
+    const rows = await db.global.platformAudit.find(orgId ? { orgId } : {}, {
+      sort: { createdAt: -1 },
+      limit,
+    });
+    const admins = await db.global.platformAdmins.find({
+      id: { $in: rows.map((x) => x.adminId).filter((x): x is string => !!x) },
+    });
+    const emailOf = new Map(admins.map((a) => [a.id, a.email]));
+    return rows.map((x) => ({
+      id: x.id,
+      admin_email: x.adminId ? (emailOf.get(x.adminId) ?? null) : null,
+      action: x.action,
+      org_id: x.orgId,
+      detail: x.detail as object | null,
+      created_at: x.createdAt,
+    }));
+  }
+
   async function tenantById(id: string) {
-    const rows = await db.execute<TenantRow>(sql`select * from platform_get_tenant(${id})`);
-    if (!rows[0]) throw notFound('Workspace');
-    return rows[0];
+    const org = await db.global.organizations.findOne({ id });
+    if (!org) throw notFound('Workspace');
+    return toTenantRow(org);
   }
 
   r.get(
@@ -248,13 +275,7 @@ export async function platformRoutes(
         plan: await loadPlan(tx, t.id),
         usage: await loadUsage(tx, t.id),
       }));
-      const history = await db.execute<{
-        id: string;
-        admin_email: string | null;
-        action: string;
-        detail: object | null;
-        created_at: Date;
-      }>(sql`select * from platform_audit_list(${t.id}, 30)`);
+      const history = await auditList(t.id, 30);
       return {
         id: t.id,
         name: t.name,
@@ -272,6 +293,7 @@ export async function platformRoutes(
         limitOverrides: t.limit_overrides,
         effective: { name: plan.name, limits: plan.limits, features: plan.features },
         usage,
+        workType: (await db.global.organizations.findOne({ id: t.id }))?.workType ?? null,
         history: history.map((h) => ({
           id: h.id,
           admin: h.admin_email,
@@ -308,10 +330,8 @@ export async function platformRoutes(
       if (await findOrgBySlug(db, b.slug)) {
         throw new AppError(409, 'slug_taken', slugMessage.taken, { slug: slugMessage.taken });
       }
-      const plan = await db.execute<{ key: string }>(
-        sql`select key from plans where key = ${b.plan}`,
-      );
-      if (!plan[0])
+      const plan = await db.global.plans.findOne({ key: b.plan });
+      if (!plan)
         throw new AppError(400, 'validation_error', 'Unknown plan', { plan: 'Unknown plan' });
       const out = await provisionWorkspace(db, {
         name: b.name,
@@ -362,7 +382,14 @@ export async function platformRoutes(
     const t = await tenantById(req.params.id);
     const reason =
       status === 'suspended' ? req.body?.reason?.trim() || 'Suspended by the platform' : null;
-    await db.execute(sql`select platform_set_status(${t.id}, ${status}, ${reason})`);
+    await db.global.organizations.updateOne(
+      { id: t.id },
+      {
+        status,
+        suspendedAt: status === 'suspended' ? new Date() : null,
+        suspendedReason: status === 'suspended' ? reason : null,
+      },
+    );
     await audit(
       req.platformAdmin!,
       status === 'suspended' ? 'platform.workspace_suspended' : 'platform.workspace_unsuspended',
@@ -425,10 +452,8 @@ export async function platformRoutes(
       const t = await tenantById(req.params.id);
       const b = req.body;
       if (b.planKey) {
-        const found = await db.execute<{ key: string }>(
-          sql`select key from plans where key = ${b.planKey}`,
-        );
-        if (!found[0])
+        const found = await db.global.plans.findOne({ key: b.planKey });
+        if (!found)
           throw new AppError(400, 'validation_error', 'Unknown plan', { planKey: 'Unknown plan' });
       }
       const planKey = b.planKey !== undefined ? b.planKey : t.plan_key;
@@ -443,8 +468,14 @@ export async function platformRoutes(
         trialEnds = null;
       }
       const overrides = b.limitOverrides ?? t.limit_overrides;
-      await db.execute(
-        sql`select platform_set_plan(${t.id}, ${planKey}, ${onTrial}, ${trialEnds ? new Date(trialEnds).toISOString() : null}::timestamptz, ${JSON.stringify(overrides)}::jsonb)`,
+      await db.global.organizations.updateOne(
+        { id: t.id },
+        {
+          planKey,
+          onTrial,
+          trialEndsAt: trialEnds ? new Date(trialEnds) : null,
+          limitOverrides: overrides as Record<string, number>,
+        },
       );
       await audit(req.platformAdmin!, 'platform.plan_changed', t.id, {
         before: { plan: t.plan_key, onTrial: t.on_trial },
@@ -483,10 +514,18 @@ export async function platformRoutes(
           'Unsuspend this workspace before opening it',
         );
       }
-      const owners = await db.execute<{ user_id: string; email: string }>(
-        sql`select * from platform_owner_of(${t.id})`,
+      // The earliest active owner whose account is still active.
+      const ownerMemberships = await db.global.all.memberships.find(
+        { orgId: t.id, orgRole: 'owner', status: 'active' },
+        { sort: { createdAt: 1 } },
       );
-      const owner = owners[0];
+      const ownerUsers = await db.global.users.find({
+        id: { $in: ownerMemberships.map((m) => m.userId) },
+        status: 'active',
+      });
+      const first = ownerMemberships.find((m) => ownerUsers.some((u) => u.id === m.userId));
+      const ownerUser = first && ownerUsers.find((u) => u.id === first.userId);
+      const owner = ownerUser ? { user_id: ownerUser.id, email: ownerUser.email } : null;
       if (!owner)
         throw new AppError(409, 'no_owner', 'This workspace has no active owner to open it as');
       const admin = req.platformAdmin!;
@@ -518,14 +557,7 @@ export async function platformRoutes(
   );
 
   r.get('/platform/audit', { preHandler: requirePlatformAdmin }, async () => {
-    const rows = await db.execute<{
-      id: string;
-      admin_email: string | null;
-      action: string;
-      org_id: string | null;
-      detail: object | null;
-      created_at: Date;
-    }>(sql`select * from platform_audit_list(${null}, 100)`);
+    const rows = await auditList(null, 100);
     return {
       items: rows.map((h) => ({
         id: h.id,

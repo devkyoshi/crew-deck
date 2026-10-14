@@ -38,6 +38,7 @@ import { memberRoutes } from './routes/members.js';
 import { planRoutes } from './routes/plan.js';
 import { platformRoutes } from './routes/platform.js';
 import { signupRoutes, type SendMail } from './routes/signup.js';
+import { workspaceRoutes } from './routes/workspaces.js';
 import type { EnqueueInviteEmail } from './email/queue.js';
 
 export interface AppDeps {
@@ -133,6 +134,7 @@ export function buildApp({
     sendMail: sendMail ?? (async () => {}),
   });
   app.register(planRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(workspaceRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(signupRoutes, {
     prefix: '/api/v1',
     ...authDeps,

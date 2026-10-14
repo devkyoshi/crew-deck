@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import {
   adminDb,
   caller,
@@ -10,8 +9,6 @@ import {
   tenantIds,
   uniqueEmail,
 } from './helpers.js';
-import { organizations, workItems } from '../src/db/schema.js';
-import { withTenant } from '../src/db/client.js';
 
 const t = makeApp();
 const call = caller(t.app);
@@ -362,8 +359,8 @@ describe('deleting items', () => {
     // History is kept: the rows still exist, only flagged.
     const a = adminDb();
     try {
-      const rows = await a.db.select().from(workItems).where(eq(workItems.id, story.id));
-      expect(rows[0]?.deletedAt).not.toBeNull();
+      const row = await a.db.global.all.workItems.get(story.id);
+      expect(row?.deletedAt).not.toBeNull();
     } finally {
       await a.close();
     }
@@ -573,9 +570,9 @@ describe('the board', () => {
     await mkItem(sp, c.owner, { title: 'Recent', statusId: done.id });
     const a = adminDb();
     try {
-      await withTenant(a.db, ids.acme, (tx) =>
-        tx.update(workItems).set({ resolvedAt: new Date(Date.now() - 30 * 86_400_000) }).where(eq(workItems.id, old.id)),
-      );
+      await a.db
+        .tenant(ids.acme)
+        .workItems.updateOne({ id: old.id }, { resolvedAt: new Date(Date.now() - 30 * 86_400_000) });
     } finally {
       await a.close();
     }
@@ -630,32 +627,25 @@ describe('tenant isolation', () => {
     expect((await send('GET', `/items/${a.key}`, c.globex, undefined, 'globex')).json().id).toBe(b.id);
   });
 
-  it('is enforced by the database: a tenant cannot see or insert rows for another', async () => {
+  it('is enforced by the repository layer: a tenant cannot see, change or insert rows for another', async () => {
     const it = await mkItem(space, c.owner);
     const { appDb } = await import('./helpers.js');
     const app = appDb();
     try {
-      await withTenant(app.db, ids.globex, async (tx) => {
-        expect(await tx.select().from(workItems).where(eq(workItems.id, it.id))).toHaveLength(0);
-      });
+      const other = app.db.tenant(ids.globex);
+      expect(await other.workItems.get(it.id)).toBeNull();
+      expect(await other.workItems.updateOne({ id: it.id }, { title: 'x' })).toBe(0);
       await expect(
-        withTenant(app.db, ids.globex, (tx) =>
-          tx.update(workItems).set({ title: 'x' }).where(eq(workItems.id, it.id)).returning(),
-        ).then((rows) => rows.length),
-      ).resolves.toBe(0);
-      await expect(
-        withTenant(app.db, ids.globex, (tx) =>
-          tx.insert(workItems).values({
-            orgId: ids.acme,
-            spaceId: space.id,
-            number: 9999,
-            type: 'task',
-            title: 'smuggled',
-            statusId: it.statusId,
-            reporterId: owner.id,
-            rank: 'a0',
-          }),
-        ),
+        other.workItems.insert({
+          orgId: ids.acme,
+          spaceId: space.id,
+          number: 9999,
+          type: 'task',
+          title: 'smuggled',
+          statusId: it.statusId,
+          reporterId: owner.id,
+          rank: 'a0',
+        }),
       ).rejects.toThrow();
     } finally {
       await app.close();
@@ -668,10 +658,10 @@ describe('plan limits', () => {
     const { org, slug, owner: o } = await createOrg('wilimit');
     const a = adminDb();
     try {
-      await a.db
-        .update(organizations)
-        .set({ planKey: 'free', limitOverrides: { work_items: 3 } })
-        .where(eq(organizations.id, org.id));
+      await a.db.global.organizations.updateOne(
+        { id: org.id },
+        { planKey: 'free', limitOverrides: { work_items: 3 } },
+      );
     } finally {
       await a.close();
     }
@@ -709,7 +699,7 @@ describe('plan limits', () => {
     const { org, slug, owner: o } = await createOrg('wiscrum');
     const a = adminDb();
     try {
-      await a.db.update(organizations).set({ planKey: 'free' }).where(eq(organizations.id, org.id));
+      await a.db.global.organizations.updateOne({ id: org.id }, { planKey: 'free' });
     } finally {
       await a.close();
     }

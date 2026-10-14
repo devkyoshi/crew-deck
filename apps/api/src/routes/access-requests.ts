@@ -1,16 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { withTenant, type Tx } from '../db/client.js';
-import { memberships, spaceAccessRequests, spaceMembers, spaces, users } from '../db/schema.js';
+import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { offsetOf, pageQuery } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
-import { effectiveRoleSql } from '../spaces/access.js';
+import { effectiveRole, effectiveRoles } from '../spaces/access.js';
 import { isOrgAdmin, resolveSpace, spaceCtx } from './spaces.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,50 +46,38 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
     },
     async (req) => {
       const actor = actorOf(req);
-      await withTenant(deps.db, actor.orgId, async (tx) => {
-        const myRole = effectiveRoleSql(actor.userId, actor.orgId);
+      await withTenantTx(deps.db, actor.orgId, async (tx) => {
         const param = req.params.id;
-        const [space] = await tx
-          .select({ id: spaces.id, role: myRole })
-          .from(spaces)
-          .where(
-            and(
-              eq(spaces.orgId, actor.orgId),
-              sql`${spaces.deletedAt} is null`,
-              eq(spaces.visibility, 'private'),
-              eq(spaces.status, 'active'),
-              UUID.test(param) ? eq(spaces.id, param) : eq(spaces.key, param.toUpperCase()),
-            ),
-          );
+        const space = await tx.spaces.findOne({
+          deletedAt: null,
+          visibility: 'private',
+          status: 'active',
+          ...(UUID.test(param) ? { id: param } : { key: param.toUpperCase() }),
+        });
         // Missing, open, archived, already a member, or an org admin: all look the same to the caller.
-        if (!space || space.role || isOrgAdmin(actor)) return;
-        const pending = await tx
-          .select({ id: spaceAccessRequests.id })
-          .from(spaceAccessRequests)
-          .where(
-            and(
-              eq(spaceAccessRequests.spaceId, space.id),
-              eq(spaceAccessRequests.userId, actor.userId),
-              eq(spaceAccessRequests.status, 'pending'),
-            ),
-          );
-        if (pending.length) return;
-        const [created] = await tx
-          .insert(spaceAccessRequests)
-          .values({
-            orgId: actor.orgId,
+        if (!space || isOrgAdmin(actor)) return;
+        if (await effectiveRole(tx, actor.userId, space.id)) return;
+        if (
+          await tx.spaceAccessRequests.exists({
             spaceId: space.id,
             userId: actor.userId,
-            message: req.body.message || null,
+            status: 'pending',
           })
-          .returning({ id: spaceAccessRequests.id });
+        ) {
+          return;
+        }
+        const created = await tx.spaceAccessRequests.insert({
+          spaceId: space.id,
+          userId: actor.userId,
+          message: req.body.message || null,
+        });
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
           action: 'space.access_requested',
           targetType: 'space',
           targetId: space.id,
-          after: { requestId: created!.id },
+          after: { requestId: created.id },
         });
       });
       return SENT;
@@ -115,68 +101,57 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
       const actor = actorOf(req);
       const q = req.query;
       const mine = q.mine === 'true';
-      const role = effectiveRoleSql(actor.userId, actor.orgId);
-      const conds: (SQL | undefined)[] = [eq(spaceAccessRequests.orgId, actor.orgId)];
-      if (q.status !== 'all') conds.push(eq(spaceAccessRequests.status, q.status));
-      if (mine) {
-        conds.push(eq(spaceAccessRequests.userId, actor.userId));
-      } else if (!isOrgAdmin(actor)) {
-        // The inbox only holds requests for spaces the caller administers.
-        conds.push(sql`${role} = 'admin'`, sql`${spaces.deletedAt} is null`);
-      }
-      const where = and(...conds);
+      const filter: Record<string, unknown> = {};
+      if (q.status !== 'all') filter.status = q.status;
+      if (mine) filter.userId = actor.userId;
 
       return withTenant(deps.db, actor.orgId, async (tx) => {
-        const rows = await tx
-          .select({
-            id: spaceAccessRequests.id,
-            status: spaceAccessRequests.status,
-            message: spaceAccessRequests.message,
-            grantedRole: spaceAccessRequests.grantedRole,
-            createdAt: spaceAccessRequests.createdAt,
-            decidedAt: spaceAccessRequests.decidedAt,
-            requesterId: users.id,
-            requesterName: users.name,
-            requesterEmail: users.email,
-            requesterAvatar: users.avatarUrl,
-            spaceId: spaces.id,
-            spaceKey: spaces.key,
-            spaceName: spaces.name,
-            spaceIcon: spaces.icon,
-            decidedByName: sql<string | null>`(select d.name from users d where d.id = decided_by)`,
-          })
-          .from(spaceAccessRequests)
-          .innerJoin(spaces, eq(spaces.id, spaceAccessRequests.spaceId))
-          .innerJoin(users, eq(users.id, spaceAccessRequests.userId))
-          .where(where)
-          .orderBy(desc(spaceAccessRequests.createdAt), desc(spaceAccessRequests.id))
-          .limit(q.pageSize)
-          .offset(offsetOf(q));
-        const [count] = await tx
-          .select({ n: sql<number>`count(*)::int` })
-          .from(spaceAccessRequests)
-          .innerJoin(spaces, eq(spaces.id, spaceAccessRequests.spaceId))
-          .where(where);
+        let requests = await tx.spaceAccessRequests.find(filter, {
+          sort: { createdAt: -1, id: -1 },
+        });
+        const spaceDocs = await tx.spaces.find({
+          id: { $in: [...new Set(requests.map((x) => x.spaceId))] },
+        });
+        const spaceById = new Map(spaceDocs.map((s) => [s.id, s]));
+        // A request whose space is gone is not shown.
+        requests = requests.filter((x) => spaceById.has(x.spaceId));
+        if (!mine && !isOrgAdmin(actor)) {
+          // The inbox only holds requests for spaces the caller administers.
+          const roles = await effectiveRoles(tx, actor.userId, [...spaceById.keys()]);
+          requests = requests.filter(
+            (x) => roles.get(x.spaceId) === 'admin' && spaceById.get(x.spaceId)!.deletedAt === null,
+          );
+        }
+        const total = requests.length;
+        const page = requests.slice(offsetOf(q), offsetOf(q) + q.pageSize);
+        const people = await tx.users([
+          ...page.map((x) => x.userId),
+          ...page.map((x) => x.decidedBy).filter((x): x is string => !!x),
+        ]);
         return {
           // People only learn the key they asked for, never the name of a space they cannot see.
-          items: rows.map((x) => ({
-            id: x.id,
-            status: x.status,
-            message: x.message,
-            grantedRole: x.grantedRole,
-            createdAt: x.createdAt,
-            decidedAt: x.decidedAt,
-            requesterId: x.requesterId,
-            requesterName: x.requesterName,
-            requesterEmail: x.requesterEmail,
-            requesterAvatar: x.requesterAvatar,
-            spaceKey: x.spaceKey,
-            spaceId: mine ? null : x.spaceId,
-            spaceName: mine ? null : x.spaceName,
-            spaceIcon: mine ? null : x.spaceIcon,
-            decidedByName: x.decidedByName,
-          })),
-          total: count?.n ?? 0,
+          items: page.map((x) => {
+            const space = spaceById.get(x.spaceId)!;
+            const who = people.get(x.userId);
+            return {
+              id: x.id,
+              status: x.status,
+              message: x.message,
+              grantedRole: x.grantedRole,
+              createdAt: x.createdAt,
+              decidedAt: x.decidedAt,
+              requesterId: x.userId,
+              requesterName: who?.name ?? null,
+              requesterEmail: who?.email ?? '',
+              requesterAvatar: who?.avatarUrl ?? null,
+              spaceKey: space.key,
+              spaceId: mine ? null : space.id,
+              spaceName: mine ? null : space.name,
+              spaceIcon: mine ? null : space.icon,
+              decidedByName: x.decidedBy ? (people.get(x.decidedBy)?.name ?? null) : null,
+            };
+          }),
+          total,
           page: q.page,
           pageSize: q.pageSize,
         };
@@ -184,11 +159,8 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
     },
   );
 
-  async function loadForDecision(tx: Tx, actor: Actor, id: string) {
-    const [request] = await tx
-      .select()
-      .from(spaceAccessRequests)
-      .where(and(eq(spaceAccessRequests.id, id), eq(spaceAccessRequests.orgId, actor.orgId)));
+  async function loadForDecision(tx: TenantDb, actor: Actor, id: string) {
+    const request = await tx.spaceAccessRequests.get(id);
     if (!request) throw notFound('Request');
     // resolveSpace 404s for anyone who cannot see the space, so outsiders learn nothing.
     const space = await resolveSpace(tx, actor, request.spaceId);
@@ -212,15 +184,12 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { request, space } = await loadForDecision(tx, actor, req.params.id);
         if (space.status === 'archived') {
           throw new AppError(409, 'archived', 'Restore this space before adding people to it');
         }
-        const [person] = await tx
-          .select({ status: memberships.status })
-          .from(memberships)
-          .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, request.userId)));
+        const person = await tx.memberships.findOne({ userId: request.userId });
         if (!person || person.status !== 'active') {
           throw new AppError(
             409,
@@ -229,28 +198,16 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
           );
         }
         const role = req.body.role;
-        const inserted = await tx
-          .insert(spaceMembers)
-          .values({
-            spaceId: space.id,
-            orgId: actor.orgId,
-            principalType: 'user',
-            principalId: request.userId,
-            spaceRole: role,
-          })
-          .onConflictDoNothing()
-          .returning({ id: spaceMembers.id });
-        await tx
-          .update(spaceAccessRequests)
-          .set({
-            status: 'approved',
-            decidedBy: actor.userId,
-            decidedAt: new Date(),
-            grantedRole: role,
-          })
-          .where(
-            and(eq(spaceAccessRequests.id, request.id), eq(spaceAccessRequests.orgId, actor.orgId)),
-          );
+        const inserted = await tx.spaceMembers.insertIgnore({
+          spaceId: space.id,
+          principalType: 'user',
+          principalId: request.userId,
+          spaceRole: role,
+        });
+        await tx.spaceAccessRequests.updateOne(
+          { id: request.id },
+          { status: 'approved', decidedBy: actor.userId, decidedAt: new Date(), grantedRole: role },
+        );
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -259,7 +216,7 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
           targetId: space.id,
           after: { requestId: request.id, userId: request.userId, role },
         });
-        if (inserted.length) {
+        if (inserted) {
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -290,14 +247,12 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
         const { request, space } = await loadForDecision(tx, actor, req.params.id);
-        await tx
-          .update(spaceAccessRequests)
-          .set({ status: 'declined', decidedBy: actor.userId, decidedAt: new Date() })
-          .where(
-            and(eq(spaceAccessRequests.id, request.id), eq(spaceAccessRequests.orgId, actor.orgId)),
-          );
+        await tx.spaceAccessRequests.updateOne(
+          { id: request.id },
+          { status: 'declined', decidedBy: actor.userId, decidedAt: new Date() },
+        );
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
@@ -321,27 +276,19 @@ export async function accessRequestRoutes(app: FastifyInstance, deps: AuthDeps) 
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => {
       const actor = actorOf(req);
-      return withTenant(deps.db, actor.orgId, async (tx) => {
-        const [request] = await tx
-          .select()
-          .from(spaceAccessRequests)
-          .where(
-            and(
-              eq(spaceAccessRequests.id, req.params.id),
-              eq(spaceAccessRequests.orgId, actor.orgId),
-              eq(spaceAccessRequests.userId, actor.userId),
-            ),
-          );
+      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+        const request = await tx.spaceAccessRequests.findOne({
+          id: req.params.id,
+          userId: actor.userId,
+        });
         if (!request) throw notFound('Request');
         if (request.status !== 'pending') {
           throw new AppError(409, 'not_pending', 'This request has already been handled');
         }
-        await tx
-          .update(spaceAccessRequests)
-          .set({ status: 'cancelled', decidedAt: new Date() })
-          .where(
-            and(eq(spaceAccessRequests.id, request.id), eq(spaceAccessRequests.orgId, actor.orgId)),
-          );
+        await tx.spaceAccessRequests.updateOne(
+          { id: request.id },
+          { status: 'cancelled', decidedAt: new Date() },
+        );
         await writeAudit(tx, {
           orgId: actor.orgId,
           actorId: actor.userId,
