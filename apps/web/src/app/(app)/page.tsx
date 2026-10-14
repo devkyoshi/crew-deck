@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, LayoutGrid, Sparkles, Users, UsersRound } from 'lucide-react';
+import { ArrowRight, LayoutGrid, Users, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/shared/empty-state';
-import { HeroBanner } from '@/components/shared/hero-banner';
 import { IconTile, type Tone } from '@/components/shared/pastel';
 import { TeamWidget } from '@/components/checkin/team-board';
 import { useToday } from '@/components/checkin/use-today';
@@ -36,7 +35,7 @@ export default function HomePage() {
   const checkinOn = useToday().data?.enabled === true;
   // The date depends on the viewer's timezone, which the server does not know. Rendering it on the
   // server would disagree with the browser near midnight (a hydration error), so it appears after mount.
-  const [today, setToday] = useState(' ');
+  const [today, setToday] = useState(' ');
   useEffect(() => {
     setToday(
       new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long' }).format(
@@ -46,28 +45,26 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-8">
-      <HeroBanner
-        eyebrow={today}
-        title={`Hello, ${first}`}
-        badge={
-          <span className="bg-card/90 inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm shadow-soft">
-            <Sparkles className="text-primary size-4" aria-hidden />
-            Welcome to {org.name}
-          </span>
-        }
-      />
+    <div className="space-y-6">
+      <header className="space-y-0.5">
+        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{today}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{`Hello, ${first}`}</h1>
+        <p className="text-muted-foreground text-sm">Here is what is happening in {org.name}.</p>
+      </header>
 
       {checkinOn && <TeamWidget />}
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Jump in</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SHORTCUTS.map((s) => (
-            <Link key={s.href} href={s.href} className="group focus-visible:outline-none">
-              <Card className="hover:border-primary/40 group-focus-visible:ring-ring/50 flex-row items-center gap-3 p-4 shadow-none transition-colors group-focus-visible:ring-[3px]">
+        <h2 className="text-base font-semibold">Jump in</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {SHORTCUTS.map((s, i) => (
+            <Link
+              key={s.href}
+              href={s.href}
+              className="group animate-fade-up focus-visible:outline-none"
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <Card className="hover:border-primary/40 group-focus-visible:ring-ring/50 flex-row items-center gap-3 px-4 py-3.5 shadow-none transition-colors group-focus-visible:ring-[3px]">
                 <IconTile tone={s.tone} icon={s.icon} />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{s.title}</div>
@@ -86,11 +83,11 @@ export default function HomePage() {
       <section className="space-y-3">
         <h2 className="text-base font-semibold">Your work</h2>
         <EmptyState
-          icon={Sparkles}
+          illustration="empty"
           title="Nothing here yet"
           description="Spaces, tasks and updates will show up here as your team starts using the workspace."
           action={
-            <Button variant="outline" asChild>
+            <Button variant="outline" size="sm" asChild>
               <Link href="/spaces">Browse spaces</Link>
             </Button>
           }

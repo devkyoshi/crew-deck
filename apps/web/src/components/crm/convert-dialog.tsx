@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/shared/notice';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -242,11 +243,7 @@ export function ConvertDialog({ lead }: { lead: Lead }) {
             )}
           </fieldset>
 
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          )}
+          {error && <Notice variant="error">{error}</Notice>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

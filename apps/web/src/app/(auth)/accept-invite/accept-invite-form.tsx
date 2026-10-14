@@ -5,11 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AlertCircle } from 'lucide-react';
+import { Globe, ShieldCheck, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { FormRow, FormSection } from '@/components/ui/form-layout';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
+import { Illustration } from '@/components/illustrations';
+import { Notice } from '@/components/shared/notice';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError, type Providers } from '@/lib/api';
 
@@ -31,34 +36,6 @@ type Values = z.infer<typeof schema>;
 
 type Preview = { email: string; orgName: string; orgSlug: string };
 
-function Field({
-  id,
-  label,
-  error,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error ? (
-        <p id={`${id}-error`} className="text-destructive text-xs">
-          {error}
-        </p>
-      ) : (
-        hint && <p className="text-muted-foreground text-xs">{hint}</p>
-      )}
-    </div>
-  );
-}
-
 export function AcceptInviteForm({ token }: { token: string }) {
   const router = useRouter();
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -75,6 +52,8 @@ export function AcceptInviteForm({ token }: { token: string }) {
       avatarUrl: '',
     },
   });
+
+  const { shakeKey, onInvalid } = useFormFeedback();
 
   useEffect(() => {
     if (!token) return;
@@ -124,7 +103,8 @@ export function AcceptInviteForm({ token }: { token: string }) {
   if (invalid) {
     return (
       <Card>
-        <CardHeader className="text-center">
+        <CardHeader className="items-center text-center">
+          <Illustration name="lock" />
           <CardTitle className="text-xl">Invitation not valid</CardTitle>
           <CardDescription>
             This link is invalid, already used, or has expired. Ask a workspace admin to send a new
@@ -155,7 +135,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
 
   return (
     <Card>
-      <CardHeader className="text-center">
+      <CardHeader className="items-center text-center">
         <CardTitle className="text-xl">Join {preview.orgName}</CardTitle>
         <CardDescription>
           Set up your account for{' '}
@@ -163,64 +143,63 @@ export function AcceptInviteForm({ token }: { token: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          {formError && (
-            <div
-              role="alert"
-              className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border p-3 text-sm"
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-5" noValidate>
+          {formError && <Notice variant="error">{formError}</Notice>}
+
+          <FormSection title="Your profile" icon={UserRound}>
+            <Field
+              label="Full name"
+              htmlFor="name"
+              error={errors.name?.message}
+              shakeKey={shakeKey}
             >
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-              {formError}
-            </div>
-          )}
-          <Field id="name" label="Full name" error={errors.name?.message}>
-            <Input
-              id="name"
-              autoComplete="name"
-              aria-invalid={!!errors.name}
-              {...register('name')}
-            />
-          </Field>
-          <Field
-            id="password"
-            label="Password"
-            error={errors.password?.message}
-            hint={`At least ${MIN_PASSWORD} characters.`}
-          >
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              aria-invalid={!!errors.password}
-              {...register('password')}
-            />
-          </Field>
-          <Field id="confirm" label="Confirm password" error={errors.confirm?.message}>
-            <Input
-              id="confirm"
-              type="password"
-              autoComplete="new-password"
-              aria-invalid={!!errors.confirm}
-              {...register('confirm')}
-            />
-          </Field>
-          <Field
-            id="timezone"
-            label="Timezone"
-            error={errors.timezone?.message}
-            hint="Used to work out your day."
-          >
-            <Input id="timezone" {...register('timezone')} />
-          </Field>
-          <Field id="avatarUrl" label="Avatar URL (optional)" error={errors.avatarUrl?.message}>
-            <Input
-              id="avatarUrl"
-              placeholder="https://…"
-              aria-invalid={!!errors.avatarUrl}
-              {...register('avatarUrl')}
-            />
-          </Field>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Input autoComplete="name" {...register('name')} />
+            </Field>
+            <Field
+              label="Avatar URL (optional)"
+              htmlFor="avatarUrl"
+              error={errors.avatarUrl?.message}
+              shakeKey={shakeKey}
+            >
+              <Input placeholder="https://…" {...register('avatarUrl')} />
+            </Field>
+          </FormSection>
+
+          <FormSection title="Security" icon={ShieldCheck}>
+            <FormRow>
+              <Field
+                label="Password"
+                htmlFor="password"
+                error={errors.password?.message}
+                hint={`At least ${MIN_PASSWORD} characters.`}
+                shakeKey={shakeKey}
+              >
+                <PasswordInput autoComplete="new-password" {...register('password')} />
+              </Field>
+              <Field
+                label="Confirm password"
+                htmlFor="confirm"
+                error={errors.confirm?.message}
+                shakeKey={shakeKey}
+              >
+                <PasswordInput autoComplete="new-password" {...register('confirm')} />
+              </Field>
+            </FormRow>
+          </FormSection>
+
+          <FormSection title="Preferences" icon={Globe}>
+            <Field
+              label="Timezone"
+              htmlFor="timezone"
+              error={errors.timezone?.message}
+              hint="Used to work out your day."
+              shakeKey={shakeKey}
+            >
+              <Input {...register('timezone')} />
+            </Field>
+          </FormSection>
+
+          <Button type="submit" className="w-full" loading={isSubmitting}>
             {isSubmitting ? 'Creating account…' : 'Create account'}
           </Button>
         </form>

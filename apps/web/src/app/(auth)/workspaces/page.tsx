@@ -1,43 +1,58 @@
 'use client';
 
 import { useState } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Illustration } from '@/components/illustrations';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 
 /** Shown on the bare domain, where no workspace can be resolved. */
 export default function WorkspacesPage() {
   const [slug, setSlug] = useState('');
-  const valid = /^[a-z0-9][a-z0-9-]*$/.test(slug);
+  const [error, setError] = useState<string | null>(null);
+  const { shakeKey, fail } = useFormFeedback();
 
   function go(e: React.FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (!slug) {
+      setError('Enter your workspace name');
+      fail();
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+      setError('Use lowercase letters, digits and hyphens');
+      fail();
+      return;
+    }
     const { protocol, host } = window.location;
     window.location.assign(`${protocol}//${slug}.${host}/sign-in`);
   }
 
   return (
     <Card>
-      <CardHeader className="text-center">
+      <CardHeader className="items-center text-center">
+        <Illustration name="spaces" className="mb-1 h-20" />
         <CardTitle className="text-xl">Find your workspace</CardTitle>
         <CardDescription>Enter your workspace name to continue.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={go} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="slug">Workspace</Label>
+        <form onSubmit={go} className="space-y-3" noValidate>
+          <Field label="Workspace" htmlFor="slug" error={error} shakeKey={shakeKey}>
             <Input
-              id="slug"
               placeholder="acme"
               autoComplete="off"
               value={slug}
-              onChange={(e) => setSlug(e.target.value.trim().toLowerCase())}
+              onChange={(e) => {
+                setSlug(e.target.value.trim().toLowerCase());
+                setError(null);
+              }}
             />
-          </div>
-          <Button type="submit" className="w-full" disabled={!valid}>
-            Continue
+          </Field>
+          <Button type="submit" className="w-full">
+            Continue <ArrowRight />
           </Button>
         </form>
       </CardContent>

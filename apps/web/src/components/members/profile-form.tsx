@@ -5,8 +5,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
+import { FormActions, FormRow, FormSection } from '@/components/ui/form-layout';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Notice } from '@/components/shared/notice';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { ApiError } from '@/lib/api';
 
 const schema = z.object({
@@ -50,6 +53,8 @@ export function ProfileForm({
     defaultValues: { name: '', jobTitle: '', timezone: 'UTC', avatarUrl: '', ...initial },
   });
 
+  const { shakeKey, onInvalid } = useFormFeedback();
+
   const submit = handleSubmit(async (v) => {
     setError(null);
     try {
@@ -57,45 +62,44 @@ export function ProfileForm({
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not save. Try again.');
     }
-  });
+  }, onInvalid);
 
   const field = (id: keyof ProfileValues, label: string, hint?: string) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={`pf-${id}`}>{label}</Label>
-      <Input id={`pf-${id}`} aria-invalid={!!errors[id]} {...register(id)} />
-      {errors[id] ? (
-        <p className="text-destructive text-xs">{errors[id]?.message}</p>
-      ) : (
-        hint && <p className="text-muted-foreground text-xs">{hint}</p>
-      )}
-    </div>
+    <Field
+      label={label}
+      htmlFor={`pf-${id}`}
+      error={errors[id]?.message}
+      hint={hint}
+      shakeKey={shakeKey}
+    >
+      <Input {...register(id)} />
+    </Field>
   );
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate data-ready={ready || undefined}>
-      {error && (
-        <div
-          role="alert"
-          className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm"
-        >
-          {error}
-        </div>
-      )}
-      {field('name', 'Full name')}
-      {field('jobTitle', 'Job title')}
-      {field('timezone', 'Timezone', 'Used to work out your day.')}
-      {withAvatar &&
-        field('avatarUrl', 'Avatar URL', 'Link to an image. Leave empty for initials.')}
-      <div className="flex justify-end gap-2">
+    <form onSubmit={submit} className="space-y-5" noValidate data-ready={ready || undefined}>
+      {error && <Notice variant="error">{error}</Notice>}
+      <FormSection title="Basics">
+        <FormRow>
+          {field('name', 'Full name')}
+          {field('jobTitle', 'Job title')}
+        </FormRow>
+      </FormSection>
+      <FormSection title="Preferences">
+        {field('timezone', 'Timezone', 'Used to work out your day.')}
+        {withAvatar &&
+          field('avatarUrl', 'Avatar URL', 'Link to an image. Leave empty for initials.')}
+      </FormSection>
+      <FormActions>
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting || !isDirty}>
+        <Button type="submit" loading={isSubmitting} disabled={!isDirty}>
           {isSubmitting ? 'Saving…' : submitLabel}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

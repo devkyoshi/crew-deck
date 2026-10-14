@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/shared/notice';
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, TriangleAlert, Upload } from 'lucide-react';
@@ -182,11 +183,7 @@ export function ImportDialog({ type }: { type: ImportType }) {
         </DialogHeader>
         <Stepper steps={STEPS} current={step} />
 
-        {error && (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        )}
+        {error && <Notice variant="error">{error}</Notice>}
 
         {step === 0 && (
           <div className="space-y-3">

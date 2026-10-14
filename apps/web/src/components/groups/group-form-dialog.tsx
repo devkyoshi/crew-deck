@@ -17,7 +17,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Field } from '@/components/ui/field';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError, type GroupDetail } from '@/lib/api';
 
@@ -50,6 +51,8 @@ export function GroupFormDialog({
     defaultValues: { name: group?.name ?? '', description: group?.description ?? '' },
   });
 
+  const { shakeKey, onInvalid } = useFormFeedback();
+
   const submit = handleSubmit(async (v) => {
     try {
       const saved = await api<GroupDetail>(group ? `/groups/${group.id}` : '/groups', {
@@ -66,7 +69,7 @@ export function GroupFormDialog({
       if (e instanceof ApiError && e.fields?.name) setError('name', { message: e.fields.name });
       else toast.error(e instanceof ApiError ? e.message : 'Could not save the group');
     }
-  });
+  }, onInvalid);
 
   return (
     <Dialog
@@ -85,23 +88,22 @@ export function GroupFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="group-name">Name</Label>
-            <Input id="group-name" aria-invalid={!!errors.name} {...register('name')} />
-            {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="group-desc">Description</Label>
-            <Textarea id="group-desc" rows={3} {...register('description')} />
-            {errors.description && (
-              <p className="text-destructive text-xs">{errors.description.message}</p>
-            )}
-          </div>
+          <Field label="Name" htmlFor="group-name" error={errors.name?.message} shakeKey={shakeKey}>
+            <Input {...register('name')} />
+          </Field>
+          <Field
+            label="Description"
+            htmlFor="group-desc"
+            error={errors.description?.message}
+            shakeKey={shakeKey}
+          >
+            <Textarea rows={3} {...register('description')} />
+          </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" loading={isSubmitting}>
               {isSubmitting ? 'Saving…' : group ? 'Save changes' : 'Create group'}
             </Button>
           </DialogFooter>

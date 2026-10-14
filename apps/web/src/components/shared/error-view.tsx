@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
-import { RotateCw, TriangleAlert } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
+import { Illustration } from '@/components/illustrations';
 import { Button } from '@/components/ui/button';
 
 /** Friendly full-section error with a retry. Used by route error boundaries. */
@@ -25,9 +26,7 @@ export function ErrorView({
       role="alert"
       className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center"
     >
-      <span className="flex size-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-        <TriangleAlert className="size-6" aria-hidden />
-      </span>
+      <Illustration name="error" />
       <div className="space-y-1">
         <h1 className="text-lg font-semibold">Something went wrong</h1>
         <p className="text-muted-foreground text-sm">

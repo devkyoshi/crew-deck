@@ -54,7 +54,7 @@ export function TonedHeader({
 }) {
   const t = TONES[tone];
   return (
-    <div className={cn('flex items-center gap-2 rounded-2xl px-4 py-2.5', t.bg)}>
+    <div className={cn('flex items-center gap-2 rounded-lg px-3.5 py-2', t.bg)}>
       <Icon className={cn('size-4', t.text)} aria-hidden />
       <span className="font-medium">{title}</span>
       {count !== undefined && (
@@ -159,12 +159,12 @@ export function IconTile({
   return (
     <span
       className={cn(
-        'flex size-10 shrink-0 items-center justify-center rounded-xl',
+        'flex size-9 shrink-0 items-center justify-center rounded-lg',
         TONES[tone].pill,
         className,
       )}
     >
-      <Icon className="size-5" aria-hidden />
+      <Icon className="size-4" aria-hidden />
     </span>
   );
 }

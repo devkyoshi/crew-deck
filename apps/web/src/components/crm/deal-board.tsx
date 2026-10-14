@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/shared/notice';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -248,11 +249,7 @@ function QuickAdd({
           Cancel
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="text-destructive text-xs">
-          {error}
-        </p>
-      )}
+      {error && <Notice variant="error">{error}</Notice>}
     </form>
   );
 }

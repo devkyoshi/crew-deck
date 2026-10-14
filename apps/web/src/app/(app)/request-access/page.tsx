@@ -3,13 +3,16 @@
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2 } from 'lucide-react';
+import { Illustration } from '@/components/illustrations';
+import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { FormActions, FormSection } from '@/components/ui/form-layout';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
 
 function Form() {
@@ -18,11 +21,18 @@ function Form() {
   const [message, setMessage] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const valid = /^[A-Z][A-Z0-9]{1,9}$/.test(key);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const { shakeKey, fail } = useFormFeedback();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (!/^[A-Z][A-Z0-9]{1,9}$/.test(key)) {
+      setKeyError(
+        key ? 'Use 2 to 10 letters or digits, starting with a letter' : 'Enter the space key',
+      );
+      fail();
+      return;
+    }
     setState('sending');
     setError(null);
     try {
@@ -38,8 +48,8 @@ function Form() {
   if (state === 'sent') {
     return (
       <Card className="max-w-xl">
-        <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-          <CheckCircle2 className="size-10 text-emerald-500" aria-hidden />
+        <CardContent className="flex flex-col items-center gap-3 py-6 text-center">
+          <Illustration name="success" />
           <div className="font-medium">Request sent</div>
           <p className="text-muted-foreground max-w-sm text-sm">
             If that space exists and is private, its admins have been asked to review your request.
@@ -68,41 +78,39 @@ function Form() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          {error && (
-            <div
-              role="alert"
-              className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-3 text-sm"
-            >
-              {error}
-            </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor="ra-key">Space key</Label>
-            <Input
-              id="ra-key"
-              className="max-w-40 font-mono uppercase"
-              placeholder="ENG"
-              maxLength={10}
-              autoComplete="off"
-              value={key}
-              onChange={(e) => setKey(e.target.value.toUpperCase())}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ra-msg">Message (optional)</Label>
-            <Textarea
-              id="ra-msg"
-              rows={3}
-              maxLength={500}
-              placeholder="Why do you need access?"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-            />
-          </div>
-          <Button type="submit" disabled={!valid || state === 'sending'}>
-            {state === 'sending' ? 'Sending…' : 'Request access'}
-          </Button>
+        <form onSubmit={submit} className="space-y-5" noValidate>
+          {error && <Notice variant="error">{error}</Notice>}
+          <FormSection title="Which space?">
+            <Field label="Space key" htmlFor="ra-key" error={keyError} shakeKey={shakeKey}>
+              <Input
+                className="max-w-40 font-mono uppercase"
+                placeholder="ENG"
+                maxLength={10}
+                autoComplete="off"
+                value={key}
+                onChange={(e) => {
+                  setKey(e.target.value.toUpperCase());
+                  setKeyError(null);
+                }}
+              />
+            </Field>
+          </FormSection>
+          <FormSection title="Why do you need it?">
+            <Field label="Message (optional)" htmlFor="ra-msg">
+              <Textarea
+                rows={3}
+                maxLength={500}
+                placeholder="Why do you need access?"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </Field>
+          </FormSection>
+          <FormActions className="justify-start">
+            <Button type="submit" loading={state === 'sending'}>
+              {state === 'sending' ? 'Sending…' : 'Request access'}
+            </Button>
+          </FormActions>
         </form>
       </CardContent>
     </Card>

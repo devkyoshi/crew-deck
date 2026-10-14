@@ -43,7 +43,7 @@ export function SpacesNav() {
   const starred = useQuery({
     queryKey: ['spaces', { starred: true, sidebar: true }],
     queryFn: () =>
-      api<Page<Space>>(`/spaces${qs({ starred: 'true', status: 'all', pageSize: 8 })}`),
+      api<Page<Space>>(`/spaces${qs({ starred: 'true', status: 'all', pageSize: 5 })}`),
     staleTime: 30_000,
   });
   const pending = useQuery({
@@ -56,19 +56,14 @@ export function SpacesNav() {
   const requestsActive = pathname === '/access-requests' || pathname === '/request-access';
   const starredItems = starred.data?.items ?? [];
   const starredKeys = new Set(starredItems.map((s) => s.key));
-  const recentItems = recent.filter((r) => !starredKeys.has(r.key)).slice(0, 4);
+  const recentItems = recent.filter((r) => !starredKeys.has(r.key)).slice(0, 3);
   const allActive = pathname === '/spaces' || pathname === '/spaces/new';
 
   return (
     <>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton
-            asChild
-            isActive={allActive}
-            tooltip="All spaces"
-            className="h-9 rounded-xl"
-          >
+          <SidebarMenuButton asChild isActive={allActive} tooltip="All spaces">
             <Link href="/spaces" aria-current={allActive ? 'page' : undefined}>
               <LayoutGrid />
               <span>All spaces</span>
@@ -81,12 +76,7 @@ export function SpacesNav() {
           </SidebarMenuAction>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <SidebarMenuButton
-            asChild
-            isActive={requestsActive}
-            tooltip="Access requests"
-            className="h-9 rounded-xl"
-          >
+          <SidebarMenuButton asChild isActive={requestsActive} tooltip="Access requests">
             <Link href="/access-requests" aria-current={requestsActive ? 'page' : undefined}>
               <Inbox />
               <span>Access requests</span>
@@ -95,7 +85,7 @@ export function SpacesNav() {
           {pendingCount > 0 && (
             <SidebarMenuBadge
               aria-label={`${pendingCount} pending`}
-              className="bg-primary text-primary-foreground rounded-full"
+              className="bg-primary text-primary-foreground rounded-full text-[10px]"
             >
               {pendingCount}
             </SidebarMenuBadge>
@@ -106,7 +96,7 @@ export function SpacesNav() {
       <div className="group-data-[collapsible=icon]:hidden">
         {starredItems.length > 0 && (
           <>
-            <SidebarGroupLabel className="mt-2 h-6 gap-1.5">
+            <SidebarGroupLabel className="mt-1.5 h-6 gap-1.5">
               <Star className="size-3" aria-hidden /> Starred
             </SidebarGroupLabel>
             <SidebarMenuSub className="mx-2 mt-0">
@@ -118,7 +108,7 @@ export function SpacesNav() {
         )}
         {recentItems.length > 0 && (
           <>
-            <SidebarGroupLabel className="mt-2 h-6 gap-1.5">
+            <SidebarGroupLabel className="mt-1.5 h-6 gap-1.5">
               <Clock className="size-3" aria-hidden /> Recent
             </SidebarGroupLabel>
             <SidebarMenuSub className="mx-2 mt-0">

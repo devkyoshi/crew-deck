@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/shared/notice';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -232,11 +233,7 @@ export function ActivityForm({
           <CalendarClock className="size-4" aria-hidden />{' '}
           {add.isPending ? 'Adding…' : 'Add activity'}
         </Button>
-        {error && (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        )}
+        {error && <Notice variant="error">{error}</Notice>}
       </div>
     </form>
   );

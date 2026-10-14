@@ -63,12 +63,12 @@ function TenantSwitcher() {
 
   const label = (
     <>
-      <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
-        <Layers className="size-4" aria-hidden />
+      <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+        <Layers className="size-3.5" aria-hidden />
       </span>
       <span className="grid flex-1 text-left leading-tight">
-        <span className="truncate font-semibold">{org.name}</span>
-        <span className="text-muted-foreground truncate text-xs">{org.slug}</span>
+        <span className="truncate text-[13px] font-semibold">{org.name}</span>
+        <span className="text-muted-foreground truncate text-[11px]">{org.slug}</span>
       </span>
     </>
   );
@@ -92,7 +92,7 @@ function TenantSwitcher() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg" aria-label="Switch workspace">
               {label}
-              <ChevronsUpDown className="size-4 opacity-60" aria-hidden />
+              <ChevronsUpDown className="size-3.5 opacity-60" aria-hidden />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56">
@@ -120,7 +120,7 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
         <SidebarGroupLabel asChild>
           <CollapsibleTrigger>
             {group.label}
-            <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </CollapsibleTrigger>
         </SidebarGroupLabel>
         <CollapsibleContent>
@@ -136,12 +136,7 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                       : pathname.startsWith(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={active}
-                        tooltip={item.title}
-                        className="relative h-9 rounded-xl data-[active=true]:font-medium data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:h-5 data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary"
-                      >
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
                         <Link href={item.href} aria-current={active ? 'page' : undefined}>
                           <item.icon />
                           <span>{item.title}</span>
@@ -165,7 +160,7 @@ export function AppSidebar() {
   const crmVisible = useCrmAccess().data?.canView === true;
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
+      <SidebarHeader className="border-sidebar-border border-b p-2">
         <TenantSwitcher />
       </SidebarHeader>
       <SidebarContent>

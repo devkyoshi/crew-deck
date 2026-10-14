@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AlertCircle, FlaskConical } from 'lucide-react';
+import { FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
+import { Notice } from '@/components/shared/notice';
+import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError, type Providers } from '@/lib/api';
@@ -67,6 +70,7 @@ export function SignInForm({ initialError }: { initialError?: string }) {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ resolver: zodResolver(schema) });
+  const { shakeKey, onInvalid } = useFormFeedback();
 
   useEffect(() => {
     api<Providers>('/auth/providers')
@@ -90,22 +94,14 @@ export function SignInForm({ initialError }: { initialError?: string }) {
 
   return (
     <Card>
-      <CardHeader className="text-center">
+      <CardHeader className="items-center text-center">
         <CardTitle className="text-xl">
           {providers?.tenant ? `Sign in to ${providers.tenant.name}` : 'Sign in'}
         </CardTitle>
         <CardDescription>Use your work account to continue.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {formError && (
-          <div
-            role="alert"
-            className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border p-3 text-sm"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {formError}
-          </div>
-        )}
+        {formError && <Notice variant="error">{formError}</Notice>}
 
         {!providers && !loadError && (
           <div className="space-y-3" aria-busy="true" aria-label="Loading sign-in options">
@@ -115,9 +111,7 @@ export function SignInForm({ initialError }: { initialError?: string }) {
           </div>
         )}
         {loadError && (
-          <p className="text-muted-foreground text-center text-sm">
-            Could not load sign-in options. Refresh to try again.
-          </p>
+          <Notice variant="warning">Could not load sign-in options. Refresh to try again.</Notice>
         )}
 
         {providers && !providers.tenant && (
@@ -143,40 +137,24 @@ export function SignInForm({ initialError }: { initialError?: string }) {
                 <Separator className="flex-1" />
               </div>
             )}
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="username"
-                  aria-invalid={!!errors.email}
-                  aria-describedby={errors.email ? 'email-error' : undefined}
-                  {...register('email')}
-                />
-                {errors.email && (
-                  <p id="email-error" className="text-destructive text-xs">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  aria-invalid={!!errors.password}
-                  aria-describedby={errors.password ? 'password-error' : undefined}
-                  {...register('password')}
-                />
-                {errors.password && (
-                  <p id="password-error" className="text-destructive text-xs">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-3" noValidate>
+              <Field
+                label="Email"
+                htmlFor="email"
+                error={errors.email?.message}
+                shakeKey={shakeKey}
+              >
+                <Input type="email" autoComplete="username" {...register('email')} />
+              </Field>
+              <Field
+                label="Password"
+                htmlFor="password"
+                error={errors.password?.message}
+                shakeKey={shakeKey}
+              >
+                <PasswordInput autoComplete="current-password" {...register('password')} />
+              </Field>
+              <Button type="submit" className="w-full" loading={isSubmitting}>
                 {isSubmitting ? 'Signing in…' : 'Sign in'}
               </Button>
             </form>
