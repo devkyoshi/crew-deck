@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FlaskConical } from 'lucide-react';
+import { ArrowRight, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
+import { SplitHeading } from '@/components/auth/auth-split-layout';
 import { Notice } from '@/components/shared/notice';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { Separator } from '@/components/ui/separator';
@@ -97,21 +97,24 @@ export function SignInForm({ initialError }: { initialError?: string }) {
   const onSubmit = (v: Values) => signIn('/auth/login', v);
 
   return (
-    <Card>
-      <CardHeader className="items-center text-center">
-        <CardTitle className="text-xl">
-          {providers?.tenant ? `Sign in to ${providers.tenant.name}` : 'Sign in'}
-        </CardTitle>
-        <CardDescription>Use your work account to continue.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <>
+      <SplitHeading
+        title={
+          providers?.tenant
+            ? `Welcome back to ${providers.tenant.name}!`
+            : 'Welcome back to Crew Deck!'
+        }
+        lead="Please enter your details to sign in to your account"
+      />
+
+      <div className="space-y-4">
         {formError && <Notice variant="error">{formError}</Notice>}
 
         {!providers && !loadError && (
           <div className="space-y-3" aria-busy="true" aria-label="Loading sign-in options">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-11 w-full rounded-lg" />
+            <Skeleton className="h-11 w-full rounded-lg" />
+            <Skeleton className="h-11 w-full rounded-lg" />
           </div>
         )}
         {loadError && (
@@ -119,10 +122,15 @@ export function SignInForm({ initialError }: { initialError?: string }) {
         )}
 
         {providers && !providers.tenant && (
-          <p className="text-muted-foreground text-center text-sm">
-            Open your workspace address (for example{' '}
-            <span className="font-mono">acme.localhost</span>) to sign in.
-          </p>
+          <div className="space-y-3 text-center">
+            <p className="text-muted-foreground text-sm">
+              Open your workspace address (for example{' '}
+              <span className="text-foreground font-mono font-medium">acme.localhost</span>) to sign in.
+            </p>
+            <Button variant="outline" className="h-11 rounded-lg" asChild>
+              <a href="/workspaces">Find my workspace</a>
+            </Button>
+          </div>
         )}
 
         {providers?.tenant?.suspended && (
@@ -135,27 +143,28 @@ export function SignInForm({ initialError }: { initialError?: string }) {
         {providers?.tenant && !providers.tenant.suspended && (
           <>
             {providers.google && (
-              <Button variant="outline" className="w-full" asChild>
+              <Button variant="outline" className="h-11 w-full rounded-lg font-medium" asChild>
                 <a href="/api/v1/auth/sso/google">
                   <GoogleIcon /> Continue with Google
                 </a>
               </Button>
             )}
             {providers.google && (
-              <div className="flex items-center gap-3">
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
                 <Separator className="flex-1" />
-                <span className="text-muted-foreground text-xs">or</span>
+                Or sign in with
                 <Separator className="flex-1" />
               </div>
             )}
-            <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-3" noValidate>
-              <Field
-                label="Email"
-                htmlFor="email"
-                error={errors.email?.message}
-                shakeKey={shakeKey}
-              >
-                <Input type="email" autoComplete="username" {...register('email')} />
+            <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4" noValidate>
+              <Field label="Email" htmlFor="email" error={errors.email?.message} shakeKey={shakeKey}>
+                <Input
+                  type="email"
+                  autoComplete="username"
+                  placeholder="johndoe@mail.com"
+                  className="h-11 rounded-lg"
+                  {...register('email')}
+                />
               </Field>
               <Field
                 label="Password"
@@ -163,20 +172,38 @@ export function SignInForm({ initialError }: { initialError?: string }) {
                 error={errors.password?.message}
                 shakeKey={shakeKey}
               >
-                <PasswordInput autoComplete="current-password" {...register('password')} />
+                <PasswordInput
+                  autoComplete="current-password"
+                  placeholder="minimum 8 characters"
+                  className="h-11 rounded-lg"
+                  {...register('password')}
+                />
               </Field>
-              <Button type="submit" className="w-full" loading={isSubmitting}>
-                {isSubmitting ? 'Signing in…' : 'Sign in'}
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-lg font-medium"
+                loading={isSubmitting}
+              >
+                {isSubmitting ? 'Signing in…' : 'Sign In'} {!isSubmitting && <ArrowRight />}
               </Button>
             </form>
+
+            <div className="text-center">
+              <a
+                href="/workspaces"
+                className="text-foreground text-sm font-medium underline underline-offset-4"
+              >
+                Switch workspace
+              </a>
+            </div>
 
             {providers.devLogin && (
               <DevLogin onSignIn={(email) => signIn('/auth/dev-login', { email })} />
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </>
   );
 }
 

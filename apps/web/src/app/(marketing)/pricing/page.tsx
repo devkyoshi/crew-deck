@@ -1,37 +1,46 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Check, ChevronDown, MailCheck, Rocket, UsersRound } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Layers,
+  MailCheck,
+  Rocket,
+  Sparkles,
+  UsersRound,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlanComparison } from '@/components/plans/plan-comparison';
+import { JiraSpotIcon } from '@/components/illustrations/jira-illustrations';
 import { api } from '@/lib/api';
 import { formatLimit, formatPrice, type PlanInfo } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 
 const BLURB: Record<string, { line: string; points: string[] }> = {
   free: {
-    line: 'For a small team getting started.',
-    points: ['Up to 5 people', 'Spaces, groups and check-in', 'A simple CRM to start'],
+    line: 'For a small team getting started with agility.',
+    points: ['Up to 5 people', 'Spaces, groups and daily check-in', 'Kanban boards and CRM to start'],
   },
   team: {
-    line: 'For growing companies.',
+    line: 'For growing companies needing full collaboration.',
     points: [
       'Up to 50 people',
-      'Unlimited spaces',
-      'CRM with import and export',
-      'Attendance reports',
+      'Unlimited spaces & boards',
+      'Full CRM with import & export',
+      'Attendance & team reports',
     ],
   },
   business: {
-    line: 'For companies that need control.',
+    line: 'For organizations demanding governance & scale.',
     points: [
-      'Unlimited people',
-      'Per-space audit log',
-      'Your logo and colours',
-      'Priority support',
+      'Unlimited teammates',
+      'Per-space & org audit log',
+      'Custom branding & logo',
+      'Priority support & SLA',
     ],
   },
 };
@@ -39,18 +48,21 @@ const BLURB: Record<string, { line: string; points: string[] }> = {
 const STEPS = [
   {
     icon: Rocket,
+    color: 'blue' as const,
     title: 'Sign up in a minute',
-    text: 'Tell us your name, company and work email. No card needed.',
+    text: 'Tell us your name, company and work email. No credit card needed.',
   },
   {
     icon: MailCheck,
+    color: 'emerald' as const,
     title: 'Confirm your email',
-    text: 'Open the link we send. Your workspace is created right then.',
+    text: 'Open the one-time link we send. Your workspace is provisioned instantly.',
   },
   {
     icon: UsersRound,
+    color: 'purple' as const,
     title: 'Invite your team',
-    text: 'Add people, make spaces, start checking in. You are on a free trial of everything.',
+    text: 'Create spaces, launch sprints, check in. You are on a full 14-day trial of everything.',
   },
 ];
 
@@ -61,19 +73,19 @@ const FAQ = [
   },
   {
     q: 'Do I need a credit card to start?',
-    a: 'No. Billing is not switched on yet, so nothing is charged on any plan.',
+    a: 'No. Billing is not switched on yet, so nothing is charged on any plan during your evaluation.',
   },
   {
     q: 'Can I use a personal email address?',
-    a: 'Yes. A company email is best, because it lets you restrict invitations to your own domain, but it is not required.',
+    a: 'Yes. A company email is recommended, because it lets you restrict invitations to your own domain, but it is not required.',
   },
   {
     q: 'Is my company’s data kept separate?',
-    a: 'Yes. Every company has its own address and its data is isolated from every other company at the database level.',
+    a: 'Yes. Every company has its own address and its data is isolated from every other company at the database level with strict multi-tenancy.',
   },
   {
     q: 'Can I change plan later?',
-    a: 'Yes. A platform administrator can move your workspace between plans at any time, and the plan page shows what you use against your limits.',
+    a: 'Yes. A platform administrator can move your workspace between plans at any time, and the billing page displays your current usage in real time.',
   },
 ];
 
@@ -85,52 +97,64 @@ export default function PricingPage() {
   const trial = query.data?.trialDays ?? 14;
 
   return (
-    <div>
-      <section className="relative isolate overflow-hidden">
-        <Image
-          src="/auth/desk-topdown.jpg"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="-z-20 object-cover"
-        />
+    <div className="space-y-16 sm:space-y-24">
+      {/* Clean, Apple/Jira-inspired Hero Section (No Stock Photos) */}
+      <section className="relative overflow-hidden pt-8 pb-12 sm:pt-14 sm:pb-16 text-center">
+        {/* Subtle ambient radial backdrop */}
         <div
-          aria-hidden
-          className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/40"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-80"
         />
-        <div className="mx-auto max-w-6xl px-5 py-16 text-white sm:py-24">
-          <div className="max-w-2xl space-y-5">
-            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-              Simple plans for every team
-            </h1>
-            <p className="text-lg text-slate-100">
-              Start with a {trial}-day trial of everything in Business. When it ends you move to
-              Free automatically, and nothing is ever deleted.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button size="lg" asChild>
-                <Link href="/signup">
-                  Start free trial <ArrowRight />
-                </Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                asChild
-              >
-                <a href="#compare">Compare plans</a>
-              </Button>
-            </div>
-            <p className="text-sm text-slate-300">No card needed. Set up in about a minute.</p>
+
+        <div className="mx-auto max-w-4xl px-5 space-y-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 text-xs font-semibold text-primary shadow-xs">
+            <Sparkles className="size-3.5" aria-hidden />
+            <span>14-day full Business trial • No credit card required</span>
+          </div>
+
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            Simple plans for every team
+          </h1>
+
+          <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg">
+            Start with a {trial}-day trial of everything in Business. When it ends, your workspace moves to
+            Free automatically, and nothing is ever deleted.
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button size="lg" className="h-11 rounded-xl px-6 font-medium shadow-sm" asChild>
+              <Link href="/signup">
+                Start free trial <ArrowRight className="ml-1 size-4" />
+              </Link>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-11 rounded-xl px-6 font-medium"
+              asChild
+            >
+              <a href="#compare">Compare plans</a>
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-center gap-6 pt-2 text-xs text-muted-foreground font-medium">
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-600" aria-hidden /> No credit card needed
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-600" aria-hidden /> 60-second setup
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="size-3.5 text-emerald-600" aria-hidden /> 100% data isolation
+            </span>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-16 px-5 pt-12">
+      {/* Plans Grid */}
+      <div className="mx-auto max-w-6xl px-5 space-y-20">
         {query.isPending && (
-          <Skeleton role="status" aria-label="Loading plans" className="h-72 w-full rounded-2xl" />
+          <Skeleton role="status" aria-label="Loading plans" className="h-96 w-full rounded-2xl" />
         )}
         {query.isError && (
           <p role="alert" className="text-destructive text-center">
@@ -139,120 +163,187 @@ export default function PricingPage() {
         )}
 
         {query.data && (
-          <ul className="grid gap-5 md:grid-cols-3">
-            {query.data.plans.map((p) => (
-              <li
-                key={p.key}
-                className={cn(
-                  'bg-card relative flex flex-col gap-4 rounded-2xl border p-6 shadow-sm',
-                  p.key === 'team' && 'border-primary ring-primary/20 shadow-lg ring-4',
-                )}
-              >
-                {p.key === 'team' && (
-                  <span className="bg-primary text-primary-foreground absolute -top-3 left-6 rounded-full px-3 py-0.5 text-xs font-semibold">
-                    Most popular
-                  </span>
-                )}
-                <div>
-                  <h2 className="text-lg font-semibold">{p.name}</h2>
-                  <p className="text-muted-foreground text-sm">{BLURB[p.key]?.line}</p>
-                </div>
-                <p>
-                  <span className="text-4xl font-semibold tracking-tight">
-                    {formatPrice(p.priceCents)}
-                  </span>
-                  <span className="text-muted-foreground text-sm">
-                    {p.priceCents ? ' per person / month' : ' forever'}
-                  </span>
-                </p>
-                <ul className="flex-1 space-y-2 text-sm">
-                  {(BLURB[p.key]?.points ?? []).map((pt) => (
-                    <li key={pt} className="flex items-start gap-2">
-                      <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden /> {pt}
-                    </li>
-                  ))}
-                  <li className="text-muted-foreground pl-6">
-                    {formatLimit('storage_mb', p.limits.storage_mb)} storage
-                  </li>
-                </ul>
-                <Button asChild variant={p.key === 'team' ? 'default' : 'outline'}>
-                  <Link href="/signup">
-                    {p.key === 'free' ? 'Start for free' : 'Start free trial'}
-                  </Link>
-                </Button>
-              </li>
-            ))}
+          <ul className="grid gap-6 md:grid-cols-3 items-stretch">
+            {query.data.plans.map((p) => {
+              const isTeam = p.key === 'team';
+              return (
+                <li
+                  key={p.key}
+                  className={cn(
+                    'bg-card relative flex flex-col justify-between rounded-2xl border p-7 transition-all shadow-xs',
+                    isTeam
+                      ? 'border-primary shadow-lg ring-2 ring-primary/20 md:-translate-y-2'
+                      : 'border-border/80 hover:border-border',
+                  )}
+                >
+                  {isTeam && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                      <span className="bg-primary text-primary-foreground rounded-full px-3.5 py-1 text-xs font-bold tracking-wide uppercase shadow-xs">
+                        Most popular
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-foreground">{p.name}</h2>
+                      <p className="text-muted-foreground text-xs mt-1 min-h-[32px]">{BLURB[p.key]?.line}</p>
+                    </div>
+
+                    <div className="py-2 border-y border-border/50">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-extrabold tracking-tight text-foreground">
+                          {formatPrice(p.priceCents)}
+                        </span>
+                        <span className="text-muted-foreground text-xs font-medium">
+                          {p.priceCents ? ' / person / mo' : ' forever'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {p.priceCents ? 'Billed annually or monthly' : 'Free for small teams'}
+                      </p>
+                    </div>
+
+                    <ul className="space-y-2.5 text-xs text-foreground/90 pt-1">
+                      {(BLURB[p.key]?.points ?? []).map((pt) => (
+                        <li key={pt} className="flex items-start gap-2.5">
+                          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-0.5">
+                            <Check className="size-2.5 font-bold" aria-hidden />
+                          </span>
+                          <span className="leading-snug">{pt}</span>
+                        </li>
+                      ))}
+                      <li className="flex items-start gap-2.5 text-muted-foreground">
+                        <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                          <Check className="size-2.5 text-muted-foreground font-bold" aria-hidden />
+                        </span>
+                        <span>{formatLimit('storage_mb', p.limits.storage_mb)} workspace storage</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="pt-6">
+                    <Button
+                      asChild
+                      variant={isTeam ? 'default' : 'outline'}
+                      className="w-full h-10 rounded-xl font-medium"
+                    >
+                      <Link href="/signup">
+                        {p.key === 'free' ? 'Start for free' : 'Start free trial'}
+                      </Link>
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 
-        <section aria-labelledby="how" className="space-y-6">
-          <h2 id="how" className="text-center text-2xl font-semibold tracking-tight">
-            Up and running in three steps
-          </h2>
-          <ol className="grid gap-4 md:grid-cols-3">
+        {/* Up and Running in Three Steps */}
+        <section aria-labelledby="how" className="space-y-8 pt-4">
+          <div className="text-center space-y-2">
+            <h2 id="how" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Up and running in three steps
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto">
+              Everything you need to organize your team without weeks of configuration.
+            </p>
+          </div>
+
+          <ol className="grid gap-6 md:grid-cols-3">
             {STEPS.map((s, i) => (
-              <li key={s.title} className="bg-card flex gap-4 rounded-2xl border p-5">
-                <span className="bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl">
-                  <s.icon className="size-5" aria-hidden />
-                </span>
-                <div>
-                  <p className="font-semibold">
-                    <span className="text-muted-foreground mr-1.5">{i + 1}.</span>
-                    {s.title}
-                  </p>
-                  <p className="text-muted-foreground text-sm">{s.text}</p>
+              <li
+                key={s.title}
+                className="bg-card rounded-2xl border border-border/70 p-6 shadow-xs flex flex-col justify-between gap-4 transition-all hover:border-primary/40 hover:shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <JiraSpotIcon icon={s.icon} color={s.color} />
+                  <span className="text-xs font-mono font-bold text-muted-foreground">
+                    0{i + 1}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-semibold text-base text-foreground">{s.title}</p>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{s.text}</p>
                 </div>
               </li>
             ))}
           </ol>
         </section>
 
+        {/* Plan Comparison Table */}
         {query.data && (
-          <section id="compare" aria-labelledby="compare-title" className="scroll-mt-6 space-y-3">
-            <h2 id="compare-title" className="text-2xl font-semibold tracking-tight">
-              Compare plans
-            </h2>
-            <PlanComparison plans={query.data.plans} />
-            <p className="text-muted-foreground text-sm">
-              Need more people, custom limits or help moving over? Enterprise is tailored to you.
-              Contact us. Prices are per person per month, billed annually. Billing is not switched
-              on yet, so nothing is charged.
+          <section id="compare" aria-labelledby="compare-title" className="scroll-mt-8 space-y-6 pt-4">
+            <div className="text-center space-y-2">
+              <h2 id="compare-title" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                Compare plans
+              </h2>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                Detailed breakdown of features, permissions and workspace limits.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs p-4 sm:p-6">
+              <PlanComparison plans={query.data.plans} />
+            </div>
+
+            <p className="text-muted-foreground text-xs text-center max-w-2xl mx-auto">
+              Need custom volume, enterprise SSO, or dedicated hosting? Contact our team. Prices are per person
+              per month, billed annually. Billing is currently in preview, so no card is required.
             </p>
           </section>
         )}
 
-        <section aria-labelledby="faq" className="mx-auto max-w-3xl space-y-4">
-          <h2 id="faq" className="text-center text-2xl font-semibold tracking-tight">
-            Questions
-          </h2>
-          <div className="space-y-2">
+        {/* Frequently Asked Questions */}
+        <section aria-labelledby="faq" className="mx-auto max-w-3xl space-y-6 pt-4">
+          <div className="text-center space-y-2">
+            <h2 id="faq" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Frequently asked questions
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Answers to common questions about trials, plans, and workspace privacy.
+            </p>
+          </div>
+
+          <div className="space-y-3">
             {FAQ.map((f) => (
-              <details key={f.q} className="bg-card group rounded-xl border px-5 py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
-                  {f.q}
+              <details
+                key={f.q}
+                className="bg-card group rounded-xl border border-border/70 px-5 py-4 transition-colors hover:border-border open:border-primary/40 open:bg-card/90"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-sm text-foreground">
+                  <span>{f.q}</span>
                   <ChevronDown
-                    className="size-4 shrink-0 transition-transform group-open:rotate-180"
+                    className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
                     aria-hidden
                   />
                 </summary>
-                <p className="text-muted-foreground mt-2 text-sm">{f.a}</p>
+                <p className="text-muted-foreground mt-3 text-xs leading-relaxed">{f.a}</p>
               </details>
             ))}
           </div>
         </section>
 
-        <section className="bg-primary text-primary-foreground rounded-3xl px-6 py-12 text-center">
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Ready when your team is
-          </h2>
-          <p className="text-primary-foreground/90 mx-auto mt-2 max-w-xl">
-            Create your workspace in a minute and invite people when you are ready.
-          </p>
-          <Button size="lg" variant="secondary" className="mt-6" asChild>
-            <Link href="/signup">
-              Start free trial <ArrowRight />
-            </Link>
-          </Button>
+        {/* Bottom Call to Action Card */}
+        <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-b from-primary/10 via-primary/5 to-card p-8 sm:p-12 text-center shadow-xs">
+          <div className="mx-auto max-w-xl space-y-4">
+            <div className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+              <Layers className="size-6" aria-hidden />
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Ready when your team is
+            </h2>
+            <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
+              Create your workspace in under a minute. Zero credit card required, 14-day full Business trial.
+            </p>
+            <div className="pt-2">
+              <Button size="lg" className="h-11 rounded-xl px-8 font-medium shadow-sm" asChild>
+                <Link href="/signup">
+                  Start free trial <ArrowRight className="ml-1 size-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
         </section>
       </div>
     </div>

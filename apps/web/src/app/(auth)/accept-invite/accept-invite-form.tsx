@@ -2,23 +2,31 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Notice } from '@/components/shared/notice';
 import { MIN_PASSWORD, PasswordStrength } from '@/components/auth/password-strength';
-import { useWizard, WizardProgress } from '@/components/auth/wizard';
+import { useWizard } from '@/components/auth/wizard';
+import {
+  bigInput,
+  FieldGroup,
+  FieldStack,
+  SetupLoading,
+  SetupMessage,
+  StepFooter,
+  StepHero,
+  WizardShell,
+  type ShellStep,
+} from '@/components/auth/wizard-shell';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError, type Providers } from '@/lib/api';
 
 const STEPS = ['you', 'password'] as const;
-const LABELS = [
-  { id: 'you', label: 'You' },
-  { id: 'password', label: 'Password' },
+const SHELL_STEPS: ShellStep[] = [
+  { id: 'you', label: 'Personal details', hint: 'Just a bit about you' },
+  { id: 'password', label: 'Password', hint: 'Secure your account' },
 ];
 
 interface Answers {
@@ -27,29 +35,6 @@ interface Answers {
   timezone: string;
 }
 type Preview = { email: string; orgName: string; orgSlug: string };
-
-function Heading({
-  headingRef,
-  children,
-  lead,
-}: {
-  headingRef: React.Ref<HTMLHeadingElement>;
-  children: React.ReactNode;
-  lead?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-6 space-y-2">
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
-      >
-        {children}
-      </h1>
-      {lead && <p className="text-muted-foreground">{lead}</p>}
-    </div>
-  );
-}
 
 function Wizard({
   token,
@@ -95,105 +80,98 @@ function Wizard({
     }
   }
 
-  if (!w.ready)
-    return <Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-2xl" />;
+  if (!w.ready) return <SetupLoading />;
   const first = a.name.trim().split(/\s+/)[0];
 
   return (
-    <Card className="shadow-lg">
-      <CardContent className="p-6 sm:p-8">
-        <WizardProgress steps={LABELS} index={w.index} reached={w.reached} onGo={w.go} />
-        {formError && (
-          <div className="mb-4">
-            <Notice variant="error">{formError}</Notice>
-          </div>
-        )}
+    <WizardShell steps={SHELL_STEPS} current={w.step} reachedId={STEPS[w.reached]} onGo={w.go}>
+      {formError && (
+        <div className="mb-5">
+          <Notice variant="error">{formError}</Notice>
+        </div>
+      )}
 
-        {w.step === 'you' && (
-          <form
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!a.name.trim()) {
-                setErrors({ name: 'Tell us what to call you' });
-                return fail();
-              }
-              setErrors({});
-              w.next({ name: a.name.trim() });
-            }}
-          >
-            <Heading
-              headingRef={w.headingRef}
-              lead={
-                <>
-                  Set up your account for{' '}
-                  <span className="text-foreground font-medium">{preview.email}</span>.
-                </>
-              }
-            >
-              Join {preview.orgName}
-            </Heading>
-            <Field label="Your full name" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
-              <Input
-                autoFocus
-                autoComplete="name"
-                value={a.name}
-                maxLength={100}
-                onChange={(e) => w.set({ name: e.target.value })}
-              />
-            </Field>
-            <div className="mt-6 flex justify-end">
-              <Button type="submit">
-                Continue <ArrowRight />
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {w.step === 'password' && (
-          <form
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (a.password.length < MIN_PASSWORD) {
-                setErrors({ password: `Use at least ${MIN_PASSWORD} characters` });
-                return fail();
-              }
-              setErrors({});
-              void accept();
-            }}
-          >
-            <Heading headingRef={w.headingRef} lead="You will use it with your email to sign in.">
-              {first ? `Nearly there, ${first}. Choose a password` : 'Choose a password'}
-            </Heading>
-            <div className="space-y-4">
-              <Field
-                label="Password"
-                htmlFor="password"
-                error={errors.password}
-                shakeKey={shakeKey}
-              >
-                <PasswordInput
+      {w.step === 'you' && (
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!a.name.trim()) {
+              setErrors({ name: 'Tell us what to call you' });
+              return fail();
+            }
+            setErrors({});
+            w.next({ name: a.name.trim() });
+          }}
+        >
+          <StepHero
+            headingRef={w.headingRef}
+            title={`Join ${preview.orgName}`}
+            lead={
+              <>
+                Set up your account for{' '}
+                <span className="text-foreground font-medium">{preview.email}</span>.
+              </>
+            }
+          />
+          <FieldStack>
+            <FieldGroup title="About you">
+              <Field label="Your full name" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
+                <Input
                   autoFocus
-                  autoComplete="new-password"
-                  value={a.password}
-                  onChange={(e) => w.set({ password: e.target.value })}
+                  autoComplete="name"
+                  placeholder="Jane Doe"
+                  className={bigInput}
+                  value={a.name}
+                  maxLength={100}
+                  onChange={(e) => w.set({ name: e.target.value })}
                 />
               </Field>
-              <PasswordStrength password={a.password} />
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={w.back} disabled={busy}>
-                <ArrowLeft /> Back
-              </Button>
-              <Button type="submit" disabled={busy}>
-                {busy ? 'Joining…' : `Join ${preview.orgName}`}
-              </Button>
-            </div>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+            </FieldGroup>
+          </FieldStack>
+          <StepFooter next="Continue" left={<span />} />
+        </form>
+      )}
+
+      {w.step === 'password' && (
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (a.password.length < MIN_PASSWORD) {
+              setErrors({ password: `Use at least ${MIN_PASSWORD} characters` });
+              return fail();
+            }
+            setErrors({});
+            void accept();
+          }}
+        >
+          <StepHero
+            headingRef={w.headingRef}
+            title={first ? `Nearly there, ${first}. Choose a password` : 'Choose a password'}
+            lead="You will use it with your email to sign in."
+          />
+          <FieldStack>
+            <Field label="Password" htmlFor="password" error={errors.password} shakeKey={shakeKey}>
+              <PasswordInput
+                autoFocus
+                autoComplete="new-password"
+                placeholder="••••••••••••"
+                className={bigInput}
+                value={a.password}
+                onChange={(e) => w.set({ password: e.target.value })}
+              />
+            </Field>
+            <PasswordStrength password={a.password} />
+          </FieldStack>
+          <StepFooter
+            next={busy ? 'Joining…' : `Join ${preview.orgName}`}
+            onBack={busy ? undefined : w.back}
+            loading={busy}
+          />
+        </form>
+      )}
+    </WizardShell>
   );
 }
 
@@ -226,33 +204,26 @@ function Inner({ token }: { token: string }) {
 
   if (invalid) {
     return (
-      <Card className="shadow-lg">
-        <CardContent className="space-y-4 p-6 sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight">This invitation is not valid</h1>
-          <p className="text-muted-foreground">
-            The link is invalid, already used, or has expired. Ask a workspace admin to send you a
-            new invitation.
-          </p>
+      <SetupMessage
+        title="This invitation is not valid"
+        actions={
           <Button variant="outline" onClick={() => router.push('/sign-in')}>
             Go to sign in
           </Button>
-        </CardContent>
-      </Card>
+        }
+      >
+        The link is invalid, already used, or has expired. Ask a workspace admin to send you a new
+        invitation.
+      </SetupMessage>
     );
   }
-  if (!preview) {
-    return (
-      <Skeleton role="status" aria-label="Loading invitation" className="h-80 w-full rounded-2xl" />
-    );
-  }
+  if (!preview) return <SetupLoading />;
   return <Wizard token={token} preview={preview} onInvalid={() => setInvalid(true)} />;
 }
 
 export function AcceptInviteForm({ token }: { token: string }) {
   return (
-    <Suspense
-      fallback={<Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-2xl" />}
-    >
+    <Suspense fallback={<SetupLoading />}>
       <Inner token={token} />
     </Suspense>
   );

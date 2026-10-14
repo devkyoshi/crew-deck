@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface Saved<T> {
   data: T;
@@ -131,76 +129,4 @@ export function useWizard<T extends object>({
       router.replace(hrefFor(steps[0]!));
     },
   };
-}
-
-/** "Step 2 of 4" with a bar. Steps you have completed are buttons that take you back to them. */
-export function WizardProgress({
-  steps,
-  index,
-  reached,
-  onGo,
-}: {
-  steps: { id: string; label: string }[];
-  index: number;
-  reached: number;
-  onGo: (id: string) => void;
-}) {
-  return (
-    <nav aria-label="Progress" className="mb-6 space-y-3">
-      <p className="text-muted-foreground text-xs font-medium" aria-live="polite">
-        Step {index + 1} of {steps.length}: {steps[index]?.label}
-      </p>
-      <ol className="flex gap-2">
-        {steps.map((s, i) => {
-          const done = i < index || (i <= reached && i !== index);
-          const active = i === index;
-          const inner = (
-            <>
-              <span
-                className={cn(
-                  'flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-                  active && 'bg-primary text-primary-foreground',
-                  done && 'bg-primary/15 text-primary',
-                  !active && !done && 'bg-muted text-muted-foreground',
-                )}
-              >
-                {done ? <Check className="size-3" aria-hidden /> : i + 1}
-              </span>
-              <span className="sr-only sm:not-sr-only">{s.label}</span>
-            </>
-          );
-          return (
-            <li key={s.id} className="flex-1" aria-current={active ? 'step' : undefined}>
-              <div
-                className={cn(
-                  'mb-2 h-1 rounded-full',
-                  i <= Math.max(index, reached) ? 'bg-primary' : 'bg-border',
-                  !active && i > index && 'opacity-50',
-                )}
-                aria-hidden
-              />
-              {done ? (
-                <button
-                  type="button"
-                  onClick={() => onGo(s.id)}
-                  className="text-primary flex items-center gap-1.5 text-xs font-medium hover:underline"
-                >
-                  {inner}
-                </button>
-              ) : (
-                <span
-                  className={cn(
-                    'flex items-center gap-1.5 text-xs',
-                    active ? 'font-semibold' : 'text-muted-foreground',
-                  )}
-                >
-                  {inner}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
 }

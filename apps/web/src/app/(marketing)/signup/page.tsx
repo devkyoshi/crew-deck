@@ -1,11 +1,10 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  ArrowRight,
   Building2,
   CheckCircle2,
   Loader2,
@@ -14,22 +13,31 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Notice } from '@/components/shared/notice';
-import { useWizard, WizardProgress } from '@/components/auth/wizard';
+import { useWizard } from '@/components/auth/wizard';
+import {
+  bigInput,
+  FieldGroup,
+  FieldStack,
+  SetupLoading,
+  SetupMessage,
+  StepFooter,
+  StepHero,
+  WizardShell,
+  type ShellStep,
+} from '@/components/auth/wizard-shell';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const STEPS = ['you', 'company', 'review', 'sent'] as const;
-const LABELS = [
-  { id: 'you', label: 'You' },
-  { id: 'company', label: 'Company' },
-  { id: 'review', label: 'Review' },
-  { id: 'sent', label: 'Email' },
+const SHELL_STEPS: ShellStep[] = [
+  { id: 'you', label: 'Personal details', hint: 'Just a bit about you' },
+  { id: 'company', label: 'Company info', hint: 'Tell us about your business' },
+  { id: 'review', label: 'Review application', hint: 'Confirm and submit' },
+  { id: 'sent', label: 'Verify email', hint: 'Open the link we send' },
 ];
 
 interface Answers {
@@ -63,34 +71,18 @@ const slugValid = (s: string) => SLUG_RE.test(s) && !s.includes('--');
 
 function useDebounced<T>(value: T, ms = 400) {
   const [v, setV] = useState(value);
+  const initialRef = useRef(false);
   useEffect(() => {
+    if (!initialRef.current && value) {
+      initialRef.current = true;
+      setV(value);
+      return;
+    }
+    initialRef.current = true;
     const t = setTimeout(() => setV(value), ms);
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
-}
-
-function Heading({
-  headingRef,
-  children,
-  lead,
-}: {
-  headingRef: React.Ref<HTMLHeadingElement>;
-  children: React.ReactNode;
-  lead?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-6 space-y-2">
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
-      >
-        {children}
-      </h1>
-      {lead && <p className="text-muted-foreground">{lead}</p>}
-    </div>
-  );
 }
 
 function SignUpWizard() {
@@ -165,7 +157,7 @@ function SignUpWizard() {
     return () => clearInterval(t);
   }, [w.step, waitLeft]);
 
-  function nextFrom(step: string) {
+  async function nextFrom(step: string) {
     setFormError(null);
     const next: Record<string, string> = {};
     if (step === 'you') {
@@ -176,9 +168,24 @@ function SignUpWizard() {
     if (step === 'company') {
       if (a.company.trim().length < 2) next.company = 'Enter your company name';
       if (!slugValid(a.slug)) next.slug = 'Use 3 to 30 lowercase letters, numbers or hyphens';
-      else if (checking) next.slug = 'One moment, we are still checking that address';
-      else if (check.data && !check.data.available)
-        next.slug = check.data.reason ?? 'That address is not available';
+      else {
+        let available = check.data?.available;
+        let reason = check.data?.reason;
+        if (available === undefined) {
+          try {
+            const res = await api<{ available: boolean; reason: string | null }>(
+              `/signup/check?slug=${encodeURIComponent(a.slug)}`,
+            );
+            available = res.available;
+            reason = res.reason;
+          } catch {
+            /* ignore network check failure */
+          }
+        }
+        if (available === false) {
+          next.slug = reason ?? 'That address is not available';
+        }
+      }
     }
     setErrors(next);
     if (Object.keys(next).length) return fail();
@@ -211,15 +218,12 @@ function SignUpWizard() {
     }
   }
 
-  if (!w.ready)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+  if (!w.ready) return <SetupLoading />;
   if (config.data && !config.data.signupsEnabled) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <Notice variant="warning">Sign-ups are closed right now. Please contact us.</Notice>
-        </CardContent>
-      </Card>
+      <SetupMessage title="Sign-ups are closed right now">
+        We are not taking new workspaces at the moment. Please contact us and we will help.
+      </SetupMessage>
     );
   }
 
@@ -228,108 +232,129 @@ function SignUpWizard() {
     nextFrom(step);
   };
 
-  return (
-    <Card className="shadow-lg">
-      <CardContent className="p-6 sm:p-8">
-        <WizardProgress steps={LABELS} index={w.index} reached={w.reached} onGo={w.go} />
-        {formError && (
-          <div className="mb-4">
-            <Notice variant="error">{formError}</Notice>
-          </div>
-        )}
+  const err = formError && (
+    <div className="mb-5">
+      <Notice variant="error">{formError}</Notice>
+    </div>
+  );
 
-        {w.step === 'you' && (
-          <form onSubmit={enter('you')} noValidate>
-            <Heading
-              headingRef={w.headingRef}
-              lead={`Free for ${trial} days. We just need a couple of details to begin.`}
+  return (
+    <WizardShell
+      steps={SHELL_STEPS}
+      current={w.step}
+      reachedId={STEPS[w.reached]}
+      onGo={w.go}
+    >
+      {err}
+
+      {w.step === 'you' && (
+        <form onSubmit={enter('you')} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title="Let’s set up your workspace"
+            lead={`Free for ${trial} days, no card needed. We just need a couple of details to begin.`}
+          />
+          <FieldStack>
+            <Field label="What should we call you?" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
+              <Input
+                autoFocus
+                autoComplete="name"
+                placeholder="e.g. Alex Miller"
+                className={bigInput}
+                value={a.name}
+                maxLength={100}
+                onChange={(e) => {
+                  clear('name');
+                  w.set({ name: e.target.value });
+                }}
+              />
+            </Field>
+            <Field
+              label="Your work email"
+              htmlFor="email"
+              error={errors.email}
+              hint="We will email you a link to confirm it. You become the workspace owner."
+              shakeKey={shakeKey}
             >
-              Let’s set up your workspace
-            </Heading>
-            <div className="space-y-4">
-              <Field
-                label="What should we call you?"
-                htmlFor="name"
-                error={errors.name}
-                shakeKey={shakeKey}
-              >
-                <Input
-                  autoFocus
-                  autoComplete="name"
-                  value={a.name}
-                  maxLength={100}
-                  onChange={(e) => {
-                    clear('name');
-                    w.set({ name: e.target.value });
-                  }}
-                />
-              </Field>
-              <Field
-                label="Your work email"
-                htmlFor="email"
-                error={errors.email}
-                hint="We will email you a link to confirm it. You become the workspace owner."
-                shakeKey={shakeKey}
-              >
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  value={a.email}
-                  onChange={(e) => {
-                    clear('email');
-                    w.set({ email: e.target.value });
-                  }}
-                />
-              </Field>
-            </div>
-            <div className="mt-6 flex items-center justify-between">
+              <Input
+                type="email"
+                autoComplete="email"
+                placeholder="alex@company.com"
+                className={bigInput}
+                value={a.email}
+                onChange={(e) => {
+                  clear('email');
+                  w.set({ email: e.target.value });
+                }}
+              />
+            </Field>
+          </FieldStack>
+          <StepFooter
+            next="Continue"
+            left={
               <Link
                 href="/pricing"
-                className="text-muted-foreground text-sm underline underline-offset-4"
+                className="text-muted-foreground hover:text-foreground text-sm font-medium underline-offset-4 hover:underline"
               >
                 See plans
               </Link>
-              <Button type="submit">
-                Continue <ArrowRight />
-              </Button>
-            </div>
-          </form>
-        )}
+            }
+          />
+        </form>
+      )}
 
-        {w.step === 'company' && (
-          <form onSubmit={enter('company')} noValidate>
-            <Heading
-              headingRef={w.headingRef}
-              lead="This is the name your team will see, and the address they sign in at."
-            >
-              {firstName(a.name) ? `Nice to meet you, ${firstName(a.name)}.` : 'Nice to meet you.'}{' '}
-              What’s your company called?
-            </Heading>
-            <div className="space-y-4">
+      {w.step === 'company' && (
+        <form onSubmit={enter('company')} noValidate>
+          <StepHero
+            headingRef={w.headingRef}
+            title={
+              <>
+                {firstName(a.name) ? `Nice to meet you, ${firstName(a.name)}.` : 'Nice to meet you.'}{' '}
+                What’s your company called?
+              </>
+            }
+            lead="This is the name your team will see, and the address they sign in at."
+          />
+          <FieldStack>
+            <FieldGroup title="Company">
+              <div>
+                <Field label="Company name" htmlFor="company" error={errors.company} shakeKey={shakeKey}>
+                  <Input
+                    autoFocus
+                    autoComplete="organization"
+                    placeholder="e.g. Acme Corp"
+                    className={bigInput}
+                    value={a.company}
+                    maxLength={80}
+                    onChange={(e) => {
+                      clear('company');
+                      w.set({ company: e.target.value });
+                    }}
+                  />
+                </Field>
+                <div className="text-muted-foreground mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+                  {['Acme Studio', 'Apex Engineering', 'Nova Labs', 'Skyline'].map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      className="border-border hover:border-primary/50 hover:bg-muted rounded-full border px-2.5 py-1 text-[11px] transition-colors"
+                      onClick={() => {
+                        clear('company');
+                        w.set({ company: ex, slug: suggest(ex), slugTouched: false });
+                      }}
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </FieldGroup>
+
+            <FieldGroup title="Workspace address">
               <Field
-                label="Company name"
-                htmlFor="company"
-                error={errors.company}
-                shakeKey={shakeKey}
-              >
-                <Input
-                  autoFocus
-                  autoComplete="organization"
-                  value={a.company}
-                  maxLength={80}
-                  onChange={(e) => {
-                    clear('company');
-                    w.set({ company: e.target.value });
-                  }}
-                />
-              </Field>
-              <Field
-                label="Workspace address"
+                label="Sign-in address"
                 htmlFor="slug"
-                error={
-                  errors.slug ??
-                  (taken ? (check.data?.reason ?? 'That address is not available') : null)
-                }
+                error={errors.slug ?? (taken ? (check.data?.reason ?? 'That address is not available') : null)}
                 hint={
                   <span className="inline-flex items-center gap-1.5" aria-live="polite">
                     {a.slug && slugValid(a.slug) && checking ? (
@@ -353,6 +378,7 @@ function SignUpWizard() {
                 <Input
                   autoComplete="off"
                   spellCheck={false}
+                  className={`${bigInput} font-mono text-sm`}
                   value={a.slug}
                   maxLength={30}
                   onChange={(e) => {
@@ -361,9 +387,10 @@ function SignUpWizard() {
                   }}
                 />
               </Field>
+
               {taken && alternatives.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-muted-foreground text-xs">Free right now:</p>
+                  <p className="text-muted-foreground text-xs font-medium">Free right now:</p>
                   <div className="flex flex-wrap gap-2">
                     {alternatives.map((alt) => (
                       <Button
@@ -371,6 +398,7 @@ function SignUpWizard() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="rounded-full text-xs"
                         onClick={() => w.set({ slug: alt.s, slugTouched: true })}
                       >
                         {alt.s}
@@ -379,137 +407,123 @@ function SignUpWizard() {
                   </div>
                 </div>
               )}
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={w.back}>
-                <ArrowLeft /> Back
-              </Button>
-              <Button type="submit">
-                Continue <ArrowRight />
-              </Button>
-            </div>
-          </form>
-        )}
+            </FieldGroup>
+          </FieldStack>
+          <StepFooter next="Continue" onBack={w.back} />
+        </form>
+      )}
 
-        {w.step === 'review' && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void send();
-            }}
-            noValidate
-          >
-            <Heading
-              headingRef={w.headingRef}
-              lead="Check these, then we will email you a link to confirm."
-            >
-              Looks good? Here’s what we’ll create
-            </Heading>
-            <dl className="bg-muted/40 divide-y rounded-xl border text-sm">
-              {(
-                [
-                  ['Name', a.name, 'you'],
-                  ['Work email', a.email, 'you'],
-                  ['Company', a.company, 'company'],
-                  ['Address', `${a.slug}.${domain}`, 'company'],
-                ] as const
-              ).map(([label, value, step]) => (
-                <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="flex min-w-0 items-center gap-2 font-medium">
-                    <span className="truncate">{value}</span>
-                    <button
-                      type="button"
-                      onClick={() => w.go(step)}
-                      className="text-primary shrink-0 rounded p-1"
-                      aria-label={`Change ${label.toLowerCase()}`}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                    </button>
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <div className="bg-accent text-accent-foreground mt-4 flex items-start gap-3 rounded-xl p-4 text-sm">
-              <Sparkles className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <p>
-                You start with a <strong>{trial}-day Business trial</strong>, no card needed. After
-                that your workspace moves to Free, and nothing is deleted.{' '}
+      {w.step === 'review' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+          noValidate
+        >
+          <StepHero
+            headingRef={w.headingRef}
+            title="Looks good? Here’s what we’ll create"
+            lead="Check these, then we will email you a link to confirm."
+          />
+          <FieldStack>
+            <FieldGroup title="You">
+              <ReviewRow label="Name" value={a.name} onEdit={() => w.go('you')} />
+              <ReviewRow label="Work email" value={a.email} onEdit={() => w.go('you')} />
+            </FieldGroup>
+            <FieldGroup title="Workspace">
+              <ReviewRow label="Company" value={a.company} onEdit={() => w.go('company')} />
+              <ReviewRow label="Address" value={`${a.slug}.${domain}`} onEdit={() => w.go('company')} />
+            </FieldGroup>
+            <p className="text-muted-foreground flex items-start gap-2.5 text-[13px] leading-relaxed">
+              <Sparkles className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>
+                You start with a <strong className="text-foreground">{trial}-day Business trial</strong>, no
+                card needed. After that your workspace moves to Free, and nothing is deleted.{' '}
                 <Link href="/pricing" className="underline underline-offset-4">
                   Compare plans
                 </Link>
-              </p>
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={w.back}>
-                <ArrowLeft /> Back
-              </Button>
-              <Button type="submit" disabled={busy}>
-                {busy ? 'Sending…' : 'Email me the link'} {!busy && <Mail />}
-              </Button>
-            </div>
-          </form>
-        )}
+              </span>
+            </p>
+          </FieldStack>
+          <StepFooter next={busy ? 'Sending…' : 'Email me the link'} icon={<Mail />} onBack={w.back} loading={busy} />
+        </form>
+      )}
 
-        {w.step === 'sent' && (
-          <div>
-            <Heading headingRef={w.headingRef}>Check your inbox</Heading>
-            <div className="space-y-4">
-              <div className="bg-accent text-accent-foreground flex items-start gap-3 rounded-xl p-4">
-                <Mail className="mt-0.5 size-5 shrink-0" aria-hidden />
-                <p className="text-sm">
-                  We sent a link to <strong>{a.email}</strong>. Open it to create{' '}
-                  <strong>{a.company}</strong>. It works for 24 hours.
-                </p>
-              </div>
-              {a.devLink && (
-                <Notice variant="info">
-                  Email is not set up on this server, so here is your link:{' '}
-                  <a className="font-medium underline" href={a.devLink} data-testid="dev-link">
-                    Create my workspace
-                  </a>
-                </Notice>
-              )}
-              <ul className="text-muted-foreground space-y-1.5 text-sm">
-                <li className="flex gap-2">
-                  <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Nothing is created
-                  until you open the link.
-                </li>
-                <li className="flex gap-2">
-                  <Mail className="mt-0.5 size-4 shrink-0" aria-hidden /> Nothing there? Check spam,
-                  or the address may be mistyped.
-                </li>
-              </ul>
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => w.go('you')}>
-                  <ArrowLeft /> Change my details
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy || waitLeft > 0}
-                  onClick={() => void send()}
-                >
-                  {waitLeft > 0
-                    ? `Send again in ${waitLeft}s`
-                    : busy
-                      ? 'Sending…'
-                      : 'Send it again'}
-                </Button>
-              </div>
-            </div>
+      {w.step === 'sent' && (
+        <div>
+          <StepHero
+            headingRef={w.headingRef}
+            title="Check your inbox"
+            lead={
+              <>
+                We sent a link to <strong className="text-foreground">{a.email}</strong>. Open it to create{' '}
+                <strong className="text-foreground">{a.company}</strong>. It works for 24 hours.
+              </>
+            }
+          />
+          <FieldStack>
+            {a.devLink && (
+              <Notice variant="info">
+                Email is not set up on this server, so here is your link:{' '}
+                <a className="font-medium underline" href={a.devLink} data-testid="dev-link">
+                  Create my workspace
+                </a>
+              </Notice>
+            )}
+            <ul className="text-muted-foreground space-y-2 text-sm">
+              <li className="flex gap-2.5">
+                <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Nothing is created until you
+                open the link.
+              </li>
+              <li className="flex gap-2.5">
+                <Mail className="mt-0.5 size-4 shrink-0" aria-hidden /> Nothing there? Check spam, or the
+                address may be mistyped.
+              </li>
+            </ul>
+          </FieldStack>
+          <div className="mt-9 flex flex-wrap items-center justify-between gap-2">
+            <Button type="button" variant="ghost" onClick={() => w.go('you')}>
+              <ArrowLeft /> Change my details
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+             
+              disabled={busy || waitLeft > 0}
+              onClick={() => void send()}
+            >
+              {waitLeft > 0 ? `Send again in ${waitLeft}s` : busy ? 'Sending…' : 'Send it again'}
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </WizardShell>
+  );
+}
+
+function ReviewRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="flex min-w-0 items-center gap-2 font-medium">
+        <span className="truncate">{value}</span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-primary shrink-0 rounded p-1"
+          aria-label={`Change ${label.toLowerCase()}`}
+        >
+          <Pencil className="size-3.5" aria-hidden />
+        </button>
+      </span>
+    </div>
   );
 }
 
 export default function SignUpPage() {
   return (
-    <Suspense
-      fallback={<Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />}
-    >
+    <Suspense fallback={<SetupLoading />}>
       <SignUpWizard />
     </Suspense>
   );
