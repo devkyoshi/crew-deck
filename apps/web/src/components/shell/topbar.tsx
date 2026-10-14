@@ -16,6 +16,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { CheckinControl } from '@/components/checkin/checkin-control';
 import { CommandPalette } from './command-palette';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SpaceSwitcher } from './space-switcher';
 import { findNavItem } from './nav';
 import { UserMenu } from './user-menu';
@@ -60,6 +61,7 @@ export function Topbar() {
       <CheckinControl />
       <SpaceSwitcher />
       <CommandPalette />
+      <NotificationBell />
       <ThemeToggle />
       <UserMenu />
     </header>

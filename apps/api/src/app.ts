@@ -33,6 +33,7 @@ import { boardRoutes } from './routes/board.js';
 import { workItemRoutes } from './routes/work-items.js';
 import { workCopyRoutes } from './routes/work-copy.js';
 import { workFindRoutes } from './routes/work-find.js';
+import { notificationRoutes } from './routes/notifications.js';
 import { workDepthRoutes } from './routes/work-depth.js';
 import { attachmentRoutes, MAX_UPLOAD_BYTES } from './routes/attachments.js';
 import multipart from '@fastify/multipart';
@@ -132,6 +133,7 @@ export function buildApp({
   app.register(workDepthRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workCopyRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workFindRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(notificationRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(attachmentRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });

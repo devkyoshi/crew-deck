@@ -9,6 +9,7 @@ import type { CommentDoc, UserDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { addWatchers, recordActivity } from '../work/activity.js';
+import { deliverSafely, type NotifyEvent } from '../work/notify.js';
 import { sanitizeDoc } from '../work/rich-text.js';
 import {
   assertMentionable,
@@ -127,7 +128,9 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
       if (!clean.doc) {
         throw new AppError(422, 'validation_error', 'Write a comment first', { body: 'Write a comment first' });
       }
-      return withTenantTx(deps.db, actor.orgId, async (t) => {
+      const events: NotifyEvent[] = [];
+      const result = await withTenantTx(deps.db, actor.orgId, async (t) => {
+        events.length = 0;
         const { row, space } = await resolveItem(t, actor, req.params.id);
         if (!can(actor, 'comment.create', spaceCtx(space))) throw forbidden();
         assertWritable(space);
@@ -149,9 +152,16 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
           kind: 'commented',
           newValue: { commentId: created.id, excerpt: clean.text.slice(0, 280) },
         });
+        const base = { orgId: actor.orgId, actorId: actor.userId, itemId: row.id };
+        const excerpt = clean.text.slice(0, 200);
+        if (clean.mentions.length) events.push({ type: 'mentioned', ...base, userIds: clean.mentions, excerpt });
+        // Watchers hear about the comment; people mentioned in it already get the mention instead.
+        events.push({ type: 'commented', ...base, excerpt, skip: clean.mentions });
         const [out] = await presentComments(t, actor, space, [created]);
         return out!;
       });
+      await deliverSafely(deps.db, events, req.log);
+      return result;
     },
   );
 
@@ -164,7 +174,9 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
       if (!clean.doc) {
         throw new AppError(422, 'validation_error', 'Write a comment first', { body: 'Write a comment first' });
       }
-      return withTenantTx(deps.db, actor.orgId, async (t) => {
+      const events: NotifyEvent[] = [];
+      const result = await withTenantTx(deps.db, actor.orgId, async (t) => {
+        events.length = 0;
         const { comment, row, space } = await resolveComment(t, actor, req.params.id);
         if (comment.deletedAt) throw notFound('Comment');
         if (!can(actor, 'comment.editOwn', { ...spaceCtx(space), isAuthor: comment.authorId === actor.userId })) {
@@ -179,9 +191,14 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
         );
         if (!updated) throw notFound('Comment');
         await addWatchers(t, row.id, added);
+        if (added.length) {
+          events.push({ type: 'mentioned', orgId: actor.orgId, actorId: actor.userId, itemId: row.id, userIds: added, excerpt: clean.text.slice(0, 200) });
+        }
         const [out] = await presentComments(t, actor, space, [updated]);
         return out!;
       });
+      await deliverSafely(deps.db, events, req.log);
+      return result;
     },
   );
 

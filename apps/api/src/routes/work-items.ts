@@ -14,6 +14,7 @@ import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work
 import { textToDoc } from '../work/doc.js';
 import { mentionsIn, sanitizeDoc } from '../work/rich-text.js';
 import { searchTextOf } from '../work/search-text.js';
+import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
   assertAssignable,
   assertMentionable,
@@ -203,7 +204,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
     async (req) => {
       const actor = actorOf(req);
       const b = req.body;
-      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const events: NotifyEvent[] = [];
+      const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        events.length = 0;
         const space = await resolveSpace(tx, actor, req.params.id);
         if (!can(actor, 'item.create', spaceCtx(space))) throw forbidden();
         assertWritable(space);
@@ -253,8 +256,13 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (b.labelIds?.length) await setItemLabels(tx, actor.orgId, space, created.id, b.labelIds);
         await recordActivity(tx, { item: created, actorId: actor.userId, kind: 'created' });
         await addWatchers(tx, created.id, [actor.userId, b.assigneeId, ...(rich?.mentions ?? [])]);
+        const base = { orgId: actor.orgId, actorId: actor.userId, itemId: created.id };
+        if (b.assigneeId) events.push({ type: 'assigned', ...base, userId: b.assigneeId });
+        if (rich?.mentions.length) events.push({ type: 'mentioned', ...base, userIds: rich.mentions, excerpt: rich.text.slice(0, 200) });
         return fresh(tx, actor, space, created.id);
       });
+      await deliverSafely(deps.db, events, req.log);
+      return out;
     },
   );
 
@@ -297,7 +305,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
       const actor = actorOf(req);
       const b = req.body;
       const expected = ifMatch(req);
-      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const events: NotifyEvent[] = [];
+      const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        events.length = 0;
         const { row, space } = await resolveItem(tx, actor, req.params.id);
         if (!can(actor, 'item.edit', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
           throw forbidden();
@@ -350,10 +360,17 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (updated === 0) throw stale();
         if (b.labelIds !== undefined) await setItemLabels(tx, actor.orgId, space, row.id, b.labelIds);
         const after = await fresh(tx, actor, space, row.id);
-        await recordChanges(tx, row, actor.userId, itemChanges(presentItem(row, space.key), after));
+        const changes = itemChanges(presentItem(row, space.key), after);
+        await recordChanges(tx, row, actor.userId, changes);
         await addWatchers(tx, row.id, [b.assigneeId, ...newMentions]);
+        events.push(...eventsFromChanges(actor.orgId, actor.userId, row.id, changes));
+        if (newMentions.length) {
+          events.push({ type: 'mentioned', orgId: actor.orgId, actorId: actor.userId, itemId: row.id, userIds: newMentions, excerpt: rich?.text.slice(0, 200) });
+        }
         return after;
       });
+      await deliverSafely(deps.db, events, req.log);
+      return out;
     },
   );
 

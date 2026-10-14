@@ -67,11 +67,11 @@ describe('search', () => {
     const a = await mkItem(priv, c.member!, { title: `Pour the ${WORD} slab` });
     const b = await mkItem(priv, c.member!, { title: 'Order steel', description: `Ask the ${WORD} supplier first` });
     expect((await search(a.key, c.member!)).map((i) => i.key)).toEqual([a.key]);
-    expect((await search(a.key.replace('-', ' ').toLowerCase(), c.member!))[0].key).toBe(a.key);
+    expect((await search(a.key.replace('-', ' ').toLowerCase(), c.member!))[0]!.key).toBe(a.key);
     const words = await search(WORD, c.member!);
     expect(words.map((i) => i.key)).toEqual(expect.arrayContaining([a.key, b.key]));
-    expect(words[0].key).toBe(a.key); // a title match ranks above a description match
-    expect(words[0].spaceName).toBe('Find');
+    expect(words[0]!.key).toBe(a.key); // a title match ranks above a description match
+    expect(words[0]!.spaceName).toBe('Find');
     const partial = await search(WORD.slice(0, 7), c.member!);
     expect(partial.map((i) => i.key)).toContain(a.key);
   });
@@ -139,7 +139,7 @@ describe('saved filters', () => {
     const forViewer = (await send('GET', `/filters?space=${priv.key}`, c.viewer!)).json().items as Json[];
     expect(forViewer.map((f) => f.name)).toContain('Team high');
     expect(forViewer.map((f) => f.name)).not.toContain('My bugs');
-    expect(forViewer.find((f) => f.name === 'Team high').canEdit).toBe(false);
+    expect(forViewer.find((f) => f.name === 'Team high')!.canEdit).toBe(false);
     // The outsider cannot open the private space at all.
     expect((await send('GET', `/filters?space=${priv.key}`, c.outsider!)).statusCode).toBe(404);
     const anywhere = (await send('GET', '/filters', c.outsider!)).json().items as Json[];

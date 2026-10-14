@@ -8,6 +8,7 @@ import { createBrevoSender, createLogSender } from './email/sender.js';
 import { createRedis } from './lib/redis.js';
 import { startTrialExpiry } from './plans/jobs.js';
 import { startRebalanceJobs } from './work/jobs.js';
+import { startNotificationJobs } from './work/notify-jobs.js';
 
 const config = loadConfig();
 const { db, close } = await createDb(config.MONGODB_URI, config.MONGODB_DB);
@@ -41,6 +42,11 @@ const autoClose = await startAutoCloseJobs(redis, db, {
   error: (m) => app.log.error(m),
 });
 
+const notifications = startNotificationJobs(db, config, (m) => sender.send(m), {
+  info: (m) => app.log.info(m),
+  error: (m) => app.log.error(m),
+});
+
 const trials = startTrialExpiry(db, {
   info: (m) => app.log.info(m),
   error: (m) => app.log.error(m),
@@ -51,6 +57,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     await worker.close();
     await autoClose.close();
     await trials.close();
+    await notifications.close();
     await rebalance.close();
     await queue.close();
     await app.close();

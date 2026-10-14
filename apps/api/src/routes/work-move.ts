@@ -11,6 +11,7 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can } from '../permissions/can.js';
 import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import type { EnqueueRebalance } from '../work/jobs.js';
+import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
   assertAssignable,
   assertWritable,
@@ -91,9 +92,11 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
       const b = req.body;
       const expected = ifMatch(req);
       let rebalance: { spaceId: string; statusId: string } | null = null;
+      const events: NotifyEvent[] = [];
 
       const result = await withTenantTx(deps.db, actor.orgId, async (tx) => {
         rebalance = null;
+        events.length = 0;
         const { row, space } = await resolveItem(tx, actor, req.params.id);
         if (!can(actor, 'item.edit', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
           throw forbidden();
@@ -179,13 +182,9 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         if (needsRebalance(rank)) rebalance = { spaceId: space.id, statusId: target.id };
 
         const [fresh] = await loadItemRows(tx, { id: row.id });
-        await recordChanges(
-          tx,
-          row,
-          actor.userId,
-          itemChanges(presentItem(row, space.key), presentItem(fresh!, space.key)),
-          { statusAsMove: true },
-        );
+        const changes = itemChanges(presentItem(row, space.key), presentItem(fresh!, space.key));
+        await recordChanges(tx, row, actor.userId, changes, { statusAsMove: true });
+        events.push(...eventsFromChanges(actor.orgId, actor.userId, row.id, changes));
         await addWatchers(tx, row.id, [b.assigneeId]);
         const wip = await tx.workItems.count({
           spaceId: space.id,
@@ -204,6 +203,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         const job = rebalance as { spaceId: string; statusId: string };
         await deps.enqueueRebalance?.({ orgId: actor.orgId, ...job });
       }
+      await deliverSafely(deps.db, events, req.log);
       return result;
     },
   );
@@ -214,7 +214,9 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
     const actor = actorOf(req);
     const b = req.body;
     const ids = [...new Set(b.ids)];
-    return withTenantTx(deps.db, actor.orgId, async (tx) => {
+    const events: NotifyEvent[] = [];
+    const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
+      events.length = 0;
       const rows = await tx.workItems.find(
         { id: { $in: ids }, deletedAt: null },
         {
@@ -328,17 +330,15 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         for (const row of before) {
           const now2 = after.get(row.id);
           if (!now2) continue;
-          await recordChanges(
-            tx,
-            row,
-            actor.userId,
-            itemChanges(presentItem(row, space.key), presentItem(now2, space.key)),
-            { statusAsMove: true },
-          );
+          const changes = itemChanges(presentItem(row, space.key), presentItem(now2, space.key));
+          await recordChanges(tx, row, actor.userId, changes, { statusAsMove: true });
+          events.push(...eventsFromChanges(actor.orgId, actor.userId, row.id, changes));
           if (b.action === 'assign') await addWatchers(tx, row.id, [b.assigneeId]);
         }
       }
       return { updated: ok.length, failed };
     });
+    await deliverSafely(deps.db, events, req.log);
+    return out;
   });
 }

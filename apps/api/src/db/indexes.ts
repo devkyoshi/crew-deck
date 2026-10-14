@@ -192,6 +192,22 @@ const INDEXES: Record<string, Ix[]> = {
     ['owner', { orgId: 1, ownerId: 1 }],
     ['shared', { orgId: 1, isShared: 1, spaceId: 1 }],
   ],
+  notifications: [
+    ['id', { id: 1 }, U],
+    ['user_time', { orgId: 1, userId: 1, createdAt: -1 }],
+    ['unread', { orgId: 1, userId: 1, readAt: 1 }],
+    [
+      'dedupe',
+      { orgId: 1, userId: 1, dedupeKey: 1 },
+      { unique: true, partialFilterExpression: { dedupeKey: { $type: 'string' } } },
+    ],
+  ],
+  notification_prefs: [['user', { orgId: 1, userId: 1 }, U]],
+  email_batches: [
+    ['id', { id: 1 }, U],
+    ['one_open', { orgId: 1, userId: 1 }, { unique: true, partialFilterExpression: { sentAt: { $type: 'null' } } }],
+    ['due', { sentAt: 1, dueAt: 1 }],
+  ],
 };
 
 export async function ensureIndexes(handle: MongoDb) {

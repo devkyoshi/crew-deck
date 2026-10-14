@@ -538,3 +538,52 @@ export interface SavedFilterDoc {
   isShared: boolean;
   createdAt: Date;
 }
+
+// ---- Notifications ---------------------------------------------------------------------------------------
+
+export type NotificationType =
+  | 'assigned'
+  | 'mentioned'
+  | 'commented'
+  | 'status_changed'
+  | 'due_soon'
+  | 'sprint_started'
+  | 'sprint_completed';
+
+export interface NotificationDoc {
+  id: string;
+  orgId: string;
+  /** Who it is for. */
+  userId: string;
+  type: NotificationType;
+  itemId: string | null;
+  spaceId: string | null;
+  /** Who caused it (null for scheduled reminders). */
+  actorId: string | null;
+  /** Display snapshot: item key and title, space key, excerpt, status names. */
+  data: Record<string, unknown>;
+  /** Kept only to back an email, because the person turned in-app off for this type. */
+  hidden: boolean;
+  readAt: Date | null;
+  /** Makes scheduled reminders idempotent (one per person, item and day). */
+  dedupeKey: string | null;
+  createdAt: Date;
+}
+
+export interface NotificationPrefsDoc {
+  orgId: string;
+  userId: string;
+  settings: Partial<Record<NotificationType, { inApp: boolean; email: boolean }>>;
+  updatedAt: Date;
+}
+
+/** Notifications waiting to go out together in one email. */
+export interface EmailBatchDoc {
+  id: string;
+  orgId: string;
+  userId: string;
+  notificationIds: string[];
+  dueAt: Date;
+  sentAt: Date | null;
+  createdAt: Date;
+}
