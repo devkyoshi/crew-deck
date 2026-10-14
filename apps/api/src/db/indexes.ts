@@ -119,6 +119,7 @@ const INDEXES: Record<string, Ix[]> = {
     ],
     ['org_assignee_due', { orgId: 1, assigneeId: 1, resolvedAt: 1 }],
     ['org_reporter', { orgId: 1, reporterId: 1 }],
+    ['sprint', { sprintId: 1 }],
   ],
   labels: [
     ['id', { id: 1 }, U],
@@ -208,6 +209,16 @@ const INDEXES: Record<string, Ix[]> = {
     ['one_open', { orgId: 1, userId: 1 }, { unique: true, partialFilterExpression: { sentAt: { $type: 'null' } } }],
     ['due', { sentAt: 1, dueAt: 1 }],
   ],
+  sprints: [
+    ['id', { id: 1 }, U],
+    ['space_state', { spaceId: 1, state: 1 }],
+    ['one_active', { spaceId: 1 }, { unique: true, partialFilterExpression: { state: 'active' } }],
+  ],
+  sprint_items_history: [
+    ['id', { id: 1 }, U],
+    ['sprint_item', { sprintId: 1, itemId: 1 }],
+  ],
+  sprint_snapshots: [['sprint_date', { sprintId: 1, date: 1 }, U]],
 };
 
 export async function ensureIndexes(handle: MongoDb) {

@@ -198,6 +198,7 @@ export interface SpaceMemberSummary {
 }
 
 export interface SpaceDetail extends Space {
+  boardType: 'kanban' | 'scrum';
   members: SpaceMemberSummary[];
   permissions: { edit: boolean; manageMembers: boolean; delete: boolean; viewAudit: boolean };
 }

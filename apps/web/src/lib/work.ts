@@ -77,6 +77,9 @@ export interface WorkItem {
   subtasks: { total: number; done: number };
   labels: Label[];
   permissions?: { edit: boolean; delete: boolean };
+  sprintId?: string | null;
+  /** Sprints this item was carried out of unfinished. */
+  carryOverCount?: number;
 }
 
 export interface BoardSettings {
@@ -88,6 +91,8 @@ export interface BoardSettings {
 export interface BoardData {
   space: { id: string; key: string; name: string; status: 'active' | 'archived' };
   board: { id: string; type: BoardType; name: string; settings: BoardSettings };
+  /** The running sprint on a Scrum board (null when none is running, or on Kanban). */
+  sprint?: { id: string; name: string; goal: string | null; startDate: string | null; endDate: string | null } | null;
   statuses: {
     id: string;
     name: string;

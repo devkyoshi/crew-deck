@@ -1,5 +1,6 @@
 'use client';
 
+import { useHasFeature } from '@/lib/plans';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -129,6 +130,7 @@ export function CreateSpaceWizard() {
     }
   }
 
+  const scrumAllowed = useHasFeature('scrum_sprints');
   const nameReg = register('name');
 
   return (
@@ -289,18 +291,29 @@ export function CreateSpaceWizard() {
                   Starts with: {startingColumns}
                 </p>
               </button>
-              <div
-                aria-disabled="true"
-                className="space-y-2 rounded-2xl border border-dashed p-4 opacity-70"
+              <button
+                type="button"
+                aria-pressed={v.boardType === 'scrum'}
+                disabled={!scrumAllowed}
+                onClick={() => setValue('boardType', 'scrum')}
+                className={cn(
+                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                  v.boardType === 'scrum' && 'border-primary bg-accent ring-primary/30 ring-2',
+                )}
               >
-                <Timer className="text-muted-foreground size-5" aria-hidden />
+                <Timer className="text-primary size-5" aria-hidden />
                 <div className="flex items-center gap-2 font-medium">
-                  Scrum <span className="bg-secondary rounded-full px-2 py-0.5 text-[11px]">Coming soon</span>
+                  Scrum
+                  {!scrumAllowed && (
+                    <span className="bg-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
+                      <Lock className="size-3" aria-hidden /> Team plan
+                    </span>
+                  )}
                 </div>
                 <p className="text-muted-foreground text-xs">
-                  A backlog and sprints. Available on the Team plan when it launches.
+                  A backlog and sprints with start and end dates, plus sprint reports.
                 </p>
-              </div>
+              </button>
             </div>
           </div>
         )}

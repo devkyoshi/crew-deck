@@ -32,6 +32,9 @@ export type Action =
   | 'attachment.add'
   | 'attachment.delete'
   | 'filter.share'
+  | 'sprint.create'
+  | 'sprint.start'
+  | 'sprint.complete'
   | 'status.manage'
   | 'board.manage'
   | 'label.create'
@@ -131,6 +134,8 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
       return resource.spaceVisibility === 'open';
 
     case 'audit.viewSpace':
+    case 'sprint.start':
+    case 'sprint.complete':
     case 'status.manage':
     case 'board.manage':
     case 'label.manage':
@@ -144,6 +149,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'comment.create':
     case 'attachment.add':
     case 'filter.share':
+    case 'sprint.create':
       return adminLike || spaceAdmin || resource.spaceRole === 'member';
 
     // People edit only their own comments, and only while they can still comment.

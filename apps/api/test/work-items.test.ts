@@ -121,10 +121,12 @@ describe('new spaces', () => {
     expect(board.permissions.createItem).toBe(true);
   });
 
-  it('refuses Scrum for now, after the plan check', async () => {
+  it('creates Scrum spaces on plans that include sprints', async () => {
     const res = await send('POST', '/spaces', c.owner, { key: newKey(), name: 'S', boardType: 'scrum' });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('not_available');
+    expect(res.statusCode, res.body).toBe(200);
+    const board = (await send('GET', `/spaces/${res.json().id}/board`, c.owner)).json();
+    expect(board.board.type).toBe('scrum');
+    expect(board.sprint).toBeNull();
   });
 });
 

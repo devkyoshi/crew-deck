@@ -1,5 +1,7 @@
 'use client';
 
+import { useSetBoardType } from '@/lib/sprints-api';
+import { useHasFeature } from '@/lib/plans';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -47,7 +49,6 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadError } from '@/components/shared/load-error';
-import { Notice } from '@/components/shared/notice';
 import { api } from '@/lib/api';
 import { errorText, refreshWork, statusesKey, useStatuses } from '@/lib/work-api';
 import {
@@ -201,10 +202,7 @@ export function BoardSettingsSheet({
             <h3 id="bs-other" className="text-sm font-semibold">
               Board type
             </h3>
-            <Notice variant="info">
-              This is a Kanban board (continuous flow). Scrum boards with a backlog and sprints come in a later
-              update.
-            </Notice>
+            <BoardTypeSwitch spaceKey={spaceKey} type={board.type} />
           </section>
         </div>
       </SheetContent>
@@ -531,5 +529,40 @@ function StatusRow({
       />
       </div>
     </li>
+  );
+}
+
+/** Kanban or Scrum. Scrum needs the plan's sprints feature; switching back keeps sprints and returns planned work. */
+function BoardTypeSwitch({ spaceKey, type }: { spaceKey: string; type: 'kanban' | 'scrum' }) {
+  const setType = useSetBoardType(spaceKey);
+  const scrumAllowed = useHasFeature('scrum_sprints');
+  const other = type === 'kanban' ? 'scrum' : 'kanban';
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground text-sm">
+        {type === 'kanban'
+          ? 'Kanban: continuous flow, work moves across the columns.'
+          : 'Scrum: a backlog and sprints. The board shows the running sprint.'}
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={setType.isPending || (other === 'scrum' && !scrumAllowed)}
+        onClick={() =>
+          setType.mutate(other, {
+            onSuccess: (r) =>
+              toast.success(
+                `Switched to ${other === 'scrum' ? 'Scrum' : 'Kanban'}${r.movedToBacklog ? `; ${r.movedToBacklog} planned items are back in the backlog` : ''}`,
+              ),
+            onError: (e) => toast.error(errorText(e, 'Could not switch')),
+          })
+        }
+      >
+        Switch to {other === 'scrum' ? 'Scrum' : 'Kanban'}
+      </Button>
+      {other === 'scrum' && !scrumAllowed && (
+        <p className="text-muted-foreground text-xs">Scrum boards are part of the Team plan and above.</p>
+      )}
+    </div>
   );
 }

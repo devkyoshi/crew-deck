@@ -10,7 +10,7 @@ import type { TenantDb } from '../db/client.js';
 export async function seedSpaceWork(
   t: TenantDb,
   spaceId: string,
-  opts: { statuses?: readonly StatusTemplate[] } = {},
+  opts: { statuses?: readonly StatusTemplate[]; boardType?: 'kanban' | 'scrum' } = {},
 ) {
   let statuses = opts.statuses;
   if (!statuses) {
@@ -20,7 +20,7 @@ export async function seedSpaceWork(
         ? WORKSPACE_TEMPLATES[org.workType].statuses
         : DEFAULT_STATUSES;
   }
-  await t.boards.insert({ spaceId });
+  await t.boards.insert({ spaceId, type: opts.boardType ?? 'kanban' });
   await t.spaceCounters.insert({ spaceId });
   await t.spaceStatuses.insert(
     statuses.map((s, position) => ({

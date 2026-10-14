@@ -96,6 +96,7 @@ export const refreshWork = (qc: QueryClient) =>
     qc.invalidateQueries({ queryKey: ['epics'] }),
     qc.invalidateQueries({ queryKey: ['my-items'] }),
     qc.invalidateQueries({ queryKey: ['search'] }),
+    qc.invalidateQueries({ queryKey: ['backlog'] }),
   ]);
 
 // ---- Mutations ----------------------------------------------------------------------------------------
@@ -145,7 +146,7 @@ export function useUpdateItem() {
     onSuccess: (saved, { patch }) => {
       replaceEverywhere(qc, saved);
       // Lists and searches show fields too; they refetch quietly in the background.
-      for (const key of ['list', 'epics', 'my-items', 'search']) void qc.invalidateQueries({ queryKey: [key] });
+      for (const key of ['list', 'epics', 'my-items', 'search', 'backlog']) void qc.invalidateQueries({ queryKey: [key] });
       // A status change moves the card to another column, so let the board reorder itself.
       if (patch.statusId !== undefined || patch.type !== undefined || patch.parentId !== undefined) {
         void refreshWork(qc);

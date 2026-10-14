@@ -160,6 +160,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   const detail = async (tx: TenantDb, actor: Actor, row: SpaceView) => ({
     ...row,
+    boardType: (await tx.boards.findOne({ spaceId: row.id }, { projection: { type: 1 } }))?.type ?? 'kanban',
     members: await memberSummary(tx, row.id),
     permissions: presentPermissions(actor, row),
   });
@@ -221,11 +222,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         const plan = await loadPlan(tx, actor.orgId);
         assertWithinLimit(plan, 'spaces', await countSpaces(tx, actor.orgId));
         if (b.boardType === 'scrum') {
-          // Plan first, so a Free workspace gets the upgrade prompt rather than "not available".
           assertFeature(plan, 'scrum_sprints', 'Scrum boards');
-          throw new AppError(422, 'not_available', 'Scrum boards are not available yet', {
-            boardType: 'Scrum boards are not available yet',
-          });
         }
         // Keys are unique per workspace and never reused, deleted spaces included.
         if (await tx.spaces.exists({ key: b.key })) throw keyTaken();
@@ -260,7 +257,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         });
         const spaceId = created.id;
         // Board, counter and starting columns (the old database trigger), from the workspace template.
-        await seedSpaceWork(tx, spaceId);
+        await seedSpaceWork(tx, spaceId, { boardType: b.boardType });
 
         // The creator is always the first space admin, whatever else was chosen.
         const byPrincipal = new Map<

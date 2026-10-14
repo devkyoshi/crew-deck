@@ -9,6 +9,7 @@ import { createRedis } from './lib/redis.js';
 import { startTrialExpiry } from './plans/jobs.js';
 import { startRebalanceJobs } from './work/jobs.js';
 import { startNotificationJobs } from './work/notify-jobs.js';
+import { startSprintSnapshots } from './work/sprints.js';
 
 const config = loadConfig();
 const { db, close } = await createDb(config.MONGODB_URI, config.MONGODB_DB);
@@ -47,6 +48,8 @@ const notifications = startNotificationJobs(db, config, (m) => sender.send(m), {
   error: (m) => app.log.error(m),
 });
 
+const snapshots = startSprintSnapshots(db, { error: (m) => app.log.error(m) });
+
 const trials = startTrialExpiry(db, {
   info: (m) => app.log.info(m),
   error: (m) => app.log.error(m),
@@ -58,6 +61,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     await autoClose.close();
     await trials.close();
     await notifications.close();
+    await snapshots.close();
     await rebalance.close();
     await queue.close();
     await app.close();

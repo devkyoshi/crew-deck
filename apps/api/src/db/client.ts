@@ -62,6 +62,9 @@ const TENANT = {
   notifications: 'notifications',
   notificationPrefs: 'notification_prefs',
   emailBatches: 'email_batches',
+  sprints: 'sprints',
+  sprintItemsHistory: 'sprint_items_history',
+  sprintSnapshots: 'sprint_snapshots',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -117,6 +120,9 @@ export interface TenantDocs {
   notifications: T.NotificationDoc;
   notificationPrefs: T.NotificationPrefsDoc;
   emailBatches: T.EmailBatchDoc;
+  sprints: T.SprintDoc;
+  sprintItemsHistory: T.SprintItemHistoryDoc;
+  sprintSnapshots: T.SprintSnapshotDoc;
 }
 
 export interface GlobalDocs {
@@ -315,6 +321,7 @@ const NO_ID = new Set<string>([
   'crmRecordTags',
   'watchers',
   'notificationPrefs',
+  'sprintSnapshots',
   'platformSettings',
   'plans',
 ]);
@@ -595,6 +602,9 @@ export class TenantDb {
   readonly notifications!: TenantRepos['notifications'];
   readonly notificationPrefs!: TenantRepos['notificationPrefs'];
   readonly emailBatches!: TenantRepos['emailBatches'];
+  readonly sprints!: TenantRepos['sprints'];
+  readonly sprintItemsHistory!: TenantRepos['sprintItemsHistory'];
+  readonly sprintSnapshots!: TenantRepos['sprintSnapshots'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

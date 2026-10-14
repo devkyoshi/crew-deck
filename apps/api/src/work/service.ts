@@ -180,6 +180,8 @@ export function presentItem(row: ItemRow, spaceKey: string) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     subtasks: { total: row.childCount, done: row.childDone },
+    sprintId: row.sprintId ?? null,
+    carryOverCount: row.carryOverCount ?? 0,
     labels: row.labels,
   };
 }

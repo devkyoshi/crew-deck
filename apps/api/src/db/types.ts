@@ -311,6 +311,8 @@ export interface WorkItemDoc {
   labelIds: string[];
   /** The description as plain text, for the search index (see work/search-text.ts). */
   searchText?: string;
+  /** How many sprints this item was carried out of unfinished. */
+  carryOverCount?: number;
   resolvedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -586,4 +588,54 @@ export interface EmailBatchDoc {
   dueAt: Date;
   sentAt: Date | null;
   createdAt: Date;
+}
+
+// ---- Sprints (Scrum) -------------------------------------------------------------------------------------
+
+export interface SprintDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  name: string;
+  goal: string | null;
+  /** Calendar dates (YYYY-MM-DD); required to start. */
+  startDate: string | null;
+  endDate: string | null;
+  state: 'planned' | 'active' | 'closed';
+  startedAt: Date | null;
+  closedAt: Date | null;
+  /** Points in the sprint when it started (the burndown's first ideal value). */
+  startPoints: number | null;
+  /** Written when the sprint completes, for the sprint report. */
+  summary: {
+    completed: string[];
+    notCompleted: string[];
+    addedAfterStart: string[];
+    completedPoints: number;
+    notCompletedPoints: number;
+  } | null;
+  createdBy: string;
+  createdAt: Date;
+}
+
+/** Every time an item joins or leaves a sprint. */
+export interface SprintItemHistoryDoc {
+  id: string;
+  orgId: string;
+  sprintId: string;
+  itemId: string;
+  addedAt: Date;
+  removedAt: Date | null;
+  estimateAtAdd: number | null;
+}
+
+/** One row per sprint and day: what was left (the burndown's actual line). */
+export interface SprintSnapshotDoc {
+  orgId: string;
+  sprintId: string;
+  date: string;
+  totalPoints: number;
+  remainingPoints: number;
+  items: number;
+  open: number;
 }

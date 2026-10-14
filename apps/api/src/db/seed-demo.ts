@@ -42,6 +42,7 @@ interface SpaceSeed {
   icon: string;
   visibility: 'open' | 'private';
   status?: 'archived';
+  boardType?: 'kanban' | 'scrum';
   members: { who: string; type: 'user' | 'group'; role: SpaceRole }[];
 }
 
@@ -142,7 +143,7 @@ async function ensureSpace(ctx: Ctx, s: SpaceSeed, age: number) {
       createdAt: daysAgo(age),
       updatedAt: daysAgo(age),
     });
-    await seedSpaceWork(t, space.id);
+    await seedSpaceWork(t, space.id, { boardType: s.boardType });
     await t.auditLogs.insert({
       actorId: owner,
       action: 'space.created',
@@ -567,6 +568,21 @@ const ACME_SPACES: SpaceSeed[] = [
     ],
   },
   {
+    key: 'APP',
+    name: 'Mobile App',
+    description: 'The customer app, built in two-week sprints.',
+    icon: 'rocket',
+    visibility: 'open',
+    boardType: 'scrum',
+    members: [
+      { who: 'owner', type: 'user', role: 'admin' },
+      { who: 'priya', type: 'user', role: 'admin' },
+      { who: 'member', type: 'user', role: 'member' },
+      { who: 'Backend', type: 'group', role: 'member' },
+      { who: 'viewer', type: 'user', role: 'viewer' },
+    ],
+  },
+  {
     key: 'LEGACY',
     name: 'Legacy Portal',
     description: 'Retired in 2025. Kept for reference.',
@@ -590,12 +606,125 @@ const ACME_ITEMS: Record<string, DemoItem[]> = {
     { type: 'task', title: 'Review the payment provider contract', status: 'In Review', priority: 'medium', assignee: 'priya', estimate: 1, dueInDays: 1 },
     { type: 'task', title: 'Move CI to the new runners', status: 'In Progress', priority: 'medium', assignee: 'ben', estimate: 8 },
   ],
+  APP: [
+    { type: 'story', title: 'Sign in with a magic link', status: 'Done', assignee: 'priya', estimate: 5, labels: ['auth'] },
+    { type: 'story', title: 'Remember the last opened screen', status: 'Done', assignee: 'ben', estimate: 3 },
+    { type: 'bug', title: 'Push notifications arrive twice', status: 'Done', assignee: 'ben', estimate: 2, priority: 'high' },
+    { type: 'story', title: 'Offline mode for the order list', status: 'To Do', assignee: 'dmitri', estimate: 8 },
+    { type: 'story', title: 'Dark mode', status: 'Done', assignee: 'member', estimate: 3 },
+    { type: 'story', title: 'Order tracking map', status: 'In Progress', assignee: 'priya', estimate: 5, priority: 'high' },
+    { type: 'bug', title: 'Keyboard covers the address field', status: 'In Review', assignee: 'member', estimate: 1 },
+    { type: 'task', title: 'Upgrade the payment SDK', status: 'To Do', assignee: 'ben', estimate: 3 },
+    { type: 'story', title: 'Reorder from history', status: 'To Do', estimate: 5 },
+    { type: 'story', title: 'Share an order with a friend', status: 'To Do', estimate: 3 },
+    { type: 'bug', title: 'Prices round wrongly in some currencies', status: 'To Do', estimate: 2, priority: 'highest' },
+  ],
   OPS: [
     { type: 'task', title: 'Rotate the staging credentials', status: 'To Do', priority: 'high', dueInDays: 2 },
     { type: 'task', title: 'Write the on-call handover notes', status: 'In Progress', priority: 'medium' },
     { type: 'bug', title: 'Backup job reports success on empty dumps', status: 'To Do', priority: 'highest' },
   ],
 };
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * A Scrum space with history: Sprint 1 completed two weeks ago (with a carried-over story), Sprint 2
+ * running for five days, and the rest in the backlog. Snapshots make the burndown show real lines.
+ */
+async function seedSprints(ctx: Ctx, spaceId: string) {
+  const { t } = ctx;
+  if (await t.sprints.exists({ spaceId })) return;
+  const items = await t.workItems.find({ spaceId, deletedAt: null }, { sort: { number: 1 } });
+  const byTitle = new Map(items.map((i) => [i.title, i]));
+  const pick = (...titles: string[]) => titles.map((x) => byTitle.get(x)!).filter(Boolean);
+  const pts = (list: typeof items) => list.reduce((s, i) => s + Number(i.estimate ?? 0), 0);
+  const key = (await t.spaces.get(spaceId))!.key;
+
+  // Sprint 1: days 20 to 7 ago. Three stories done, the offline story carried over.
+  const s1Items = pick('Sign in with a magic link', 'Remember the last opened screen', 'Push notifications arrive twice', 'Offline mode for the order list');
+  const s1Start = daysAgo(20);
+  const s1End = daysAgo(7);
+  const s1 = await t.sprints.insert({
+    spaceId,
+    name: `${key} Sprint 1`,
+    goal: 'People can sign in and stay signed in',
+    startDate: isoDay(s1Start),
+    endDate: isoDay(s1End),
+    state: 'closed',
+    startedAt: s1Start,
+    closedAt: s1End,
+    startPoints: pts(s1Items),
+    summary: {
+      completed: s1Items.slice(0, 3).map((i) => i.id),
+      notCompleted: s1Items.slice(3).map((i) => i.id),
+      addedAfterStart: [],
+      completedPoints: pts(s1Items.slice(0, 3)),
+      notCompletedPoints: pts(s1Items.slice(3)),
+    },
+    createdBy: ctx.owner,
+    createdAt: daysAgo(22),
+  });
+  // Sprint 2: started 5 days ago, ends in 9. The carried-over story plus new work.
+  const s2Items = pick('Offline mode for the order list', 'Dark mode', 'Order tracking map', 'Keyboard covers the address field', 'Upgrade the payment SDK');
+  const s2Start = daysAgo(5);
+  const s2 = await t.sprints.insert({
+    spaceId,
+    name: `${key} Sprint 2`,
+    goal: 'Orders work on a bad connection',
+    startDate: isoDay(s2Start),
+    endDate: isoDay(new Date(Date.now() + 9 * 86_400_000)),
+    state: 'active',
+    startedAt: s2Start,
+    closedAt: null,
+    startPoints: pts(s2Items),
+    summary: null,
+    createdBy: ctx.owner,
+    createdAt: daysAgo(6),
+  });
+  await t.sprints.insert({
+    spaceId,
+    name: `${key} Sprint 3`,
+    goal: null,
+    startDate: null,
+    endDate: null,
+    state: 'planned',
+    startedAt: null,
+    closedAt: null,
+    startPoints: null,
+    summary: null,
+    createdBy: ctx.owner,
+    createdAt: daysAgo(1),
+  });
+
+  for (const i of s1Items) {
+    await t.sprintItemsHistory.insert({ sprintId: s1.id, itemId: i.id, addedAt: daysAgo(21), removedAt: i.resolvedAt ? null : s1End, estimateAtAdd: i.estimate });
+  }
+  for (const i of s2Items) {
+    await t.sprintItemsHistory.insert({ sprintId: s2.id, itemId: i.id, addedAt: daysAgo(6), removedAt: null, estimateAtAdd: i.estimate });
+  }
+  // Done items of sprint 1 finished during it; sprint 2's done item finished yesterday.
+  for (const [n, i] of s1Items.slice(0, 3).entries()) {
+    await t.workItems.updateOne({ id: i.id }, { sprintId: s1.id, resolvedAt: daysAgo(16 - n * 3) });
+  }
+  for (const i of s2Items) await t.workItems.updateOne({ id: i.id }, { sprintId: s2.id });
+  await t.workItems.updateOne({ id: byTitle.get('Offline mode for the order list')!.id }, { carryOverCount: 1 });
+  await t.workItems.updateOne({ id: byTitle.get('Dark mode')!.id }, { resolvedAt: daysAgo(1) });
+
+  // Daily snapshots: sprint 1 burns down to the carried-over 8 points, sprint 2 is under way.
+  const s1Total = pts(s1Items);
+  const s1Done = s1Items.slice(0, 3);
+  for (let d = 20; d >= 7; d--) {
+    const day = daysAgo(d);
+    const remaining = s1Total - pts(s1Done.filter((i, n) => 16 - n * 3 >= d));
+    await t.sprintSnapshots.upsert({ sprintId: s1.id, date: isoDay(day) }, { totalPoints: s1Total, remainingPoints: remaining, items: 4, open: 4 } as never);
+  }
+  const s2Total = pts(s2Items);
+  for (let d = 5; d >= 1; d--) {
+    const remaining = d <= 1 ? s2Total - 3 : s2Total;
+    await t.sprintSnapshots.upsert({ sprintId: s2.id, date: isoDay(daysAgo(d)) }, { totalPoints: s2Total, remainingPoints: remaining, items: 5, open: 5 } as never);
+  }
+}
 
 async function seedAcme(db: Db, passwordHash: string) {
   const ctx = await ctxFor(db, 'acme');
@@ -611,6 +740,7 @@ async function seedAcme(db: Db, passwordHash: string) {
   for (const [key, items] of Object.entries(ACME_ITEMS)) {
     await seedItems(ctx, spaceIds.get(key)!, items, ctx.owner);
   }
+  await seedSprints(ctx, spaceIds.get('APP')!);
   await seedStars(ctx, [
     ['owner', 'ENG'],
     ['owner', 'OPS'],

@@ -115,6 +115,15 @@ export function WorkItemCard({
           )}
           {show('dueDate') && item.dueDate && <DueDate date={item.dueDate} done={done} />}
           {show('estimate') && item.estimate !== null && <EstimatePill value={item.estimate} />}
+          {(item.carryOverCount ?? 0) > 0 && (
+            <span
+              className="rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-200"
+              title={`Carried over from ${item.carryOverCount} sprint${item.carryOverCount === 1 ? '' : 's'}`}
+            >
+              ↻ {item.carryOverCount}
+              <span className="sr-only"> carry-overs</span>
+            </span>
+          )}
           {show('assignee') && (
             <span className="relative z-10">
               <UserAvatar person={item.assignee} size={compact ? 20 : 24} />

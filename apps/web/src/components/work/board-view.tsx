@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -99,6 +100,7 @@ import { BulkBar } from './bulk-bar';
 import { CreateItemDialog } from './create-item-dialog';
 import { FilterBar } from './filter-bar';
 import { SavedFilters } from './saved-filters';
+import { dateRange } from '@/lib/sprints-api';
 import { useSpace } from '@/components/spaces/space-context';
 import { ItemDetail } from './item-detail';
 import { ShortcutsOverlay } from './shortcuts-overlay';
@@ -834,7 +836,31 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       </div>
 
-      {totalAll === 0 && !filtered && (
+      {data.board.type === 'scrum' && data.sprint && (
+        <div className="bg-primary/5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-sm">
+          <span className="font-medium">{data.sprint.name}</span>
+          <span className="text-muted-foreground">{dateRange(data.sprint)}</span>
+          {data.sprint.goal && <span className="text-muted-foreground">Goal: {data.sprint.goal}</span>}
+          <Link href={`/spaces/${spaceKey}/backlog`} className="text-primary ml-auto hover:underline">
+            Backlog
+          </Link>
+        </div>
+      )}
+      {data.board.type === 'scrum' && !data.sprint && !filtered && (
+        <div className="rounded-xl border border-dashed">
+          <EmptyState
+            icon={Kanban}
+            title="No active sprint"
+            description={`The board shows the running sprint. Plan one and start it from the backlog.`}
+            action={
+              <Button asChild>
+                <Link href={`/spaces/${spaceKey}/backlog`}>Go to the backlog</Link>
+              </Button>
+            }
+          />
+        </div>
+      )}
+      {totalAll === 0 && !filtered && data.board.type !== 'scrum' && (
         <div className="rounded-xl border border-dashed">
           <EmptyState
             icon={Kanban}

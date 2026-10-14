@@ -110,6 +110,9 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
         const boardRow = await loadBoard(tx, space.id);
         const board = presentBoard(boardRow);
         const statuses = await listStatuses(tx, space.id);
+        // A Scrum board shows the running sprint only (nothing when no sprint is running).
+        const sprint = board.type === 'scrum' ? await tx.sprints.findOne({ spaceId: space.id, state: 'active' }) : null;
+        if (board.type === 'scrum') extra.push({ sprintId: sprint?.id ?? '__none__' });
 
         const columns = [];
         for (const status of statuses) {
@@ -134,6 +137,9 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
           filtered: hasFilters(filters),
           space: { id: space.id, key: space.key, name: space.name, status: space.status },
           board,
+          sprint: sprint
+            ? { id: sprint.id, name: sprint.name, goal: sprint.goal, startDate: sprint.startDate, endDate: sprint.endDate }
+            : null,
           statuses,
           columns,
           permissions: permissions(actor, space),
@@ -158,6 +164,10 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
         const board = presentBoard(await loadBoard(tx, space.id));
+        if (board.type === 'scrum') {
+          const sprint = await tx.sprints.findOne({ spaceId: space.id, state: 'active' });
+          extra.push({ sprintId: sprint?.id ?? '__none__' });
+        }
         const status = await tx.spaceStatuses.findOne({ id: req.params.statusId, spaceId: space.id });
         if (!status) throw notFound('Status');
         const cursor = afterCursor(req.query.cursor);
