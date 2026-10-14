@@ -1,4 +1,5 @@
 import type { TenantDb } from '../db/client.js';
+import { liveTouch } from '../lib/live.js';
 import type { ActivityKind } from '../db/types.js';
 import type { presentItem } from './service.js';
 
@@ -61,6 +62,7 @@ export async function recordActivity(t: TenantDb, events: ActivityInput | Activi
   const list = Array.isArray(events) ? events : [events];
   if (list.length === 0) return;
   const createdAt = new Date();
+  for (const e of list) liveTouch({ orgId: t.orgId, spaceId: e.item.spaceId, kind: e.kind, itemId: e.item.id });
   await t.activityEvents.insert(
     list.map((e) => ({
       itemId: e.item.id,

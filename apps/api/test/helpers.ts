@@ -68,6 +68,7 @@ export function makeApp(
     }) => Promise<void> | void;
     env?: Record<string, string>;
     enqueueRebalance?: (job: { orgId: string; spaceId: string; statusId: string }) => Promise<void> | void;
+    liveTiming?: { heartbeatMs?: number; recheckMs?: number };
   } = {},
 ) {
   const config = loadConfig({
@@ -94,6 +95,7 @@ export function makeApp(
     enqueueRebalance: async (job) => {
       await opts.enqueueRebalance?.(job);
     },
+    liveTiming: opts.liveTiming,
   });
   return {
     app,

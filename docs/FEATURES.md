@@ -62,7 +62,7 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Read-only, audited impersonation                                      | Built  |      |
 | Platform settings (for example block free email providers at sign-up) | Built  |      |
 
-## Work management (planned, see docs/work-items)
+## Work management (see docs/work-items)
 
 | Feature                                                              | Status  | Gate               |
 | -------------------------------------------------------------------- | ------- | ------------------ |
@@ -71,11 +71,12 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Filters in the URL, swimlanes, labels, bulk actions, shortcuts (W2)  | Built   |                    |
 | Rich text, comments, mentions, attachments, links, activity (W3)     | Built   | `max_attachment_mb`, `storage_mb` |
 | Watchers, duplicate an item, move an item to another space (W3)      | Built   | `work_items`       |
-| List view, epics, search, My work, saved filters (W4)                | Planned | `shared_filters`   |
-| Notifications: in-app, email, preferences (W5)                       | Planned |                    |
-| Backlog and sprints (Scrum) (W6)                                     | Planned | `scrum_sprints`    |
-| Burndown and sprint report (W6)                                      | Planned | `burndown_reports` |
-| Live updates (W7)                                                    | Planned |                    |
+| List view with CSV export, epics page, search, My work (W4)          | Built   |                    |
+| Saved filters, shared with the space (W4)                            | Built   | `shared_filters` to share |
+| Notifications: in-app, batched email, preferences, due reminders (W5) | Built  |                    |
+| Backlog and sprints (Scrum) (W6)                                     | Built   | `scrum_sprints`    |
+| Burndown and sprint report (W6)                                      | Built   | `burndown_reports` |
+| Live updates on boards, lists, backlogs and items (W7)               | Built   |                    |
 
 ## Workspaces and templates
 

@@ -34,9 +34,9 @@ Legend: **Built** works today. **Partial** works but with a gap. **Missing** is 
 
 | Option (key) | What it needs to be real | Related plan gate |
 | --- | --- | --- |
-| Run sprints (`run_sprints`) | Backlog, sprint planning, start and complete sprint (W6) | `scrum_sprints` |
-| Work in scrum (`work_in_scrum`) | Scrum board type (create-space wizard shows it as *Coming soon*), burndown (W6) | `scrum_sprints`, `burndown_reports` |
-| Map work dependencies (`map_dependencies`) | Links ("blocks / is blocked by") are **Built** on the item page; still missing: showing them on cards and warning when a blocked item moves | — |
+| Run sprints (`run_sprints`) | **Built** (backlog, sprints, reports); offered as ready at sign-up | `scrum_sprints` |
+| Work in scrum (`work_in_scrum`) | **Built** (Scrum board type, burndown); offered as ready at sign-up | `scrum_sprints`, `burndown_reports` |
+| Map work dependencies (`map_dependencies`) | Links ("blocks / is blocked by") are **Built** on the item page and offered as ready at sign-up; still missing: showing them on cards and warning when a blocked item moves | — |
 | Plan a roadmap (`roadmap`) | Timeline of epics with dates | — |
 | Content calendar (`content_calendar`) | Calendar view of items by due date | — |
 | Run approvals (`approvals`) | Approval step on an item or a request, with approver, decision and trail | — |
@@ -44,14 +44,18 @@ Legend: **Built** works today. **Partial** works but with a gap. **Missing** is 
 | Use checklists (`checklists`) | Checklists inside descriptions and comments are **Built** (rich text); missing: checklist progress on cards and reusable checklist templates | — |
 | Store documents (`documents`) | Attachments on items and storage limits are **Built**; missing: a documents library, versions and object storage (S3) | `max_attachment_mb`, `storage_mb` |
 
-## 3. Work management phases not started
+## 3. Work management: built, with these gaps
 
-From [work-items/PHASES.md](work-items/PHASES.md):
+All seven phases in [work-items/PHASES.md](work-items/PHASES.md) are built. Known gaps:
 
-- **W4** list view, epics page, global search, My work, saved filters (`shared_filters`).
-- **W5** notifications (in-app and email) and preferences.
-- **W6** backlog and sprints, burndown and sprint report.
-- **W7** live updates (server-sent events).
+- **Backlog ordering.** Work can be moved between the backlog and sprints, but not reordered within a
+  section (it follows the board's rank).
+- **List view** pages with Show more rather than a virtualised table; CSV export is capped at 5,000 rows.
+- **Search** covers item titles and descriptions, not comments or attachment names.
+- **Notifications** have no daily digest option and no push notifications; emails need a Brevo key.
+- **Sprints:** no sprint velocity or cumulative flow reports, no Kanban sprints (out of scope in the brief).
+- **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
+- **Moved items** keep their history, but the old key does not redirect to the new one.
 
 ## 4. Platform features not built
 
@@ -73,7 +77,6 @@ From [work-items/PHASES.md](work-items/PHASES.md):
   into `StorageDriver`); no virus scanning beyond refusing programs and scripts; the link picker searches
   the current space (other spaces by typing a key); deleted items keep their attachments on disk.
 
-- **Scrum board type** is shown as *Coming soon* in the create-space wizard and refused by the API.
 - **Work-item limit upgrade notice** in the UI is still pending (the API answers 402 correctly).
 - **A space can end up with no active admin** through indirect changes (for example deleting its only
   admin group). Workspace admins can repair it from the space's Members tab.

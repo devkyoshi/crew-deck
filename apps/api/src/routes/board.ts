@@ -6,6 +6,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant } from '../db/client.js';
 import type { BoardDoc } from '../db/types.js';
 import { filterConditions, filterQuery, hasFilters, type FilterQuery } from '../work/filters.js';
+import { liveTouch } from '../lib/live.js';
 import { forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import {
@@ -218,6 +219,7 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
             updatedAt: new Date(),
           },
         );
+        liveTouch({ orgId: actor.orgId, spaceId: space.id, kind: 'board' });
         return presentBoard(updated!);
       });
     },

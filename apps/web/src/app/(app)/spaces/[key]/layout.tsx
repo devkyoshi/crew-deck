@@ -20,6 +20,7 @@ import {
 import { api, ApiError, type SpaceDetail } from '@/lib/api';
 import { forgetRecentSpace, pushRecentSpace } from '@/lib/recent-spaces';
 import { cn } from '@/lib/utils';
+import { useLiveSpace } from '@/lib/live';
 
 export default function SpaceLayout({
   children,
@@ -39,6 +40,8 @@ export default function SpaceLayout({
   });
 
   const space = query.data;
+  // Live updates for everything in this space (board, list, backlog, open items).
+  const live = useLiveSpace(space?.key);
   useEffect(() => {
     if (space) pushRecentSpace({ key: space.key, name: space.name, icon: space.icon });
   }, [space]);
@@ -129,6 +132,11 @@ export default function SpaceLayout({
                 <p className="text-muted-foreground mt-1 text-sm">{space.description}</p>
               )}
             </div>
+            {live === 'reconnecting' && (
+              <span className="text-muted-foreground text-xs" role="status">
+                Reconnecting…
+              </span>
+            )}
             <StarButton id={space.id} starred={space.starred} name={space.name} />
           </div>
 

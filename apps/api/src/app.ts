@@ -35,6 +35,8 @@ import { workCopyRoutes } from './routes/work-copy.js';
 import { workFindRoutes } from './routes/work-find.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { sprintRoutes } from './routes/sprints.js';
+import { liveRoutes } from './routes/live.js';
+import { LiveHub, registerLive } from './lib/live.js';
 import { workDepthRoutes } from './routes/work-depth.js';
 import { attachmentRoutes, MAX_UPLOAD_BYTES } from './routes/attachments.js';
 import multipart from '@fastify/multipart';
@@ -48,6 +50,9 @@ import { platformRoutes } from './routes/platform.js';
 import { signupRoutes, type SendMail } from './routes/signup.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import type { EnqueueInviteEmail } from './email/queue.js';
+
+/** Routes registered by `buildApp` (filled as routes are added). */
+export const ROUTES: { method: string | string[]; url: string; hasPreHandler: boolean; config: unknown }[] = [];
 
 export interface AppDeps {
   db: Db;
@@ -63,6 +68,8 @@ export interface AppDeps {
   enqueueRebalance?: EnqueueRebalance;
   /** Where attachments live. Defaults to the driver named in the config. */
   storage?: StorageDriver;
+  /** Heartbeat and access re-check intervals for live streams (shortened in tests). */
+  liveTiming?: { heartbeatMs?: number; recheckMs?: number };
 }
 
 export function buildApp({
@@ -74,6 +81,7 @@ export function buildApp({
   sendMail,
   enqueueRebalance,
   storage = createStorage(config),
+  liveTiming = {},
 }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
@@ -86,6 +94,13 @@ export function buildApp({
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandler(app);
+  // Every route, recorded as it is added, so a test can check each one is protected (see routes.test.ts).
+  app.addHook('onRoute', (route) => {
+    ROUTES.push({ method: route.method, url: route.url, hasPreHandler: !!route.preHandler, config: route.config });
+  });
+  const live = new LiveHub(redis);
+  registerLive(app, live);
+  app.addHook('onClose', async () => live.close());
   app.register(cookie);
   app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5, parts: 6 } });
   // preHandler (not onRequest) so the key generator can read the parsed body.
@@ -136,6 +151,7 @@ export function buildApp({
   app.register(workFindRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(notificationRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(sprintRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(liveRoutes, { prefix: '/api/v1', ...authDeps, live, ...liveTiming });
   app.register(attachmentRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });

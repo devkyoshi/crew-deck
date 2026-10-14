@@ -13,6 +13,7 @@ import type { Actor } from '../permissions/can.js';
 import { effectiveRole, type SpaceView } from '../spaces/access.js';
 import { resolveSpace } from '../routes/spaces.js';
 import { docToText } from './doc.js';
+import { liveTouch } from '../lib/live.js';
 
 export type SpaceRow = SpaceView;
 
@@ -417,6 +418,8 @@ export async function liveParent(t: TenantDb, space: { id: string }, parentId: s
  * a transaction (`withTenantTx`).
  */
 export async function lockSpace(t: TenantDb, spaceId: string) {
+  // Everything that takes the lock changes the board, so open boards hear about it once it commits.
+  liveTouch({ orgId: t.orgId, spaceId, kind: 'board' });
   await t.spaceCounters.updateOne({ spaceId }, { $inc: { lockVersion: 1 } } as never);
 }
 

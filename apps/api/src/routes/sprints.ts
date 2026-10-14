@@ -14,6 +14,7 @@ import { notifyOne } from '../work/notify.js';
 import { assertWritable, hydrateItems, loadBoard, presentItem, resolveItem, type SpaceRow } from '../work/service.js';
 import { daysBetween, points, setItemsSprint, snapshotSprint, SPRINT_ITEM_TYPES } from '../work/sprints.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
+import { liveTouch } from '../lib/live.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const uuidParam = z.object({ id: z.string().uuid() });
@@ -255,6 +256,7 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
         const settings = await t.tenantSettings.findOne({});
         await snapshotSprint(t, started, localDate(now, settings?.timezone ?? 'UTC'));
         notifyTo = { space, sprint: started };
+        liveTouch({ orgId: actor.orgId, spaceId: space.id, kind: 'sprint' });
         return { ...presentSprint(started), items: items.length, points: points(items) };
       });
       if (notifyTo) await notifySprint(actor, notifyTo, 'sprint_started').catch((e) => req.log.error(e));
@@ -349,6 +351,7 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
           });
         }
         notifyTo = { space, sprint: closed };
+        liveTouch({ orgId: actor.orgId, spaceId: space.id, kind: 'sprint' });
         return {
           ...presentSprint(closed),
           completed: done.length,

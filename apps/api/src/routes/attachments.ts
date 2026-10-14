@@ -88,7 +88,8 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
 
   // ---- Upload ---------------------------------------------------------------------------------------------
 
-  r.post('/items/:id/attachments', { preHandler: requireAuth, schema: { params: idParam } }, async (req, reply) => {
+  const uploadLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+  r.post('/items/:id/attachments', { preHandler: requireAuth, config: uploadLimit, schema: { params: idParam } }, async (req, reply) => {
     const actor = actorOf(req);
     if (!req.isMultipart()) {
       throw new AppError(415, 'unsupported_media_type', 'Send the file as multipart/form-data');

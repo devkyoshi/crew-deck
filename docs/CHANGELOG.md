@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-15 - Search, notifications, sprints and live updates (W4 to W7)
+
+- **Find work:** search by key or words across every space you can open (also in Ctrl+K), a List tab with
+  sorting, column choice and CSV export, an Epics tab with progress, My work, and saved filters (shared
+  filters on the Team plan and above).
+- **Notifications:** a bell with an unread count and a notifications page for assignments, mentions,
+  comments on things you watch, status changes and work due today or tomorrow. Choose in-app and email
+  per type; emails are collected into one message every few minutes.
+- **Scrum:** Scrum spaces with a backlog, sprints (start, complete, carry-over), a sprint report and a
+  burndown chart (Business plan). Switch a space between Kanban and Scrum in board settings.
+- **Live updates:** boards, lists, backlogs and open items refresh by themselves when someone else changes
+  them.
+- **Hardening:** a test fails if any route lacks an authentication check, rate limits on search, comments,
+  uploads and exports, browser tests for cross-workspace attempts and live updates.
+- The demo workspace has a Scrum space (Mobile App) with a finished and a running sprint.
+- ADR-057 to ADR-059.
+
 ## 2026-10-14 - Work item depth: rich text, comments, files, links and history (W3)
 
 - Descriptions and comments use a rich text editor (headings, lists, checklists, quotes, code, links) with

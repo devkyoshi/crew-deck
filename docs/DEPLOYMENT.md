@@ -137,6 +137,12 @@ production). If Brevo rejects a message the sign-up page says so instead of pret
 - **Health.** `GET /api/v1/health` checks the database. Compose uses it as the API health check.
 - **Capacity.** Measured on one process with 5,000 people and 1,500 spaces in one workspace: list pages
   respond in tens of milliseconds, and 40 concurrent mixed requests complete in well under a second.
+- **Live updates** use server-sent events at `/api/v1/spaces/:id/events`. A reverse proxy in front must not
+  buffer them: the API sends `X-Accel-Buffering: no` (nginx honours it); otherwise set `proxy_buffering off`
+  and a read timeout above 60 seconds for that path. Every API instance must reach the same Redis
+  (pub/sub carries the messages between instances).
+- **Background jobs** run in the API process: notification emails every minute, due-date reminders and
+  sprint snapshots every hour, rank rebalancing on demand.
 - **Security headers** are set by both apps (no sniffing, no framing, no caching of API responses, HSTS in production).
   A full script-source Content Security Policy needs per-request nonces and is not in place yet.
 

@@ -308,3 +308,43 @@ usage implies) and the columns new spaces start with. Usage options that are not
   kind, keeps labels with the same name, drops assignees who cannot open the target, and keeps comments, links,
   attachments and history. A subtask cannot move alone.
 
+## ADR-057: Search, saved filters and notifications on MongoDB (W4, W5)
+
+- **Search** reads only from the spaces the caller can open: the visible space ids go into the query
+  (`spaceId: { $in: ... }`), so nothing is filtered after the fact. Order: an exact key, then whole words
+  from a text index over the title (weight 5) and `searchText` (the description as plain text, kept on
+  every write and backfilled at start), then titles containing what was typed. A query shaped like a key
+  ("ENG-142") skips the word index, which would otherwise split it into "eng" and "142".
+- **Saved filters** store the filter part of the URL, rebuilt from the known filter keys. Personal ones are
+  for everyone; sharing needs `filter.share` (members and up) and the `shared_filters` plan feature.
+- **Notifications** are collected while a request changes data and delivered after the transaction commits.
+  Delivery never notifies the actor, re-checks that each recipient can still open the space, and follows
+  per-type preferences. Emails go into one open batch per person (unique partial index) and are sent by a
+  job about five minutes after the first notification. Due-date reminders are idempotent per person, item
+  and day through a dedupe key.
+
+## ADR-058: Sprints (W6)
+
+- One running sprint per space is enforced by a unique partial index on `sprints` (`state: 'active'`), so
+  two people pressing Start together cannot both succeed. Starting needs dates, work and a space admin.
+- Every join and leave is a row in `sprint_items_history`; completion stores a summary (completed, not
+  completed, added after the start) for the report. Unfinished work moves to the backlog, a planned sprint
+  or a new sprint and its `carryOverCount` grows.
+- The burndown reads daily `sprint_snapshots` written hourly in the workspace's timezone (the last run of
+  a day wins). Points count stories, tasks and bugs only, so subtasks are never counted twice.
+- A Scrum board shows the running sprint only. Switching back to Kanban needs no running sprint and
+  returns planned work to the backlog; the sprints are kept.
+
+## ADR-059: Live updates and the route protection test (W7)
+
+- Writers note changes during a request (`liveTouch`; the activity log and `lockSpace` do it for nearly
+  every change) through AsyncLocalStorage. After a successful response one message per space is published
+  to Redis (`live:org:{org}:space:{space}`), so every API instance hears it; a failed or rolled-back request
+  publishes nothing. Messages carry ids and kinds, never content: clients refetch through the normal,
+  permission-checked API.
+- `GET /spaces/:id/events` checks access on connect and every minute (ending the stream when access is
+  lost), sends heartbeats every 20 seconds and caps open streams per person. The browser refreshes the
+  space's screens; refetch on focus remains the fallback.
+- A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
+  from a short list of routes that are public by design.
+

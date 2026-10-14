@@ -17,6 +17,7 @@ import {
   resolvedAtFor,
 } from '../work/service.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
+import { liveTouch } from '../lib/live.js';
 
 const nameSchema = z.string().trim().min(1, 'Enter a name').max(40, 'Use 40 characters or fewer');
 const colorSchema = z.enum(STATUS_COLORS);
@@ -315,6 +316,7 @@ export async function statusRoutes(app: FastifyInstance, deps: AuthDeps) {
         for (const [i, id] of ids.entries()) {
           await tx.spaceStatuses.updateOne({ id, spaceId: space.id }, { position: i });
         }
+        liveTouch({ orgId: actor.orgId, spaceId: space.id, kind: 'statuses' });
         return { items: await listStatuses(tx, space.id) };
       });
     },

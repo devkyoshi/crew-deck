@@ -121,7 +121,11 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.post(
     '/items/:id/comments',
-    { preHandler: requireAuth, schema: { params: idParam, body: z.object({ body: z.unknown() }) } },
+    {
+      preHandler: requireAuth,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: { params: idParam, body: z.object({ body: z.unknown() }) },
+    },
     async (req) => {
       const actor = actorOf(req);
       const clean = sanitizeDoc(req.body.body);
