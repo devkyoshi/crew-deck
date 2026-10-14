@@ -32,6 +32,9 @@ import { statusRoutes } from './routes/statuses.js';
 import { boardRoutes } from './routes/board.js';
 import { workItemRoutes } from './routes/work-items.js';
 import { workDepthRoutes } from './routes/work-depth.js';
+import { attachmentRoutes, MAX_UPLOAD_BYTES } from './routes/attachments.js';
+import multipart from '@fastify/multipart';
+import { createStorage, type StorageDriver } from './storage/index.js';
 import { workMoveRoutes } from './routes/work-move.js';
 import { labelRoutes } from './routes/labels.js';
 import type { EnqueueRebalance } from './work/jobs.js';
@@ -54,6 +57,8 @@ export interface AppDeps {
   sendMail?: SendMail;
   /** Queues a rank rebalance for one board column (BullMQ in the server, a fake in tests). */
   enqueueRebalance?: EnqueueRebalance;
+  /** Where attachments live. Defaults to the driver named in the config. */
+  storage?: StorageDriver;
 }
 
 export function buildApp({
@@ -64,6 +69,7 @@ export function buildApp({
   enqueueInviteEmail,
   sendMail,
   enqueueRebalance,
+  storage = createStorage(config),
 }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
@@ -77,6 +83,7 @@ export function buildApp({
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandler(app);
   app.register(cookie);
+  app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5, parts: 6 } });
   // preHandler (not onRequest) so the key generator can read the parsed body.
   app.register(rateLimit, { global: false, hook: 'preHandler' });
 
@@ -85,7 +92,8 @@ export function buildApp({
   // API responses are personal and never cacheable; they are JSON and must not be sniffed or framed.
   app.addHook('onSend', async (_req, reply) => {
     reply.header('x-content-type-options', 'nosniff');
-    reply.header('cache-control', 'no-store');
+    // File downloads set their own (private, short) caching.
+    if (!reply.hasHeader('cache-control')) reply.header('cache-control', 'no-store');
     reply.header('referrer-policy', 'no-referrer');
     reply.header('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
   });
@@ -120,6 +128,7 @@ export function buildApp({
   app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workMoveRoutes, { prefix: '/api/v1', ...authDeps, enqueueRebalance });
   app.register(workDepthRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(attachmentRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });

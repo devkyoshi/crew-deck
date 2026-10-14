@@ -57,6 +57,7 @@ const TENANT = {
   workItemLinks: 'work_item_links',
   watchers: 'watchers',
   activityEvents: 'activity_events',
+  attachments: 'attachments',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -107,6 +108,7 @@ export interface TenantDocs {
   workItemLinks: T.WorkItemLinkDoc;
   watchers: T.WatcherDoc;
   activityEvents: T.ActivityEventDoc;
+  attachments: T.AttachmentDoc;
 }
 
 export interface GlobalDocs {
@@ -579,6 +581,7 @@ export class TenantDb {
   readonly workItemLinks!: TenantRepos['workItemLinks'];
   readonly watchers!: TenantRepos['watchers'];
   readonly activityEvents!: TenantRepos['activityEvents'];
+  readonly attachments!: TenantRepos['attachments'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

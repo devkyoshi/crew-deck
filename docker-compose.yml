@@ -48,6 +48,12 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-no-reply@example.com}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Crew Deck}
+      STORAGE_DRIVER: local
+      STORAGE_DIR: /data/files
+      # Required: the API will not start without it (32+ characters, set in .env).
+      STORAGE_SIGNING_SECRET: ${STORAGE_SIGNING_SECRET:-}
+    volumes:
+      - files:/data/files
     ports:
       - '4000:4000'
     depends_on:
@@ -118,3 +124,4 @@ services:
 volumes:
   mongodata:
   redisdata:
+  files:

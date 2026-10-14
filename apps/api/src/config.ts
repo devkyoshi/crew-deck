@@ -26,6 +26,12 @@ const envSchema = z.object({
   INVITE_TTL_DAYS: z.coerce.number().default(7),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Where attachments are kept. Only 'local' (a directory) for now; object storage can slot in later. */
+  STORAGE_DRIVER: z.enum(['local']).default('local'),
+  /** Directory for the local driver. Relative paths resolve from the API's working directory. */
+  STORAGE_DIR: z.string().default('./storage'),
+  /** Signs short-lived file links. Required in production (32+ characters). */
+  STORAGE_SIGNING_SECRET: z.string().optional(),
   TRUST_PROXY: z
     .enum(['true', 'false'])
     .default('false')
@@ -36,6 +42,13 @@ export type Config = z.infer<typeof envSchema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return envSchema.parse(env);
+}
+
+/** The secret for file links. A fixed value is used outside production so development needs no setup. */
+export function storageSecret(c: Config) {
+  if (c.STORAGE_SIGNING_SECRET && c.STORAGE_SIGNING_SECRET.length >= 32) return c.STORAGE_SIGNING_SECRET;
+  if (isProd(c)) throw new Error('STORAGE_SIGNING_SECRET must be set (32+ characters) in production');
+  return 'development-only-file-link-secret-not-for-production';
 }
 
 export const emailEnabled = (c: Config) => Boolean(c.BREVO_API_KEY) && c.EMAIL_MODE !== 'log';

@@ -165,6 +165,14 @@ export const countSites = (t: TenantDb, _orgId?: string) => t.sites.count();
 export const countWorkItems = (t: TenantDb, _orgId?: string) =>
   t.workItems.count({ deletedAt: null });
 
+/** Bytes of attachments the workspace keeps. */
+export async function storageBytes(t: TenantDb) {
+  const [row] = await t.attachments.aggregate<{ total: number }>([
+    { $group: { _id: null, total: { $sum: '$size' } } },
+  ]);
+  return row?.total ?? 0;
+}
+
 export type Usage = Partial<Record<LimitKey, number>>;
 
 export async function loadUsage(tx: TenantDb, orgId: string): Promise<Usage> {
@@ -175,8 +183,7 @@ export async function loadUsage(tx: TenantDb, orgId: string): Promise<Usage> {
     pipelines: await countPipelines(tx, orgId),
     sites: await countSites(tx, orgId),
     work_items: await countWorkItems(tx, orgId),
-    // No file storage exists yet; the limit is wired in so it is ready when uploads arrive.
-    storage_mb: 0,
+    storage_mb: Math.ceil((await storageBytes(tx)) / (1024 * 1024)),
   };
 }
 

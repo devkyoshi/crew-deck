@@ -174,6 +174,11 @@ const INDEXES: Record<string, Ix[]> = {
     ['id', { id: 1 }, U],
     ['item', { itemId: 1, createdAt: -1, id: -1 }],
   ],
+  attachments: [
+    ['id', { id: 1 }, U],
+    ['item', { itemId: 1, createdAt: 1 }],
+    ['org', { orgId: 1 }],
+  ],
 };
 
 export async function ensureIndexes(handle: MongoDb) {

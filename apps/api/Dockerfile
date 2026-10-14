@@ -16,6 +16,8 @@ COPY --from=deps /repo/packages/shared/node_modules ./packages/shared/node_modul
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/api apps/api
+# Attachments (STORAGE_DIR); mount a volume here so files survive new containers.
+RUN mkdir -p /data/files && chown node:node /data/files
 USER node
 WORKDIR /repo/apps/api
 EXPOSE 4000

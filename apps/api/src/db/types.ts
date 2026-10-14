@@ -506,3 +506,19 @@ export interface ActivityEventDoc {
   newValue: unknown;
   createdAt: Date;
 }
+
+export interface AttachmentDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  itemId: string;
+  uploaderId: string;
+  /** Cleaned display name. Never used on disk. */
+  name: string;
+  mime: string;
+  /** The sniffed image type when the file is a real PNG, JPEG, GIF or WebP (shown inline), else null. */
+  image: string | null;
+  size: number;
+  storageKey: string;
+  createdAt: Date;
+}

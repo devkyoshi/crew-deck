@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildApp } from '../src/app.js';
 import { hashPassword } from '../src/auth/password.js';
 import type { GoogleClient, GoogleProfile } from '../src/auth/google.js';
@@ -73,6 +75,7 @@ export function makeApp(
     LOG_LEVEL: 'silent',
     AUTH_RATE_LIMIT_MAX: String(opts.rateLimit ?? 1000),
     BREVO_API_KEY: '',
+    STORAGE_DIR: join(tmpdir(), 'crewdeck-test-files'),
     ...opts.env,
   });
   const conn = appDb();

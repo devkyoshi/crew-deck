@@ -17,6 +17,7 @@
   "dependencies": {
     "@crew-deck/shared": "workspace:^",
     "@fastify/cookie": "^11.1.3",
+    "@fastify/multipart": "^9",
     "@fastify/rate-limit": "^11.2.1",
     "@node-rs/argon2": "^2.2.2",
     "bullmq": "^6.3.14",
