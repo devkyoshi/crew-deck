@@ -105,7 +105,7 @@ The reasoning behind these choices is written down in [docs/DECISIONS.md](docs/D
 | Layer   | What                                                                                                                                                                                       | How big                                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
 | API     | Permissions (allowed and denied), cross-tenant isolation for every module and collection, rules (last owner, last space admin, unique keys), audit, email, workspace types, multi-workspace, every dev login, performance with 5,000 people and 1,500 spaces | 426 tests, on a fresh database each run |
-| Browser | Real user flows, keyboard-only operation, axe accessibility scans (WCAG 2.1 A and AA, light and dark), and a walk through every screen that fails on any console error or failed request   | 41 tests                                |
+| Browser | Real user flows, keyboard-only operation, axe accessibility scans (WCAG 2.1 A and AA, light and dark), and a walk through every screen that fails on any console error or failed request, workspace types and switching   | 77 tests                                |
 
 CI (`.github/workflows/ci.yml`) runs lint, type-check, the API tests and a production build, and
 separately runs the whole Playwright suite against a freshly migrated and seeded database.

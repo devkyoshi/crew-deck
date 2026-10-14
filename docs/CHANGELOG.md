@@ -14,7 +14,14 @@
 - Dev seed: five workspaces of different kinds (software, sales, construction, marketing, suspended), one
   login per role, a person in four workspaces, all with password `dev@1234`; demo content for each.
 - Docs: MISSING-FEATURES.md (what each kind of work needs that is not built yet).
-- Tests: all 415 API tests ported to MongoDB, plus 11 for workspaces and templates (426 in total).
+- Tests: all 415 API tests ported to MongoDB, plus 11 for workspaces and templates (426 in total). Browser
+  suite (77) updated for the two new sign-up steps, with new tests for workspace types, the switcher,
+  creating a workspace and the Kind of work settings; all green on a fresh database.
+- Fixes found by the browser suite: CRM pages could mismatch on hydration when the sidebar's CRM access
+  request answered first (now render the server's skeleton until hydrated); the dev seed resets the
+  platform settings so a reseed undoes console changes.
+- Verified the containerised stack (`--profile full`) with MongoDB from empty volumes: migrate, API health,
+  seed, sign-in. The old Postgres container and volume were removed from the dev machine.
 
 ## 2026-10-14 - Phase W2: Drag and drop and board power features
 

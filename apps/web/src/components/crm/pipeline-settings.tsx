@@ -1,5 +1,6 @@
 'use client';
 
+import { useHydrated } from '@/components/checkin/use-hydrated';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
@@ -218,6 +219,8 @@ function PipelineCard({ pipeline, onChanged }: { pipeline: Pipeline; onChanged: 
 export function CrmSettings() {
   const qc = useQueryClient();
   const access = useCrmAccess();
+  // Match the server HTML until hydrated (the sidebar may have fetched CRM access already).
+  const hydrated = useHydrated();
   const [newPipeline, setNewPipeline] = useState('');
   const enabled = access.data?.enabled ?? true;
   const pipelines = useQuery({
@@ -244,7 +247,7 @@ export function CrmSettings() {
     onError: fail,
   });
 
-  if (access.isPending)
+  if (!hydrated || access.isPending)
     return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
   if (access.isError) return <ErrorView error={access.error} reset={() => access.refetch()} />;
 

@@ -288,6 +288,13 @@ export async function seed(uri: string, dbName: string) {
       await upsertMembership(db.global.forOrg(orgIds.get(m.slug)!), multiId, m.role);
     }
 
+    // Platform settings back to their defaults (open sign-ups, free email allowed, 14-day trial), so a
+    // reseed also undoes anything a test or a person changed in the console.
+    await db.global.platformSettings.upsert(
+      { id: 'singleton' },
+      { blockFreeEmailDomains: false, signupsEnabled: true, trialDays: 14, updatedAt: new Date() },
+    );
+
     // A platform admin for the console at /platform (development only; production uses create-platform-admin).
     const admin = await db.global.platformAdmins.findOne({ email: PLATFORM_ADMIN.email });
     if (admin) {

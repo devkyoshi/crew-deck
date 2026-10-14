@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Children, useRef, type ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Children, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/auth/auth-split-layout';
@@ -134,12 +134,8 @@ export function WizardShell({
   /** Optional decoration on the right edge (large screens only). */
   aside?: ReactNode;
 }) {
-  const reduce = useReducedMotion();
   const ci = Math.max(0, steps.findIndex((s) => s.id === current));
   const ri = Math.max(ci, steps.findIndex((s) => s.id === reachedId));
-  const prev = useRef(ci);
-  const dir = ci >= prev.current ? 1 : -1;
-  prev.current = ci;
 
   return (
     <div className="bg-background text-foreground min-h-svh">

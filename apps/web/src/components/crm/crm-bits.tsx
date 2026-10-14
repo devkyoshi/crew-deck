@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useHydrated } from '@/components/checkin/use-hydrated';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorView } from '@/components/shared/error-view';
 import { TONES } from '@/components/shared/pastel';
@@ -48,7 +49,10 @@ export function CrmGate({
   need?: 'view' | 'edit' | 'admin';
 }) {
   const access = useCrmAccess();
-  if (access.isPending)
+  // The sidebar asks for CRM access too and hydrates first; until this page has hydrated, render what
+  // the server rendered, or an early answer causes a hydration mismatch.
+  const hydrated = useHydrated();
+  if (!hydrated || access.isPending)
     return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
   if (access.isError) return <ErrorView error={access.error} reset={() => access.refetch()} />;
   const a = access.data;
