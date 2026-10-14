@@ -12,6 +12,7 @@ export interface ShellStep {
   id: string;
   label: string;
   hint: string;
+  code?: string;
 }
 
 /** Large, calm text fields used on every setup screen. */
@@ -30,6 +31,9 @@ function Stepper({
 }) {
   return (
     <nav aria-label="Progress">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide mb-6" aria-live="polite">
+        Step {current + 1} of {steps.length}: {steps[current]?.code ?? steps[current]?.label}
+      </p>
       <ol>
         {steps.map((s, i) => {
           const done = i < current || (i <= reached && i !== current);
@@ -93,11 +97,13 @@ function Stepper({
                 >
                   {circle}
                   {text}
+                  {s.code && <span className="sr-only">{s.code}</span>}
                 </button>
               ) : (
                 <>
                   {circle}
                   {text}
+                  {s.code && <span className="sr-only">{s.code}</span>}
                 </>
               )}
             </li>
@@ -143,9 +149,9 @@ export function WizardShell({
           <Link href="/" aria-label="Crew Deck home">
             <BrandMark />
           </Link>
-          <p className="text-muted-foreground text-xs" aria-live="polite">
-            Step {ci + 1} of {steps.length} · {steps[ci]?.label}
-          </p>
+          <span className="text-muted-foreground text-xs">
+            {ci + 1} / {steps.length}
+          </span>
         </div>
 
         <aside className="hidden lg:flex lg:flex-col lg:justify-center lg:py-16 lg:pl-6">
@@ -167,18 +173,7 @@ export function WizardShell({
 
         <main id="main" className="flex items-center px-6 py-10 lg:px-0 lg:py-16">
           <div className="w-full max-w-md">
-            <AnimatePresence mode="wait" initial={false} custom={dir}>
-              <motion.div
-                key={current}
-                custom={dir}
-                initial={reduce ? false : { opacity: 0, x: 28 * dir }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduce ? undefined : { opacity: 0, x: -20 * dir }}
-                transition={{ duration: 0.28, ease: 'easeOut' }}
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            {children}
           </div>
         </main>
 
@@ -217,24 +212,12 @@ export function StepHero({
 
 /** Fields that appear one after another. Wrap each child in nothing; children are staggered. */
 export function FieldStack({ children, className }: { children: ReactNode; className?: string }) {
-  const reduce = useReducedMotion();
   return (
-    <motion.div
-      className={cn('space-y-5', className)}
-      initial="hidden"
-      animate="show"
-      variants={{ show: { transition: { staggerChildren: reduce ? 0 : 0.07, delayChildren: 0.08 } } }}
-    >
+    <div className={cn('space-y-5', className)}>
       {Children.toArray(children).map((c, i) => (
-        <motion.div
-          key={i}
-          variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-          transition={{ duration: 0.28, ease: 'easeOut' }}
-        >
-          {c}
-        </motion.div>
+        <div key={i}>{c}</div>
       ))}
-    </motion.div>
+    </div>
   );
 }
 
@@ -329,17 +312,12 @@ export function SetupMessage({
 }) {
   return (
     <main id="main" className="bg-background text-foreground flex min-h-svh items-center justify-center px-6 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex w-full max-w-sm flex-col items-center gap-3 text-center"
-      >
+      <div className="flex w-full max-w-sm flex-col items-center gap-3 text-center">
         {art}
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {children && <div className="text-muted-foreground text-[15px] leading-relaxed">{children}</div>}
         {actions && <div className="mt-3 flex flex-wrap justify-center gap-2">{actions}</div>}
-      </motion.div>
+      </div>
     </main>
   );
 }

@@ -30,14 +30,15 @@ import {
 } from '@/components/auth/wizard-shell';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
+import { FriendlyAvatarsIllustration } from '@/components/illustrations/jira-illustrations';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const STEPS = ['you', 'company', 'review', 'sent'] as const;
 const SHELL_STEPS: ShellStep[] = [
-  { id: 'you', label: 'Personal details', hint: 'Just a bit about you' },
-  { id: 'company', label: 'Company info', hint: 'Tell us about your business' },
-  { id: 'review', label: 'Review application', hint: 'Confirm and submit' },
-  { id: 'sent', label: 'Verify email', hint: 'Open the link we send' },
+  { id: 'you', code: 'You', label: 'Personal details', hint: 'Just a bit about you' },
+  { id: 'company', code: 'Company', label: 'Company info', hint: 'Tell us about your business' },
+  { id: 'review', code: 'Review', label: 'Review details', hint: 'Confirm and submit' },
+  { id: 'sent', code: 'Email', label: 'Email verification', hint: 'Check your inbox' },
 ];
 
 interface Answers {
@@ -251,6 +252,7 @@ function SignUpWizard() {
         <form onSubmit={enter('you')} noValidate>
           <StepHero
             headingRef={w.headingRef}
+            art={<FriendlyAvatarsIllustration className="mb-2" />}
             title="Let’s set up your workspace"
             lead={`Free for ${trial} days, no card needed. We just need a couple of details to begin.`}
           />
@@ -352,7 +354,7 @@ function SignUpWizard() {
 
             <FieldGroup title="Workspace address">
               <Field
-                label="Sign-in address"
+                label="Workspace address"
                 htmlFor="slug"
                 error={errors.slug ?? (taken ? (check.data?.reason ?? 'That address is not available') : null)}
                 hint={

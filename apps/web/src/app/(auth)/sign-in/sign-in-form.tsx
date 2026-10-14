@@ -184,7 +184,7 @@ export function SignInForm({ initialError }: { initialError?: string }) {
                 className="h-11 w-full rounded-lg font-medium"
                 loading={isSubmitting}
               >
-                {isSubmitting ? 'Signing in…' : 'Sign In'} {!isSubmitting && <ArrowRight />}
+                {isSubmitting ? 'Signing in…' : 'Sign in'} {!isSubmitting && <ArrowRight />}
               </Button>
             </form>
 

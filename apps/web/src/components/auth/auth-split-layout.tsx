@@ -176,14 +176,9 @@ export function AuthSplitLayout({
           </header>
 
           <main id="main" className="flex flex-1 items-center justify-center py-10">
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="w-full max-w-[26rem]"
-            >
+            <div className="w-full max-w-[26rem]">
               {children}
-            </motion.div>
+            </div>
           </main>
 
           <footer className="text-muted-foreground flex items-center justify-between text-xs">
@@ -217,7 +212,7 @@ export function SplitHeading({
     <div className="mb-7 flex flex-col items-center gap-1.5 text-center">
       {icon && <div className="mb-2">{icon}</div>}
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      {lead && <p className="text-muted-foreground text-[13px]">{lead}</p>}
+      {lead && <p className="text-muted-foreground text-sm leading-relaxed">{lead}</p>}
     </div>
   );
 }

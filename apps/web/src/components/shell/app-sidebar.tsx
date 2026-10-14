@@ -70,7 +70,7 @@ function TenantSwitcher() {
           <Layers className="size-3.5" aria-hidden />
         </span>
       )}
-      <span className="grid flex-1 text-left leading-tight">
+      <span className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
         <span className="truncate text-[13px] font-semibold">{org.name}</span>
         <span className="text-muted-foreground truncate text-[11px]">{org.slug}</span>
       </span>
@@ -81,7 +81,7 @@ function TenantSwitcher() {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent">
+          <SidebarMenuButton size="lg" className="cursor-default hover:bg-transparent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:size-9!">
             {label}
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -94,9 +94,9 @@ function TenantSwitcher() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" aria-label="Switch workspace">
+            <SidebarMenuButton size="lg" aria-label="Switch workspace" className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:size-9!">
               {label}
-              <ChevronsUpDown className="size-3.5 opacity-60" aria-hidden />
+              <ChevronsUpDown className="size-3.5 opacity-60 group-data-[collapsible=icon]:hidden" aria-hidden />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56">
