@@ -17,6 +17,18 @@ export const statusesKey = (space: string) => ['statuses', space.toUpperCase()] 
 export const errorText = (e: unknown, fallback = 'Something went wrong') =>
   e instanceof ApiError ? e.message : fallback;
 
+/** True when the plan, not the request, refused it: a limit was reached or a feature is not included. */
+export const isPlanError = (e: unknown) => e instanceof ApiError && (e.code === 'plan_limit' || e.code === 'feature_locked');
+
+/** Shows an error toast; a plan limit gets a link to the plans so the next step is clear. */
+export function toastError(e: unknown, fallback?: string) {
+  if (isPlanError(e)) {
+    toast.error(errorText(e, fallback), { action: { label: 'See plans', onClick: () => window.location.assign('/admin/billing') } });
+  } else {
+    toast.error(errorText(e, fallback));
+  }
+}
+
 // ---- Reads --------------------------------------------------------------------------------------------
 
 /** Refetches on window focus (the QueryClient default); live updates arrive in a later phase. */

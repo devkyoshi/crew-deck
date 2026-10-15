@@ -41,7 +41,7 @@ import { LoadError } from '@/components/shared/load-error';
 import { useSpace } from '@/components/spaces/space-context';
 import { ApiError } from '@/lib/api';
 import type { WorkItem } from '@/lib/work';
-import { errorText, useCreateItem } from '@/lib/work-api';
+import { toastError, useCreateItem } from '@/lib/work-api';
 import {
   dateRange,
   useBacklog,
@@ -49,6 +49,7 @@ import {
   useCreateSprint,
   useDeleteSprint,
   useMoveToSprint,
+  useReorderBacklog,
   useStartSprint,
   useUpdateSprint,
   type SprintSection,
@@ -60,6 +61,8 @@ import { useVocabulary } from './use-vocabulary';
 import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
 
 const BACKLOG = 'backlog';
+/** Droppable id of a row, so dropping on a row can reorder (the draggable keeps the bare item id). */
+const ROW = 'row:';
 
 /** Sprint planning: the running sprint, planned sprints and the backlog, with work dragged between them. */
 export function BacklogView() {
@@ -67,6 +70,7 @@ export function BacklogView() {
   const vocab = useVocabulary();
   const data = useBacklog(space.key);
   const move = useMoveToSprint();
+  const reorder = useReorderBacklog(space.key);
   const createSprint = useCreateSprint(space.key);
   const [dragging, setDragging] = useState<WorkItem | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
@@ -93,13 +97,27 @@ export function BacklogView() {
 
   const moveTo = (item: WorkItem, sprintId: string | null) => {
     if ((item.sprintId ?? null) === sprintId) return;
-    move.mutate({ ids: [item.id], sprintId }, { onError: (e) => toast.error(errorText(e, 'Could not move it')) });
+    move.mutate({ ids: [item.id], sprintId }, { onError: (e) => toastError(e, 'Could not move it') });
   };
   const onDragEnd = (e: DragEndEvent) => {
     setDragging(null);
     const item = e.active.data.current?.item as WorkItem | undefined;
     if (!item || !e.over) return;
-    moveTo(item, e.over.id === BACKLOG ? null : String(e.over.id));
+    const overId = String(e.over.id);
+    if (overId.startsWith(ROW)) {
+      // Dropped on another row: reorder when it is in the same list, otherwise move to that row's list.
+      const sections = [...sprints.map((s) => ({ sprintId: s.id as string | null, items: s.items })), { sprintId: null, items: backlog.items }];
+      const to = sections.find((s) => s.items.some((i) => i.id === overId.slice(ROW.length)));
+      if (!to) return;
+      if ((item.sprintId ?? null) !== to.sprintId) return moveTo(item, to.sprintId);
+      const ids = to.items.map((i) => i.id);
+      const from = ids.indexOf(item.id);
+      const at = ids.indexOf(overId.slice(ROW.length));
+      if (from < 0 || at < 0 || from === at) return;
+      ids.splice(at, 0, ...ids.splice(from, 1));
+      return reorder.mutate({ sprintId: to.sprintId, ids }, { onError: (err) => toastError(err, 'Could not reorder it') });
+    }
+    moveTo(item, overId === BACKLOG ? null : overId);
   };
 
   return (
@@ -140,7 +158,7 @@ export function BacklogView() {
                   className="ml-auto h-8"
                   disabled={createSprint.isPending}
                   onClick={() =>
-                    createSprint.mutate({}, { onSuccess: (s) => toast.success(`${s.name} created`), onError: (e) => toast.error(errorText(e, 'Could not create it')) })
+                    createSprint.mutate({}, { onSuccess: (s) => toast.success(`${s.name} created`), onError: (e) => toastError(e, 'Could not create it') })
                   }
                 >
                   <Plus /> Create sprint
@@ -225,7 +243,12 @@ function Row({
   overlay?: boolean;
 }) {
   const open = useOpenItem();
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id, data: { item }, disabled: !canMove || overlay });
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({ id: item.id, data: { item }, disabled: !canMove || overlay });
+  const { setNodeRef: dropRef } = useDroppable({ id: `${ROW}${item.id}`, data: { label: `${item.key}'s list` }, disabled: overlay });
+  const setNodeRef = (node: HTMLElement | null) => {
+    dragRef(node);
+    dropRef(node);
+  };
   const done = item.status.category === 'done';
   return (
     <li ref={overlay ? undefined : setNodeRef} className={cn('bg-card flex items-center gap-2 px-2 py-1.5 text-sm', isDragging && 'opacity-40', overlay && 'rounded-lg border shadow-lg')}>
@@ -288,7 +311,7 @@ function InlineCreate() {
         e.preventDefault();
         const t = title.trim();
         if (!t) return;
-        create.mutate({ type: 'story', title: t }, { onSuccess: () => setTitle(''), onError: (err) => toast.error(errorText(err, 'Could not create it')) });
+        create.mutate({ type: 'story', title: t }, { onSuccess: () => setTitle(''), onError: (err) => toastError(err, 'Could not create it') });
       }}
     >
       <Input aria-label={`New ${vocab.noun} in the backlog`} placeholder={`Add a ${vocab.noun} to the backlog…`} value={title} maxLength={255} onChange={(e) => setTitle(e.target.value)} className="h-8" />
@@ -369,7 +392,7 @@ function SprintBlock({
                             onSelect={() =>
                               del.mutate(sprint.id, {
                                 onSuccess: (r) => toast.success(`${sprint.name} deleted${r.movedToBacklog ? `; ${r.movedToBacklog} back in the backlog` : ''}`),
-                                onError: (e) => toast.error(errorText(e, 'Could not delete it')),
+                                onError: (e) => toastError(e, 'Could not delete it'),
                               })
                             }
                           >
@@ -432,7 +455,7 @@ function EditSprintDialog({
       }
       onOpenChange(false);
     } catch (e) {
-      toast.error(errorText(e, mode === 'start' ? 'Could not start the sprint' : 'Could not save it'));
+      toastError(e, mode === 'start' ? 'Could not start the sprint' : 'Could not save it');
     }
   }
 
@@ -545,7 +568,7 @@ function CompleteSprintDialog({
                     toast.success(`${r.name} completed${r.movedTo ? `; ${vocab.count(r.moved)} moved to ${r.movedTo.name}` : ''}`);
                     onOpenChange(false);
                   },
-                  onError: (e) => toast.error(errorText(e, 'Could not complete the sprint')),
+                  onError: (e) => toastError(e, 'Could not complete the sprint'),
                 },
               )
             }

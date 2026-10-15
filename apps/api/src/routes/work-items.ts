@@ -13,7 +13,9 @@ import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
 import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import { textToDoc } from '../work/doc.js';
 import { mentionsIn, sanitizeDoc } from '../work/rich-text.js';
-import { searchTextOf } from '../work/search-text.js';
+import type { StorageDriver } from '../storage/index.js';
+import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
+import { refreshSearchText, SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
   assertAssignable,
@@ -90,7 +92,7 @@ const listQuery = z.object({
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
-export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
+export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { storage?: StorageDriver }) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -242,6 +244,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
           title: b.title,
           description: rich ? rich.doc : textToDoc(b.description),
           searchText: searchTextOf(rich ? rich.doc : textToDoc(b.description)),
+          searchVersion: SEARCH_TEXT_VERSION,
           statusId,
           priority: b.priority,
           assigneeId: b.assigneeId ?? null,
@@ -341,7 +344,6 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (b.title !== undefined) set.title = b.title;
         if (b.description !== undefined) set.description = textToDoc(b.description);
         if (rich) set.description = rich.doc;
-        if (set.description !== undefined) set.searchText = searchTextOf(set.description);
         if (b.type !== undefined) set.type = b.type;
         if (b.parentId !== undefined) set.parentId = b.parentId;
         if (b.priority !== undefined) set.priority = b.priority;
@@ -358,6 +360,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         // The version check lives in the update's filter, so two simultaneous edits cannot both win.
         const updated = await tx.workItems.updateOne({ id: row.id, ...matchesVersion(expected) }, set);
         if (updated === 0) throw stale();
+        if (set.description !== undefined) await refreshSearchText(tx, row.id);
         if (b.labelIds !== undefined) await setItemLabels(tx, actor.orgId, space, row.id, b.labelIds);
         const after = await fresh(tx, actor, space, row.id);
         const changes = itemChanges(presentItem(row, space.key), after);
@@ -378,7 +381,8 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.delete('/items/:id', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
-    return withTenantTx(deps.db, actor.orgId, async (tx) => {
+    let files: string[] = [];
+    const result = await withTenantTx(deps.db, actor.orgId, async (tx) => {
       const { row, space } = await resolveItem(tx, actor, req.params.id);
       if (!can(actor, 'item.delete', { ...spaceCtx(space), isReporter: row.reporterId === actor.userId })) {
         throw forbidden();
@@ -399,7 +403,10 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps) {
         { deletedAt: now, updatedAt: now },
       );
       await recordActivity(tx, { item: row, actorId: actor.userId, kind: 'deleted' });
+      files = await dropAttachments(tx, ids);
       return { deleted: ids.length, subtasks: children.length };
     });
+    await deleteStoredFiles(deps.storage, files, req.log);
+    return result;
   });
 }

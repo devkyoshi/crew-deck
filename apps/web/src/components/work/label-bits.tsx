@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -14,7 +13,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { LABEL_CHIP, type Label } from '@/lib/work';
-import { errorText, useCreateLabel, useLabels } from '@/lib/work-api';
+import { toastError, useCreateLabel, useLabels } from '@/lib/work-api';
 import { cn } from '@/lib/utils';
 
 export function LabelChip({
@@ -92,7 +91,7 @@ export function LabelPicker({
       onChange([...all.filter((l) => chosen.has(l.id)), made]);
       setQ('');
     } catch (e) {
-      toast.error(errorText(e, 'Could not create the label'));
+      toastError(e, 'Could not create the label');
     }
   }
 

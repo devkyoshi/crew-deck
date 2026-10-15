@@ -117,6 +117,15 @@ export const useMoveToSprint = () =>
     api<{ updated: number }>('/items/sprint', { method: 'POST', body: { ids, sprintId } }),
   );
 
+export const useReorderBacklog = (space: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sprintId, ids }: { sprintId: string | null; ids: string[] }) =>
+      api<{ ok: true }>(`/spaces/${space}/backlog/order`, { method: 'PUT', body: { sprintId, ids } }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['backlog'] }),
+  });
+};
+
 export const useSetBoardType = (space: string) => {
   const qc = useQueryClient();
   return useMutation({

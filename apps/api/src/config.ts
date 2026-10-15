@@ -26,10 +26,22 @@ const envSchema = z.object({
   INVITE_TTL_DAYS: z.coerce.number().default(7),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  /** Where attachments are kept. Only 'local' (a directory) for now; object storage can slot in later. */
-  STORAGE_DRIVER: z.enum(['local']).default('local'),
+  /** Where attachments are kept: a directory on this server ('local') or an S3-compatible bucket ('s3'). */
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   /** Directory for the local driver. Relative paths resolve from the API's working directory. */
   STORAGE_DIR: z.string().default('./storage'),
+  /** S3 driver: bucket and region are required; the endpoint and path-style flag are for MinIO and similar. */
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().default('us-east-1'),
+  S3_ENDPOINT: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Optional key prefix inside the bucket. Credentials come from S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or the AWS default chain. */
+  S3_PREFIX: z.string().default(''),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
   /** Signs short-lived file links. Required in production (32+ characters). */
   STORAGE_SIGNING_SECRET: z.string().optional(),
   TRUST_PROXY: z

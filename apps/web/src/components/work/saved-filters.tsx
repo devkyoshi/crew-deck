@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { errorText } from '@/lib/work-api';
+import { toastError } from '@/lib/work-api';
 import { useDeleteFilter, useSaveFilter, useSavedFilters } from '@/lib/work-find-api';
 
 /**
@@ -74,7 +74,7 @@ export function SavedFilters({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    del.mutate(f.id, { onError: (err) => toast.error(errorText(err, 'Could not delete it')) });
+                    del.mutate(f.id, { onError: (err) => toastError(err, 'Could not delete it') });
                   }}
                 >
                   <Trash2 className="size-3.5" />
@@ -108,7 +108,7 @@ export function SavedFilters({
                     setName('');
                     setShared(false);
                   },
-                  onError: (err) => toast.error(errorText(err, 'Could not save it')),
+                  onError: (err) => toastError(err, 'Could not save it'),
                 },
               );
             }}

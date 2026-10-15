@@ -75,7 +75,7 @@ import { LoadError } from '@/components/shared/load-error';
 import { useMe } from '@/components/shell/me-context';
 import {
   boardKey,
-  errorText,
+  toastError,
   loadMoreColumn,
   useBoard,
   useCreateItem,
@@ -725,7 +725,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
     try {
       await loadMoreColumn(qc, spaceKey, filterStr, statusId, cursor);
     } catch (e) {
-      toast.error(errorText(e, 'Could not load more'));
+      toastError(e, 'Could not load more');
     } finally {
       setLoadingMore(null);
     }
@@ -744,7 +744,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
       });
       toast.success(`${item.key} created`);
     } catch (e) {
-      toast.error(errorText(e, `Could not create the ${vocab.noun}`));
+      toastError(e, `Could not create the ${vocab.noun}`);
     }
   }
 

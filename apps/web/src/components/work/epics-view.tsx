@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
 import { useSpace } from '@/components/spaces/space-context';
-import { errorText, useCreateItem, useSubtasks } from '@/lib/work-api';
+import { toastError, useCreateItem, useSubtasks } from '@/lib/work-api';
 import { useEpics, type EpicRow } from '@/lib/work-find-api';
 import { cn } from '@/lib/utils';
 import { ItemSheet, useOpenItem } from './item-sheet';
@@ -46,7 +46,7 @@ export function EpicsView() {
                   setTitle('');
                   toast.success(`${made.key} created`);
                 },
-                onError: (err) => toast.error(errorText(err, 'Could not create it')),
+                onError: (err) => toastError(err, 'Could not create it'),
               },
             );
           }}

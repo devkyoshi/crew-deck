@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isDuplicateKey, type Db, type TenantDb } from '../db/client.js';
 import type { NotificationDoc, NotificationType, SpaceDoc, WorkItemDoc } from '../db/types.js';
+import { addDays, isValidTimezone, localDate, zonedTimeToUtc } from '../lib/time.js';
 import type { Change } from './activity.js';
 import { canOpenSpace } from './service.js';
 
@@ -40,6 +41,19 @@ export const DEFAULT_PREFS: Record<NotificationType, { inApp: boolean; email: bo
 };
 
 export const EMAIL_BATCH_MINUTES = 5;
+
+/** Whether this person wants one daily email instead of quick batches. */
+export async function digestOf(t: TenantDb, userId: string) {
+  return (await t.notificationPrefs.findOne({ userId }))?.digest === true;
+}
+
+/** When the daily digest goes out: 08:00 on the person's next morning (today if it is still before). */
+export const DIGEST_HOUR = '08:00';
+export function nextDigestTime(now: Date, tz: string) {
+  const today = localDate(now, tz);
+  const at = zonedTimeToUtc(today, DIGEST_HOUR, tz);
+  return at.getTime() > now.getTime() ? at : zonedTimeToUtc(addDays(today, 1), DIGEST_HOUR, tz);
+}
 
 export async function preferencesOf(t: TenantDb, userId: string) {
   const row = await t.notificationPrefs.findOne({ userId });
@@ -174,11 +188,16 @@ export async function notifyOne(
 /** Adds a notification to the person's open email batch (or starts one, due in a few minutes). */
 async function queueEmail(t: TenantDb, userId: string, notificationId: string) {
   const now = new Date();
+  let dueAt = new Date(now.getTime() + EMAIL_BATCH_MINUTES * 60_000);
+  if (await digestOf(t, userId)) {
+    const tz = (await t.users([userId])).get(userId)?.timezone ?? 'UTC';
+    dueAt = nextDigestTime(now, isValidTimezone(tz) ? tz : 'UTC');
+  }
   await t.emailBatches.updateOne(
     { userId, sentAt: null },
     {
       $addToSet: { notificationIds: notificationId },
-      $setOnInsert: { id: randomUUID(), dueAt: new Date(now.getTime() + EMAIL_BATCH_MINUTES * 60_000), createdAt: now },
+      $setOnInsert: { id: randomUUID(), dueAt, createdAt: now },
     } as never,
     { upsert: true },
   );

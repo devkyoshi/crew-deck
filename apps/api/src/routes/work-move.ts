@@ -10,6 +10,8 @@ import type { WorkItemDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can } from '../permissions/can.js';
 import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
+import type { StorageDriver } from '../storage/index.js';
+import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
 import type { EnqueueRebalance } from '../work/jobs.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
@@ -35,6 +37,7 @@ import {
 import { resolveSpace, spaceCtx } from './spaces.js';
 
 export interface MoveDeps extends AuthDeps {
+  storage?: StorageDriver;
   enqueueRebalance?: EnqueueRebalance;
 }
 
@@ -215,8 +218,10 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
     const b = req.body;
     const ids = [...new Set(b.ids)];
     const events: NotifyEvent[] = [];
+    const files: string[] = [];
     const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
       events.length = 0;
+      files.length = 0;
       const rows = await tx.workItems.find(
         { id: { $in: ids }, deletedAt: null },
         {
@@ -313,10 +318,9 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
                 { projection: { id: 1 } },
               )
             : [];
-          await tx.workItems.updateMany(
-            { id: { $in: [...idsOk, ...subtaskRows.map((x) => x.id)] }, deletedAt: null },
-            { deletedAt: now, updatedAt: now },
-          );
+          const gone = [...idsOk, ...subtaskRows.map((x) => x.id)];
+          await tx.workItems.updateMany({ id: { $in: gone }, deletedAt: null }, { deletedAt: now, updatedAt: now });
+          files.push(...(await dropAttachments(tx, gone)));
         }
       }
       // History: one event per changed field per item (or one deletion each).
@@ -338,6 +342,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
       }
       return { updated: ok.length, failed };
     });
+    await deleteStoredFiles(deps.storage, files, req.log);
     await deliverSafely(deps.db, events, req.log);
     return out;
   });

@@ -168,6 +168,58 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ---
 
+## W8: Leftovers
+
+- [x] Old keys of moved items resolve (`keyHistory`), item page shows the current key
+- [x] Backlog and sprint lists can be reordered (`backlogRank`, `PUT /spaces/:id/backlog/order`)
+- [x] List view virtualised (`@tanstack/react-virtual`)
+- [x] Search covers comments and attachment names; older items rebuilt at start
+- [x] S3 driver and config; deleting items frees attachment records and files
+- [x] Daily summary email preference
+- [x] Upgrade notice (`toastError` with "See plans"); pricing comparison rows
+- [x] ADR numbers fixed, ADR-061, docs and Ops Memory updated
+- [x] Tests: `work-leftovers.test.ts`
+- [ ] Owner review and sign-off
+
+## W9: Workflow rules and dependencies
+
+- [ ] Workflow transitions per space (editor, enforced on edit, move, bulk, transfer)
+- [ ] Resolution on Done
+- [ ] Blocked / blocks badges on cards, warning on moving a blocked item, "Blocked" filter
+- [ ] Checklists on items with progress on cards, checklist templates
+- [ ] Tests, docs, owner review
+
+## W10: Versions and components
+
+- [ ] Versions with release flow and release notes; fix and affected versions on items
+- [ ] Components with lead and default assignee
+- [ ] Filters, pickers, Releases page, plan gate `releases`
+- [ ] Tests, docs, owner review
+
+## W11: Flow and reports
+
+- [ ] Status-change history collection and backfill
+- [ ] Velocity, cumulative flow, control chart, created vs resolved (with data tables)
+- [ ] Plan gate `advanced_reports`
+- [ ] Tests, docs, owner review
+
+## W12: Roadmap, time tracking, calendar
+
+- [ ] Roadmap timeline for epics and versions with drag and keyboard alternative
+- [ ] Time tracking: original and remaining estimate, work logs, roll-ups
+- [ ] Calendar view of due dates
+- [ ] Tests, docs, owner review
+
+## W13: Dashboards, parity sweep, hardening
+
+- [ ] Dashboards with a fixed set of gadgets
+- [ ] `JIRA-PARITY.md` with no Missing rows inside the chosen scope
+- [ ] Accessibility, keyboard and rate-limit pass on new screens; live-update events for new entities
+- [ ] Demo seed and Playwright suite extended
+- [ ] Tests, docs, owner review
+
+---
+
 ## Definition of done (every phase, brief section 11)
 
 - [ ] Lint, type-check and tests pass in CI

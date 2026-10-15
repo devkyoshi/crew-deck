@@ -120,6 +120,7 @@ const INDEXES: Record<string, Ix[]> = {
     ['org_assignee_due', { orgId: 1, assigneeId: 1, resolvedAt: 1 }],
     ['org_reporter', { orgId: 1, reporterId: 1 }],
     ['sprint', { sprintId: 1 }],
+    ['key_history', { keyHistory: 1 }, { sparse: true }],
   ],
   labels: [
     ['id', { id: 1 }, U],

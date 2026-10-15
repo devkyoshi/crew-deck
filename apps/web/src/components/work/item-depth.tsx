@@ -43,7 +43,7 @@ import { LoadError } from '@/components/shared/load-error';
 import { useMe } from '@/components/shell/me-context';
 import { api, qs, type Page, type Space } from '@/lib/api';
 import type { WorkItem } from '@/lib/work';
-import { errorText, searchAssignees } from '@/lib/work-api';
+import { toastError, searchAssignees } from '@/lib/work-api';
 import {
   LINK_OPTIONS,
   uploadAttachment,
@@ -148,7 +148,7 @@ export function WatchButton({ itemId }: { itemId: string }) {
       aria-label={watching ? 'Stop watching' : 'Watch'}
       title={watching ? 'Stop watching' : 'Watch for changes'}
       onClick={() =>
-        toggle.mutate(!watching, { onError: (e) => toast.error(errorText(e, 'Could not change that')) })
+        toggle.mutate(!watching, { onError: (e) => toastError(e, 'Could not change that') })
       }
     >
       {watching ? <BellOff /> : <Bell />}
@@ -186,7 +186,7 @@ export const LinksSection = forwardRef<LinksHandle, { item: WorkItem; onOpenItem
             setTarget(null);
             setTypedKey('');
           },
-          onError: (e) => toast.error(errorText(e, 'Could not link those')),
+          onError: (e) => toastError(e, 'Could not link those'),
         },
       );
     }
@@ -230,7 +230,7 @@ export const LinksSection = forwardRef<LinksHandle, { item: WorkItem; onOpenItem
                       size="icon"
                       className="size-7"
                       aria-label={`Remove link to ${l.item.key}`}
-                      onClick={() => remove.mutate(l.id, { onError: (e) => toast.error(errorText(e, 'Could not remove it')) })}
+                      onClick={() => remove.mutate(l.id, { onError: (e) => toastError(e, 'Could not remove it') })}
                     >
                       <X />
                     </Button>
@@ -335,7 +335,7 @@ export const AttachmentsSection = forwardRef<AttachmentsHandle, { item: WorkItem
         );
         await changed();
       } catch (e) {
-        toast.error(errorText(e, `Could not upload ${file.name}`));
+        toastError(e, `Could not upload ${file.name}`);
       } finally {
         setUploads((u) => u.filter((x) => x.id !== id));
       }
@@ -428,7 +428,7 @@ export const AttachmentsSection = forwardRef<AttachmentsHandle, { item: WorkItem
                   aria-label={`Delete ${a.name}`}
                   onClick={() => {
                     if (window.confirm(`Delete ${a.name}?`)) {
-                      del.mutate(a.id, { onError: (e) => toast.error(errorText(e, 'Could not delete it')) });
+                      del.mutate(a.id, { onError: (e) => toastError(e, 'Could not delete it') });
                     }
                   }}
                 >
@@ -516,7 +516,7 @@ function Comments({ item, composer }: { item: WorkItem; composer: React.RefObjec
         setDraft(null);
         setRound((n) => n + 1);
       },
-      onError: (e) => toast.error(errorText(e, 'Could not post that comment')),
+      onError: (e) => toastError(e, 'Could not post that comment'),
     });
   }
 
@@ -612,7 +612,7 @@ function CommentRow({
                     { id: c.id, body: draft },
                     {
                       onSuccess: () => setEditing(false),
-                      onError: (e) => toast.error(errorText(e, 'Could not save the comment')),
+                      onError: (e) => toastError(e, 'Could not save the comment'),
                     },
                   )
                 }
@@ -638,7 +638,7 @@ function CommentRow({
                 className="h-6 px-1.5 text-xs"
                 onClick={() => {
                   if (window.confirm('Delete this comment?')) {
-                    del.mutate(c.id, { onError: (e) => toast.error(errorText(e, 'Could not delete it')) });
+                    del.mutate(c.id, { onError: (e) => toastError(e, 'Could not delete it') });
                   }
                 }}
               >
@@ -836,7 +836,7 @@ export function DuplicateDialog({
                     onOpenChange(false);
                     onDone(copy.key);
                   },
-                  onError: (e) => toast.error(errorText(e, 'Could not duplicate it')),
+                  onError: (e) => toastError(e, 'Could not duplicate it'),
                 },
               )
             }
@@ -914,7 +914,7 @@ export function TransferDialog({
                     onOpenChange(false);
                     onDone(moved.key);
                   },
-                  onError: (e) => toast.error(errorText(e, 'Could not move it')),
+                  onError: (e) => toastError(e, 'Could not move it'),
                 },
               )
             }

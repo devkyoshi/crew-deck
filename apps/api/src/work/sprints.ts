@@ -38,7 +38,7 @@ export async function setItemsSprint(
         estimateAtAdd: item.estimate === null ? null : Number(item.estimate),
       });
     }
-    await t.workItems.updateOne({ id: item.id }, { sprintId, updatedAt: now });
+    await t.workItems.updateOne({ id: item.id }, { sprintId, backlogRank: null, updatedAt: now });
   }
 }
 

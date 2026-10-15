@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useBulk, useLabels, errorText, type BulkBody } from '@/lib/work-api';
+import { useBulk, useLabels, toastError, type BulkBody } from '@/lib/work-api';
 import type { BoardData, Person } from '@/lib/work';
 import { LabelChip } from './label-bits';
 import { AssigneePicker } from './work-pickers';
@@ -66,7 +66,7 @@ export function BulkBar({
       } else toast.success(done(res.updated));
       onClear();
     } catch (e) {
-      toast.error(errorText(e, `Could not change those ${vocab.nounPlural}`));
+      toastError(e, `Could not change those ${vocab.nounPlural}`);
     }
   }
 

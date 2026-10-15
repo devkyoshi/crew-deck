@@ -75,14 +75,14 @@ export function useMarkRead() {
 export const usePreferences = () =>
   useQuery({
     queryKey: ['notification-preferences'],
-    queryFn: () => api<{ preferences: Preferences }>('/me/notification-preferences'),
+    queryFn: () => api<{ preferences: Preferences; digest: boolean }>('/me/notification-preferences'),
   });
 
 export function useSavePreferences() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (preferences: Partial<Preferences>) =>
-      api<{ preferences: Preferences }>('/me/notification-preferences', { method: 'PUT', body: { preferences } }),
+    mutationFn: (body: { preferences?: Partial<Preferences>; digest?: boolean }) =>
+      api<{ preferences: Preferences; digest: boolean }>('/me/notification-preferences', { method: 'PUT', body }),
     onSuccess: (data) => qc.setQueryData(['notification-preferences'], data),
   });
 }

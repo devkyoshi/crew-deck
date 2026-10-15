@@ -50,7 +50,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadError } from '@/components/shared/load-error';
 import { api } from '@/lib/api';
-import { errorText, refreshWork, statusesKey, useStatuses } from '@/lib/work-api';
+import { toastError, refreshWork, statusesKey, useStatuses } from '@/lib/work-api';
 import {
   CATEGORY_META,
   STATUS_DOT,
@@ -98,7 +98,7 @@ export function BoardSettingsSheet({
       await api(`/boards/${board.id}`, { method: 'PATCH', body: { settings: patch } });
       onSaved();
     } catch (e) {
-      toast.error(errorText(e, 'Could not save board settings'));
+      toastError(e, 'Could not save board settings');
       setFields(board.settings.cardFields);
       setRetention(String(board.settings.doneRetentionDays));
     }
@@ -241,7 +241,7 @@ function StatusEditor({ spaceKey }: { spaceKey: string }) {
       reload();
       return r;
     } catch (e) {
-      toast.error(errorText(e, fail));
+      toastError(e, fail);
       reload();
       return undefined;
     }
@@ -554,7 +554,7 @@ function BoardTypeSwitch({ spaceKey, type }: { spaceKey: string; type: 'kanban' 
               toast.success(
                 `Switched to ${other === 'scrum' ? 'Scrum' : 'Kanban'}${r.movedToBacklog ? `; ${r.movedToBacklog} planned items are back in the backlog` : ''}`,
               ),
-            onError: (e) => toast.error(errorText(e, 'Could not switch')),
+            onError: (e) => toastError(e, 'Could not switch'),
           })
         }
       >

@@ -175,13 +175,13 @@ A sign-up gets a Business trial (14 days by default, a platform setting). `loadP
 
 Platform admins are a separate table with their own session cookie and Redis namespace, reachable only on the bare domain (404 on a workspace address). The application database role has no direct access to `platform_admins`, `platform_settings`, `signup_requests` or `platform_audit_logs`, and cannot update a workspace's status, plan or limits (column-level grants); everything cross-workspace goes through narrow SECURITY DEFINER functions, the same pattern as sign-in. A suspended workspace is refused at the tenant gate, so sign-in, invitations and already-open sessions all stop at once, and its data is kept. Impersonation opens a workspace as its owner for 30 minutes without extension, is read-only (any non-GET request is refused), shows a banner, and is recorded both in that workspace's audit log and in the platform log.
 
-## ADR-041: Guided flows keep their step in the URL
+## ADR-060: Guided flows keep their step in the URL
 
 Multi-step signed-out flows (sign-up, verify, accept invitation) use one hook, `useWizard`. The current step is the `?step=` query parameter, so the browser's Back and Forward buttons move between steps and a refresh stays put. Answers and the furthest step reached are kept in sessionStorage (sign-up only; verify and invitations keep them in memory because they sit beside one-time secrets). Typing a later step into the address bar is redirected to the furthest step reached, so questions cannot be skipped. Focus moves to the new step's heading so screen readers announce it. The photo panel is decorative (empty alt) with a dark gradient so its text keeps its contrast; photos are served from the repo, not hotlinked.
 
 ## ADR-041: Attachments live on local disk behind a storage adapter
 
-Attachments are stored through a `StorageDriver` interface (put, get, delete, signed URL). The first driver writes to a directory on the VM outside the web root (`STORAGE_DIR`); an S3-compatible driver can replace it later without API changes. Keys start with the tenant id (`{org_id}/{space_id}/{item_id}/{uuid}-{name}`), downloads use short-lived signed URLs that are checked against tenant and space access, and size is limited per plan (`max_attachment_mb`, `storage_mb`). Status: planned (W3).
+Attachments are stored through a `StorageDriver` interface (put, get, delete, signed URL). The first driver writes to a directory on the VM outside the web root (`STORAGE_DIR`); an S3-compatible driver (`STORAGE_DRIVER=s3`, built in W8) replaces it without API changes. Keys start with the tenant id (`{org_id}/{space_id}/{item_id}/{uuid}-{name}`), downloads use short-lived signed URLs that are checked against tenant and space access, and size is limited per plan (`max_attachment_mb`, `storage_mb`). Status: built (W3); S3 driver built (W8).
 
 ## ADR-042: Rich text is Tiptap, stored as JSON
 
@@ -348,3 +348,10 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-061: Moved items keep their old keys, backlog order is its own rank, the digest is a send time (W8)
+
+- A transferred item keeps its earlier keys in `keyHistory`; a lookup that finds nothing under a key checks the history and then applies the usual access check to the item's current space. Keys are never reused, so an old key cannot point at two items. The item page replaces the address with the current key.
+- Backlog and sprint lists keep a `backlogRank` (fractional string) apart from the board `rank`, which is per status column. Saving an order writes ranks for the whole list; items without one (newly added, or moved between lists, which clears it) follow the ordered ones by board rank.
+- An item's `searchText` is its description, its live comments and its attachment names, rebuilt on each change and versioned (`searchVersion`) so start-up rebuilds older items once. Access filtering is unchanged: it happens in the query.
+- The daily summary is a per-person flag. It changes only when the person's open email batch is due (08:00 in their timezone) and reuses the batch sender, so a switch needs no new job.
+- The S3 driver streams through the API like the local one, so signed links and tenant checks do not change. Deleting an item removes its attachment records in the same transaction and its stored bytes after commit, so storage use drops.

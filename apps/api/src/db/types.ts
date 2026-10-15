@@ -311,6 +311,12 @@ export interface WorkItemDoc {
   labelIds: string[];
   /** The description as plain text, for the search index (see work/search-text.ts). */
   searchText?: string;
+  /** Which sources `searchText` was built from (see work/search-text.ts). */
+  searchVersion?: number;
+  /** Order inside the backlog or a sprint list; items without one follow the ranked ones by board rank. */
+  backlogRank?: string | null;
+  /** Earlier keys (`ENG-12`) of an item that was moved to another space; they still resolve to it. */
+  keyHistory?: string[];
   /** How many sprints this item was carried out of unfinished. */
   carryOverCount?: number;
   resolvedAt: Date | null;
@@ -576,6 +582,8 @@ export interface NotificationPrefsDoc {
   orgId: string;
   userId: string;
   settings: Partial<Record<NotificationType, { inApp: boolean; email: boolean }>>;
+  /** Send emails as one daily summary (mornings, in the person's timezone) instead of a few minutes after the first. */
+  digest?: boolean;
   updatedAt: Date;
 }
 

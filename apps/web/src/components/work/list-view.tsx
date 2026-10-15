@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, Columns3, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,7 +19,14 @@ import { useSpace } from '@/components/spaces/space-context';
 import { formatDue, PRIORITY_META, type BoardData, type WorkItem } from '@/lib/work';
 import { useStatuses } from '@/lib/work-api';
 import { csvHref, LIST_SORTS, useItemList, type ListSort } from '@/lib/work-find-api';
-import { FILTER_KEYS, filterString, hasActiveFilters, NO_FILTERS, parseFilters, type Filters } from '@/lib/work-filters';
+import {
+  FILTER_KEYS,
+  filterString,
+  hasActiveFilters,
+  NO_FILTERS,
+  parseFilters,
+  type Filters,
+} from '@/lib/work-filters';
 import { cn } from '@/lib/utils';
 import { BulkBar } from './bulk-bar';
 import { FilterBar } from './filter-bar';
@@ -27,7 +35,16 @@ import { SavedFilters } from './saved-filters';
 import { useVocabulary } from './use-vocabulary';
 import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
 
-type ColumnId = 'type' | 'status' | 'priority' | 'assignee' | 'estimate' | 'due' | 'labels' | 'updated' | 'created';
+type ColumnId =
+  | 'type'
+  | 'status'
+  | 'priority'
+  | 'assignee'
+  | 'estimate'
+  | 'due'
+  | 'labels'
+  | 'updated'
+  | 'created';
 
 const COLUMNS: { id: ColumnId; label: string; sort?: ListSort }[] = [
   { id: 'type', label: 'Type' },
@@ -42,7 +59,8 @@ const COLUMNS: { id: ColumnId; label: string; sort?: ListSort }[] = [
 ];
 const DEFAULT_COLUMNS: ColumnId[] = ['type', 'status', 'priority', 'assignee', 'due'];
 
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
 function readColumns(key: string): ColumnId[] {
   try {
@@ -62,7 +80,9 @@ export function ListView() {
   const { params, push } = useUrlState();
   const filters = useMemo(() => parseFilters(new URLSearchParams(params.toString())), [params]);
   const filterStr = filterString(filters);
-  const sort = (LIST_SORTS as readonly string[]).includes(params.get('sort') ?? '') ? (params.get('sort') as ListSort) : 'key';
+  const sort = (LIST_SORTS as readonly string[]).includes(params.get('sort') ?? '')
+    ? (params.get('sort') as ListSort)
+    : 'key';
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc';
   const list = useItemList(space.key, filterStr, sort, dir);
   const statuses = useStatuses(space.key);
@@ -70,6 +90,7 @@ export function ListView() {
   const prefKey = `list:${me.user.id}:columns`;
   const [columns, setColumns] = useState<ColumnId[]>(DEFAULT_COLUMNS);
   const searchRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => setColumns(readColumns(prefKey)), [prefKey]);
 
   const setFilters = (next: Filters) =>
@@ -83,7 +104,9 @@ export function ListView() {
       p.set('dir', s === sort && dir === 'desc' ? 'asc' : 'desc');
     }, true);
   const toggleColumn = (id: ColumnId) => {
-    const next = columns.includes(id) ? columns.filter((c) => c !== id) : COLUMNS.map((c) => c.id).filter((c) => c === id || columns.includes(c));
+    const next = columns.includes(id)
+      ? columns.filter((c) => c !== id)
+      : COLUMNS.map((c) => c.id).filter((c) => c === id || columns.includes(c));
     setColumns(next);
     try {
       window.localStorage.setItem(prefKey, JSON.stringify(next));
@@ -96,15 +119,47 @@ export function ListView() {
   const first = list.data?.pages[0];
   const total = first?.total ?? 0;
   const canEdit = !!first?.permissions.editItem;
+  // Only the rows in view are drawn; blank spacer rows keep the scrollbar honest for long lists.
+  const virtual = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 41,
+    overscan: 12,
+  });
+  const rows = virtual.getVirtualItems();
+  const padTop = rows.length ? rows[0]!.start : 0;
+  const padBottom = rows.length ? virtual.getTotalSize() - rows[rows.length - 1]!.end : 0;
+  const colSpan = 2 + (canEdit ? 1 : 0) + columns.length;
   const allSelected = items.length > 0 && items.every((i) => selected.includes(i.id));
   const open = (key: string) => push((p) => p.set('item', key));
 
-  const SortHeader = ({ label, s, className }: { label: string; s?: ListSort; className?: string }) => (
-    <th scope="col" className={cn('px-3 py-2 text-left font-medium', className)} aria-sort={s && sort === s ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+  const SortHeader = ({
+    label,
+    s,
+    className,
+  }: {
+    label: string;
+    s?: ListSort;
+    className?: string;
+  }) => (
+    <th
+      scope="col"
+      className={cn('px-3 py-2 text-left font-medium', className)}
+      aria-sort={s && sort === s ? (dir === 'asc' ? 'ascending' : 'descending') : undefined}
+    >
       {s ? (
-        <button type="button" onClick={() => setSort(s)} className="hover:text-foreground inline-flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setSort(s)}
+          className="hover:text-foreground inline-flex items-center gap-1"
+        >
           {label}
-          {sort === s && (dir === 'asc' ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />)}
+          {sort === s &&
+            (dir === 'asc' ? (
+              <ArrowUp className="size-3" aria-hidden />
+            ) : (
+              <ArrowDown className="size-3" aria-hidden />
+            ))}
         </button>
       ) : (
         label
@@ -117,7 +172,13 @@ export function ListView() {
       case 'type':
         return <TypeIcon type={item.type} />;
       case 'status':
-        return <StatusChip name={item.status.name} category={item.status.category} color={item.status.color} />;
+        return (
+          <StatusChip
+            name={item.status.name}
+            category={item.status.category}
+            color={item.status.color}
+          />
+        );
       case 'priority':
         return (
           <span className="inline-flex items-center gap-1.5">
@@ -150,9 +211,19 @@ export function ListView() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
-          <FilterBar space={space.key} filters={filters} onChange={setFilters} searchRef={searchRef} />
+          <FilterBar
+            space={space.key}
+            filters={filters}
+            onChange={setFilters}
+            searchRef={searchRef}
+          />
         </div>
-        <SavedFilters spaceKey={space.key} spaceId={space.id} current={filterStr} onApply={(q) => setFilters(parseFilters(new URLSearchParams(q)))} />
+        <SavedFilters
+          spaceKey={space.key}
+          spaceId={space.id}
+          current={filterStr}
+          onApply={(q) => setFilters(parseFilters(new URLSearchParams(q)))}
+        />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-8">
@@ -162,7 +233,12 @@ export function ListView() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Show columns</DropdownMenuLabel>
             {COLUMNS.map((c) => (
-              <DropdownMenuCheckboxItem key={c.id} checked={columns.includes(c.id)} onCheckedChange={() => toggleColumn(c.id)} onSelect={(e) => e.preventDefault()}>
+              <DropdownMenuCheckboxItem
+                key={c.id}
+                checked={columns.includes(c.id)}
+                onCheckedChange={() => toggleColumn(c.id)}
+                onSelect={(e) => e.preventDefault()}
+              >
                 {c.label}
               </DropdownMenuCheckboxItem>
             ))}
@@ -183,8 +259,16 @@ export function ListView() {
         </p>
       ) : items.length === 0 ? (
         <EmptyState
-          title={hasActiveFilters(filters) ? `No matching ${vocab.nounPlural}` : `No ${vocab.nounPlural} yet`}
-          description={hasActiveFilters(filters) ? 'Try other filters.' : `Create ${vocab.nounPlural} from the board.`}
+          title={
+            hasActiveFilters(filters)
+              ? `No matching ${vocab.nounPlural}`
+              : `No ${vocab.nounPlural} yet`
+          }
+          description={
+            hasActiveFilters(filters)
+              ? 'Try other filters.'
+              : `Create ${vocab.nounPlural} from the board.`
+          }
           action={
             hasActiveFilters(filters) ? (
               <Button variant="outline" onClick={() => setFilters(NO_FILTERS)}>
@@ -194,12 +278,12 @@ export function ListView() {
           }
         />
       ) : (
-        <div className="bg-card overflow-x-auto rounded-xl border">
+        <div ref={scrollRef} className="bg-card max-h-[70vh] overflow-auto rounded-xl border">
           <table className="w-full text-sm">
             <caption className="sr-only">
               {vocab.Noun} list, {vocab.count(total)}
             </caption>
-            <thead className="text-muted-foreground border-b text-xs">
+            <thead className="text-muted-foreground bg-card sticky top-0 z-10 border-b text-xs">
               <tr>
                 {canEdit && (
                   <th scope="col" className="w-10 px-3 py-2">
@@ -218,30 +302,61 @@ export function ListView() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {items.map((item) => (
-                <tr key={item.id} className={cn('hover:bg-muted/40', selected.includes(item.id) && 'bg-primary/5')}>
-                  {canEdit && (
-                    <td className="px-3 py-2">
-                      <Checkbox
-                        aria-label={`Select ${item.key}`}
-                        checked={selected.includes(item.id)}
-                        onCheckedChange={(v) => setSelected((s) => (v === true ? [...s, item.id] : s.filter((x) => x !== item.id)))}
-                      />
-                    </td>
-                  )}
-                  <td className="text-muted-foreground px-3 py-2 tabular-nums whitespace-nowrap">{item.key}</td>
-                  <td className="max-w-md px-3 py-2">
-                    <button type="button" onClick={() => open(item.key)} className="w-full truncate text-left font-medium hover:underline">
-                      {item.title}
-                    </button>
-                  </td>
-                  {COLUMNS.filter((c) => columns.includes(c.id)).map((c) => (
-                    <td key={c.id} className="px-3 py-2 whitespace-nowrap">
-                      {cell(item, c.id)}
-                    </td>
-                  ))}
+              {padTop > 0 && (
+                <tr aria-hidden>
+                  <td colSpan={colSpan} style={{ height: padTop, padding: 0 }} />
                 </tr>
-              ))}
+              )}
+              {rows.map((vr) => {
+                const item = items[vr.index]!;
+                return (
+                  <tr
+                    key={item.id}
+                    data-index={vr.index}
+                    ref={virtual.measureElement}
+                    className={cn(
+                      'hover:bg-muted/40',
+                      selected.includes(item.id) && 'bg-primary/5',
+                    )}
+                  >
+                    {canEdit && (
+                      <td className="px-3 py-2">
+                        <Checkbox
+                          aria-label={`Select ${item.key}`}
+                          checked={selected.includes(item.id)}
+                          onCheckedChange={(v) =>
+                            setSelected((s) =>
+                              v === true ? [...s, item.id] : s.filter((x) => x !== item.id),
+                            )
+                          }
+                        />
+                      </td>
+                    )}
+                    <td className="text-muted-foreground px-3 py-2 tabular-nums whitespace-nowrap">
+                      {item.key}
+                    </td>
+                    <td className="max-w-md px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => open(item.key)}
+                        className="w-full truncate text-left font-medium hover:underline"
+                      >
+                        {item.title}
+                      </button>
+                    </td>
+                    {COLUMNS.filter((c) => columns.includes(c.id)).map((c) => (
+                      <td key={c.id} className="px-3 py-2 whitespace-nowrap">
+                        {cell(item, c.id)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+              {padBottom > 0 && (
+                <tr aria-hidden>
+                  <td colSpan={colSpan} style={{ height: padBottom, padding: 0 }} />
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -250,14 +365,25 @@ export function ListView() {
       <div className="text-muted-foreground flex items-center justify-between text-xs">
         <span aria-live="polite">{total > 0 && `${items.length} of ${vocab.count(total)}`}</span>
         {list.hasNextPage && (
-          <Button variant="outline" size="sm" disabled={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={list.isFetchingNextPage}
+            onClick={() => list.fetchNextPage()}
+          >
             {list.isFetchingNextPage && <Loader2 className="animate-spin" />} Show more
           </Button>
         )}
       </div>
 
       {selected.length > 0 && statuses.data && (
-        <BulkBar space={space.key} ids={selected} statuses={statuses.data.items as BoardData['statuses']} canDelete={canEdit} onClear={() => setSelected([])} />
+        <BulkBar
+          space={space.key}
+          ids={selected}
+          statuses={statuses.data.items as BoardData['statuses']}
+          canDelete={canEdit}
+          onClear={() => setSelected([])}
+        />
       )}
       <ItemSheet />
     </div>

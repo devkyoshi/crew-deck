@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-15 - Leftovers (W8)
+
+- **Moved items keep their old key:** opening `ENG-12` after the item moved to `OPS-3` leads to it.
+- **Backlog order:** drag work up and down inside the backlog or a sprint; the order is saved.
+- **Search** also finds items by their comments and attachment names.
+- **List view** draws only the rows in view, so long lists stay quick.
+- **Daily summary:** one email each morning instead of emails after each update (Notifications, Settings).
+- **Upgrade notice:** a plan limit shown anywhere on the work screens links to the plans; the pricing page
+  compares attachment size, Scrum, burndown and shared filters.
+- **Files:** an S3-compatible storage driver (`STORAGE_DRIVER=s3`); deleting an item frees its files and storage.
+- ADR-061; the duplicate ADR-041 was renumbered (guided flows are now ADR-060).
+
 ## 2026-10-15 - Search, notifications, sprints and live updates (W4 to W7)
 
 - **Find work:** search by key or words across every space you can open (also in Ctrl+K), a List tab with

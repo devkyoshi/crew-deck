@@ -46,16 +46,15 @@ Legend: **Built** works today. **Partial** works but with a gap. **Missing** is 
 
 ## 3. Work management: built, with these gaps
 
-All seven phases in [work-items/PHASES.md](work-items/PHASES.md) are built. Known gaps:
+All seven phases in [work-items/PHASES.md](work-items/PHASES.md) are built, and W8 closed the first round of
+leftovers (old-key redirects, backlog ordering, virtualised list, search in comments and file names, daily
+summary, S3 storage, upgrade notice). Known gaps now:
 
-- **Backlog ordering.** Work can be moved between the backlog and sprints, but not reordered within a
-  section (it follows the board's rank).
-- **List view** pages with Show more rather than a virtualised table; CSV export is capped at 5,000 rows.
-- **Search** covers item titles and descriptions, not comments or attachment names.
-- **Notifications** have no daily digest option and no push notifications; emails need a Brevo key.
-- **Sprints:** no sprint velocity or cumulative flow reports, no Kanban sprints (out of scope in the brief).
+- **CSV export** is capped at 5,000 rows.
+- **Notifications** have no push notifications; emails need a Brevo key.
+- **Sprints:** no sprint velocity or cumulative flow reports yet (planned W11).
 - **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
-- **Moved items** keep their history, but the old key does not redirect to the new one.
+- **Uploads** are not virus-scanned beyond refusing programs and scripts.
 
 ## 4. Platform features not built
 
@@ -72,12 +71,7 @@ All seven phases in [work-items/PHASES.md](work-items/PHASES.md) are built. Know
 
 ## 5. Partly built or known gaps
 
-- **Work item depth (W3)** gaps: no notifications yet for mentions or watched items (W5); the old key of a
-  moved item does not redirect to the new one; files are kept on local disk only (an S3 driver can slot
-  into `StorageDriver`); no virus scanning beyond refusing programs and scripts; the link picker searches
-  the current space (other spaces by typing a key); deleted items keep their attachments on disk.
 
-- **Work-item limit upgrade notice** in the UI is still pending (the API answers 402 correctly).
 - **A space can end up with no active admin** through indirect changes (for example deleting its only
   admin group). Workspace admins can repair it from the space's Members tab.
 - **Google sign-in and Brevo email** are covered by tests with fakes but not exercised against the real
@@ -86,4 +80,4 @@ All seven phases in [work-items/PHASES.md](work-items/PHASES.md) are built. Know
   same-tenant links, valid statuses, time ordering on check-ins and similar rules are enforced by the API
   and its tests. Unique indexes still protect keys, item numbers and pending requests.
 - **Stale documents.** `docs/BRIEF.md` and the Phase 1 brief describe the original Postgres design;
-  they are kept as the historical brief. ADR numbers 041 to 049 appear twice in `docs/DECISIONS.md`.
+  they are kept as the historical brief. 

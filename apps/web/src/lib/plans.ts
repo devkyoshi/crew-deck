@@ -86,6 +86,20 @@ export const COMPARISON: { label: string; value: (p: PlanInfo) => string }[] = [
       p.limits.work_items === undefined ? 'Unlimited' : `Up to ${p.limits.work_items} items`,
   },
   { label: 'Storage', value: (p) => formatLimit('storage_mb', p.limits.storage_mb) },
+  { label: 'Attachment size', value: (p) => formatLimit('max_attachment_mb', p.limits.max_attachment_mb) },
+  { label: 'Kanban boards, list view, epics and search', value: () => 'Included' },
+  {
+    label: 'Scrum backlog and sprints',
+    value: (p) => (p.features.includes('scrum_sprints') ? 'Included' : 'Not included'),
+  },
+  {
+    label: 'Burndown and sprint reports',
+    value: (p) => (p.features.includes('burndown_reports') ? 'Included' : 'Not included'),
+  },
+  {
+    label: 'Saved filters shared with the team',
+    value: (p) => (p.features.includes('shared_filters') ? 'Included' : 'Not included'),
+  },
   { label: 'Audit log history', value: (p) => formatLimit('audit_days', p.limits.audit_days) },
   { label: 'Members, groups and access requests', value: () => 'Included' },
   { label: 'Google and password sign-in', value: () => 'Included' },

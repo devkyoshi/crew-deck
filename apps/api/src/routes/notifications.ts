@@ -7,7 +7,7 @@ import { withTenant } from '../db/client.js';
 import type { NotificationType } from '../db/types.js';
 import { AppError } from '../lib/errors.js';
 import { describeNotification } from '../work/notify-jobs.js';
-import { NOTIFICATION_TYPES, preferencesOf } from '../work/notify.js';
+import { digestOf, NOTIFICATION_TYPES, preferencesOf } from '../work/notify.js';
 
 const typeEnum = z.enum(NOTIFICATION_TYPES as [NotificationType, ...NotificationType[]]);
 
@@ -95,7 +95,10 @@ export async function notificationRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.get('/me/notification-preferences', { preHandler: requireAuth }, async (req) => {
     const actor = actorOf(req);
-    return withTenant(deps.db, actor.orgId, async (t) => ({ preferences: await preferencesOf(t, actor.userId) }));
+    return withTenant(deps.db, actor.orgId, async (t) => ({
+      preferences: await preferencesOf(t, actor.userId),
+      digest: await digestOf(t, actor.userId),
+    }));
   });
 
   r.put(
@@ -104,7 +107,8 @@ export async function notificationRoutes(app: FastifyInstance, deps: AuthDeps) {
       preHandler: requireAuth,
       schema: {
         body: z.object({
-          preferences: z.partialRecord(typeEnum, z.object({ inApp: z.boolean(), email: z.boolean() })),
+          preferences: z.partialRecord(typeEnum, z.object({ inApp: z.boolean(), email: z.boolean() })).optional(),
+          digest: z.boolean().optional(),
         }),
       },
     },
@@ -113,8 +117,9 @@ export async function notificationRoutes(app: FastifyInstance, deps: AuthDeps) {
       return withTenant(deps.db, actor.orgId, async (t) => {
         const current = await preferencesOf(t, actor.userId);
         const settings = { ...current, ...req.body.preferences };
-        await t.notificationPrefs.upsert({ userId: actor.userId }, { settings, updatedAt: new Date() } as never);
-        return { preferences: await preferencesOf(t, actor.userId) };
+        const digest = req.body.digest ?? (await digestOf(t, actor.userId));
+        await t.notificationPrefs.upsert({ userId: actor.userId }, { settings, digest, updatedAt: new Date() } as never);
+        return { preferences: await preferencesOf(t, actor.userId), digest };
       });
     },
   );

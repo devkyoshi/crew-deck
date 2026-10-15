@@ -62,12 +62,20 @@ function Inbox({ unreadOnly }: { unreadOnly: boolean }) {
         <p className="text-muted-foreground text-sm" aria-live="polite">
           {unread ? `${unread} unread` : 'Nothing unread'}
         </p>
-        <Button variant="outline" size="sm" disabled={!unread || markRead.isPending} onClick={() => markRead.mutate({ all: true })}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!unread || markRead.isPending}
+          onClick={() => markRead.mutate({ all: true })}
+        >
           <CheckCheck /> Mark all read
         </Button>
       </div>
       {items.length === 0 ? (
-        <EmptyState title="You are all caught up" description="New assignments, mentions and comments show up here." />
+        <EmptyState
+          title="You are all caught up"
+          description="New assignments, mentions and comments show up here."
+        />
       ) : (
         <ul className="bg-card divide-y overflow-hidden rounded-xl border">
           {items.map((n) => (
@@ -83,7 +91,12 @@ function Inbox({ unreadOnly }: { unreadOnly: boolean }) {
         </ul>
       )}
       {list.hasNextPage && (
-        <Button variant="outline" size="sm" disabled={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={list.isFetchingNextPage}
+          onClick={() => list.fetchNextPage()}
+        >
           {list.isFetchingNextPage && <Loader2 className="animate-spin" />} Show older
         </Button>
       )}
@@ -98,42 +111,73 @@ function Settings() {
   if (!prefs.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
   const p = prefs.data.preferences;
   const set = (type: NotificationType, channel: 'inApp' | 'email', on: boolean) =>
-    save.mutate({ [type]: { ...p[type], [channel]: on } }, { onError: () => toast.error('Could not save that') });
+    save.mutate(
+      { preferences: { [type]: { ...p[type], [channel]: on } } },
+      { onError: () => toast.error('Could not save that') },
+    );
   return (
-    <div className="bg-card overflow-x-auto rounded-xl border">
-      <table className="w-full text-sm">
-        <caption className="text-muted-foreground p-3 text-left text-xs">
-          Emails are collected and sent together a few minutes after the first one, so a busy morning is one email.
-        </caption>
-        <thead className="text-muted-foreground border-y text-xs">
-          <tr>
-            <th scope="col" className="px-3 py-2 text-left font-medium">
-              Tell me when
-            </th>
-            <th scope="col" className="w-24 px-3 py-2 font-medium">
-              In the app
-            </th>
-            <th scope="col" className="w-24 px-3 py-2 font-medium">
-              By email
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {(Object.keys(TYPE_LABELS) as NotificationType[]).map((type) => (
-            <tr key={type}>
-              <th scope="row" className="px-3 py-2.5 text-left font-normal">
-                {TYPE_LABELS[type]}
+    <div className="space-y-3">
+      <div className="bg-card flex items-center justify-between gap-4 rounded-xl border p-3 text-sm">
+        <div>
+          <p className="font-medium">Daily summary</p>
+          <p className="text-muted-foreground text-xs">
+            Get one email each morning (8:00 in your timezone) instead of emails a few minutes after
+            each update.
+          </p>
+        </div>
+        <Switch
+          aria-label="Send one daily summary email"
+          checked={prefs.data.digest}
+          onCheckedChange={(v) =>
+            save.mutate({ digest: v }, { onError: () => toast.error('Could not save that') })
+          }
+        />
+      </div>
+      <div className="bg-card overflow-x-auto rounded-xl border">
+        <table className="w-full text-sm">
+          <caption className="text-muted-foreground p-3 text-left text-xs">
+            {prefs.data.digest
+              ? 'Emails are collected into the daily summary.'
+              : 'Emails are collected and sent together a few minutes after the first one, so a busy morning is one email.'}
+          </caption>
+          <thead className="text-muted-foreground border-y text-xs">
+            <tr>
+              <th scope="col" className="px-3 py-2 text-left font-medium">
+                Tell me when
               </th>
-              <td className="px-3 py-2.5 text-center">
-                <Switch aria-label={`${TYPE_LABELS[type]}: in the app`} checked={p[type].inApp} onCheckedChange={(v) => set(type, 'inApp', v)} />
-              </td>
-              <td className="px-3 py-2.5 text-center">
-                <Switch aria-label={`${TYPE_LABELS[type]}: by email`} checked={p[type].email} onCheckedChange={(v) => set(type, 'email', v)} />
-              </td>
+              <th scope="col" className="w-24 px-3 py-2 font-medium">
+                In the app
+              </th>
+              <th scope="col" className="w-24 px-3 py-2 font-medium">
+                By email
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y">
+            {(Object.keys(TYPE_LABELS) as NotificationType[]).map((type) => (
+              <tr key={type}>
+                <th scope="row" className="px-3 py-2.5 text-left font-normal">
+                  {TYPE_LABELS[type]}
+                </th>
+                <td className="px-3 py-2.5 text-center">
+                  <Switch
+                    aria-label={`${TYPE_LABELS[type]}: in the app`}
+                    checked={p[type].inApp}
+                    onCheckedChange={(v) => set(type, 'inApp', v)}
+                  />
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  <Switch
+                    aria-label={`${TYPE_LABELS[type]}: by email`}
+                    checked={p[type].email}
+                    onCheckedChange={(v) => set(type, 'email', v)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

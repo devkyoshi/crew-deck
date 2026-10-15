@@ -9,6 +9,7 @@ import type { CommentDoc, UserDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { addWatchers, recordActivity } from '../work/activity.js';
+import { refreshSearchText } from '../work/search-text.js';
 import { deliverSafely, type NotifyEvent } from '../work/notify.js';
 import { sanitizeDoc } from '../work/rich-text.js';
 import {
@@ -149,6 +150,7 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
           deletedAt: null,
           createdAt: new Date(),
         });
+        await refreshSearchText(t, row.id);
         await addWatchers(t, row.id, [actor.userId, ...clean.mentions]);
         await recordActivity(t, {
           item: row,
@@ -194,6 +196,7 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
           { body: clean.doc, mentions: clean.mentions, editedAt: new Date() },
         );
         if (!updated) throw notFound('Comment');
+        await refreshSearchText(t, row.id);
         await addWatchers(t, row.id, added);
         if (added.length) {
           events.push({ type: 'mentioned', orgId: actor.orgId, actorId: actor.userId, itemId: row.id, userIds: added, excerpt: clean.text.slice(0, 200) });
@@ -216,6 +219,7 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
       assertWritable(space);
       // The comment stays as a "deleted" marker so the conversation still reads in order.
       await t.comments.updateOne({ id: comment.id }, { deletedAt: new Date(), body: null, mentions: [] });
+      await refreshSearchText(t, row.id);
       await recordActivity(t, {
         item: row,
         actorId: actor.userId,

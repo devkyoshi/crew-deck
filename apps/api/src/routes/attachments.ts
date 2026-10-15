@@ -20,6 +20,7 @@ import {
   type StorageDriver,
 } from '../storage/index.js';
 import { recordActivity } from '../work/activity.js';
+import { refreshSearchText } from '../work/search-text.js';
 import { assertWritable, resolveItem, type SpaceRow } from '../work/service.js';
 import { spaceCtx } from './spaces.js';
 
@@ -173,6 +174,7 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
           storageKey: key,
           createdAt: new Date(),
         });
+        await refreshSearchText(t, row.id);
         await recordActivity(t, {
           item: row,
           actorId: actor.userId,
@@ -218,6 +220,7 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
       }
       assertWritable(space);
       await t.attachments.deleteOne({ id: a.id });
+      await refreshSearchText(t, row.id);
       await recordActivity(t, {
         item: row,
         actorId: actor.userId,

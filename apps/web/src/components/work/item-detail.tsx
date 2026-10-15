@@ -42,7 +42,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
 import { ApiError } from '@/lib/api';
 import {
-  errorText,
+  toastError,
   itemKey,
   useCreateItem,
   useDeleteItem,
@@ -731,7 +731,7 @@ function ChildrenSection({
       void children.refetch();
     } catch (e) {
       setTitle(t);
-      toast.error(errorText(e, 'Could not add that'));
+      toastError(e, 'Could not add that');
     }
   }
 

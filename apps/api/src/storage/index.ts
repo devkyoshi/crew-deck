@@ -2,8 +2,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { Readable, Transform } from 'node:stream';
+import { PassThrough, type Readable, type Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 
 /**
  * File storage behind a small interface, so the local disk used in development and single-server
@@ -50,11 +52,106 @@ export class LocalDiskDriver implements StorageDriver {
   }
 }
 
-export function createStorage(config: { STORAGE_DRIVER: 'local'; STORAGE_DIR: string }): StorageDriver {
+/** The slice of the S3 client the driver uses, so tests can stand in for the network. */
+export interface S3Like {
+  upload(input: { Bucket: string; Key: string; Body: Readable }): Promise<void>;
+  download(input: { Bucket: string; Key: string }): Promise<Readable>;
+  remove(input: { Bucket: string; Key: string }): Promise<void>;
+}
+
+/** Object storage (S3, or anything speaking its API). Files still stream through the API, so access checks and signed links are unchanged. */
+export class S3Driver implements StorageDriver {
+  constructor(
+    private readonly client: S3Like,
+    private readonly bucket: string,
+    private readonly prefix = '',
+  ) {}
+
+  private keyFor(key: string) {
+    if (!KEY_RE.test(key)) throw new Error('storage: invalid key');
+    return this.prefix ? `${this.prefix.replace(/\/+$/, '')}/${key}` : key;
+  }
+
+  async put(key: string, body: Readable, ...through: Transform[]) {
+    let bytes = 0;
+    const counter = new PassThrough();
+    counter.on('data', (chunk: Buffer) => (bytes += chunk.length));
+    // The write fails (and nothing is kept) if any transform, such as the size limit, errors out.
+    const source = through.reduce<Readable>((from, t) => from.pipe(t), body);
+    const failed = new Promise<never>((_, reject) => {
+      for (const s of [body, ...through]) s.on('error', reject);
+    });
+    const upload = this.client.upload({ Bucket: this.bucket, Key: this.keyFor(key), Body: source.pipe(counter) });
+    try {
+      await Promise.race([upload, failed]);
+    } catch (e) {
+      counter.destroy();
+      await this.delete(key).catch(() => undefined);
+      throw e;
+    }
+    return bytes;
+  }
+
+  get(key: string) {
+    const out = new PassThrough();
+    this.client.download({ Bucket: this.bucket, Key: this.keyFor(key) }).then(
+      (stream) => {
+        stream.on('error', (e) => out.destroy(e));
+        stream.pipe(out);
+      },
+      (e) => out.destroy(e as Error),
+    );
+    return out;
+  }
+
+  async delete(key: string) {
+    await this.client.remove({ Bucket: this.bucket, Key: this.keyFor(key) });
+  }
+}
+
+export function createStorage(config: {
+  STORAGE_DRIVER: 'local' | 's3';
+  STORAGE_DIR: string;
+  S3_BUCKET?: string;
+  S3_REGION?: string;
+  S3_ENDPOINT?: string;
+  S3_FORCE_PATH_STYLE?: boolean;
+  S3_PREFIX?: string;
+  S3_ACCESS_KEY_ID?: string;
+  S3_SECRET_ACCESS_KEY?: string;
+}): StorageDriver {
   switch (config.STORAGE_DRIVER) {
     case 'local':
       return new LocalDiskDriver(config.STORAGE_DIR);
+    case 's3': {
+      if (!config.S3_BUCKET) throw new Error('S3_BUCKET must be set when STORAGE_DRIVER is s3');
+      return new S3Driver(awsClient(config), config.S3_BUCKET, config.S3_PREFIX);
+    }
   }
+}
+
+function awsClient(config: Parameters<typeof createStorage>[0]): S3Like {
+  const client = new S3Client({
+    region: config.S3_REGION,
+    endpoint: config.S3_ENDPOINT,
+    forcePathStyle: config.S3_FORCE_PATH_STYLE,
+    credentials:
+      config.S3_ACCESS_KEY_ID && config.S3_SECRET_ACCESS_KEY
+        ? { accessKeyId: config.S3_ACCESS_KEY_ID, secretAccessKey: config.S3_SECRET_ACCESS_KEY }
+        : undefined,
+  });
+  return {
+    async upload(input) {
+      await new Upload({ client, params: input }).done();
+    },
+    async download(input) {
+      const res = await client.send(new GetObjectCommand(input));
+      return res.Body as Readable;
+    },
+    async remove(input) {
+      await client.send(new DeleteObjectCommand(input));
+    },
+  };
 }
 
 // ---- Signed links ---------------------------------------------------------------------------------------

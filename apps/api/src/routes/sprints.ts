@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { generateNKeysBetween } from 'fractional-indexing';
 import { z } from 'zod';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
@@ -87,6 +88,11 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
       { spaceId: space.id, deletedAt: null, type: { $in: [...SPRINT_ITEM_TYPES] }, ...filter },
       { sort: { rank: 1, number: 1 } },
     );
+    // Hand-ordered items come first in their saved order; newly added ones follow by board rank.
+    docs.sort((a, b) => {
+      if (a.backlogRank && b.backlogRank) return a.backlogRank < b.backlogRank ? -1 : a.backlogRank > b.backlogRank ? 1 : 0;
+      return a.backlogRank ? -1 : b.backlogRank ? 1 : 0;
+    });
     return (await hydrateItems(t, docs)).map((row) => presentItem(row, space.key));
   }
 
@@ -121,6 +127,36 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
       };
     });
   });
+
+  /** Saves the order of one section (a sprint, or the backlog with `sprintId: null`). */
+  r.put(
+    '/spaces/:id/backlog/order',
+    {
+      preHandler: requireAuth,
+      schema: {
+        params: idParam,
+        body: z.object({ sprintId: z.string().uuid().nullable(), ids: z.array(z.string().uuid()).min(1).max(500) }),
+      },
+    },
+    async (req) => {
+      const actor = actorOf(req);
+      const { sprintId, ids } = req.body;
+      return withTenantTx(deps.db, actor.orgId, async (t) => {
+        const space = await resolveSpace(t, actor, req.params.id);
+        if (!can(actor, 'item.edit', spaceCtx(space))) throw forbidden();
+        assertWritable(space);
+        await assertScrum(t, space);
+        const unique = [...new Set(ids)];
+        const found = await t.workItems.count({ id: { $in: unique }, spaceId: space.id, sprintId, deletedAt: null });
+        if (found !== unique.length) {
+          throw new AppError(422, 'invalid_order', 'Those items are no longer in that list. Reload and try again.');
+        }
+        const ranks = generateNKeysBetween(null, null, unique.length);
+        for (const [i, id] of unique.entries()) await t.workItems.updateOne({ id }, { backlogRank: ranks[i]! });
+        return { ok: true };
+      });
+    },
+  );
 
   // ---- Sprints ---------------------------------------------------------------------------------------------
 

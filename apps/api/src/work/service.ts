@@ -223,6 +223,17 @@ export async function resolveItem(t: TenantDb, actor: Actor, ref: string) {
       );
       itemId = hit?.id ?? null;
     }
+    if (!itemId) {
+      // An item moved to another space keeps answering to its old key; access is checked on the new space.
+      const old = await t.workItems.findOne(
+        { keyHistory: `${m[1]!.toUpperCase()}-${Number(m[2])}`, deletedAt: null },
+        { projection: { id: 1, spaceId: 1 } },
+      );
+      if (old) {
+        itemId = old.id;
+        space = await resolveSpace(t, actor, old.spaceId).catch(() => null);
+      }
+    }
   }
   if (!space || !itemId) throw notFound('Work item');
   const [row] = await loadItemRows(t, { id: itemId });

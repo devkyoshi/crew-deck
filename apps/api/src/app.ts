@@ -144,8 +144,8 @@ export function buildApp({
   app.register(spaceMemberRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(statusRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(boardRoutes, { prefix: '/api/v1', ...authDeps });
-  app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps });
-  app.register(workMoveRoutes, { prefix: '/api/v1', ...authDeps, enqueueRebalance });
+  app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps, storage });
+  app.register(workMoveRoutes, { prefix: '/api/v1', ...authDeps, enqueueRebalance, storage });
   app.register(workDepthRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workCopyRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workFindRoutes, { prefix: '/api/v1', ...authDeps });

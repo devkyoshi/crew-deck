@@ -45,4 +45,4 @@ Proposed for the work items module; details, behaviour and wiring are in [work-i
 | Filters shared with the space (`shared_filters`)       | No    | Yes       | Yes       |
 | Burndown and sprint report (`burndown_reports`)        | No    | No        | Yes       |
 
-Kanban boards, statuses, comments, links and search are included in every plan. Storage (`storage_mb`) starts being enforced when attachments ship.
+Kanban boards, statuses, comments, links and search are included in every plan. Storage (`storage_mb`) is enforced since W3, and deleting an item frees its files. The pricing page and plan comparison list all of these since W8.

@@ -381,6 +381,43 @@ SSE: authorised client receives events within ~1 s; a user without space access 
 
 ---
 
+## W8 to W13: leftovers and Jira Software parity
+
+Added on 2026-10-15 after W1 to W7 were built. Scope: close the known gaps, then add what a software team uses daily in Jira. Out of scope (raise as new briefs): Service Management (queues, SLAs, forms), approvals, custom fields and item types, automation rules, a query language, SSO. Data lives in MongoDB, so "migrations" mean new collections and indexes created at API start (`db/indexes.ts`). Each phase ends in `Review`.
+
+### W8: Leftovers (built)
+
+Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised list, search in comments and file names, S3 driver and file cleanup on delete, daily summary email, upgrade notice and pricing rows, ADR renumbering. See `PROGRESS.md`.
+
+### W9: Workflow rules and dependencies
+
+- Per-space allowed transitions (`from -> to`), default any to any; editor in board settings; enforced in `work/service.ts` for edit, move, bulk and transfer (422 with a reason). `can()` action `workflow.manage` (admin).
+- Resolution (Fixed, Won't do, Duplicate, Cannot reproduce) when moving to a Done status.
+- Dependency awareness: "blocked by N" and "blocks N" on cards (open blockers only), a warning (never a block) when moving a blocked item forward, a "Blocked" filter.
+- Checklists on items with progress on cards, and reusable checklist templates per space.
+
+### W10: Versions and components
+
+- Collections `versions` (name, description, start and release dates, state unreleased, released, archived) and `components` (name, lead, default assignee); item fields `fixVersionIds`, `affectsVersionIds`, `componentIds`.
+- Release action lists open items and moves them to another version or none; release notes grouped by type; filters on board, list, search and CSV; default assignee on create. Plan gate `releases`.
+
+### W11: Flow and reports
+
+- `status_changes` collection (item, from, to, at) fed by every status change, backfilled from `activity_events`.
+- Velocity (last six sprints), cumulative flow, control chart with cycle-time percentiles, created vs resolved; each with a data table. Plan gate `advanced_reports`.
+
+### W12: Roadmap, time tracking, calendar
+
+- Roadmap timeline of epics and versions (start and due dates, drag and resize, zoom, date fields as the keyboard alternative). Plan gate `roadmap`.
+- Time tracking: original and remaining estimate, work logs (`worklogs`), roll-ups on epics. `can()` actions `worklog.add`, `worklog.editOwn`, `worklog.deleteAny`.
+- Calendar view of due dates.
+
+### W13: Dashboards, parity sweep, hardening
+
+- Per-user dashboards from a fixed set of gadgets (assigned to me, created vs resolved, sprint health, saved filter results, version progress).
+- `JIRA-PARITY.md`: a row per Jira Software feature (Built, Partial, Out of scope) with where it lives in the app.
+- Accessibility, keyboard shortcuts, rate limits, live-update events for new entities, demo seed and Playwright coverage for W9 to W12.
+
 ## After W7
 
-Not in this module: transition restrictions, Kanban sprints, custom item types, hours estimates, automation, velocity/CFD reports, chat and wiki. Raise them as new briefs.
+Not in this module: Kanban sprints, custom item types and fields, automation, Service Management, a query language, chat and wiki. Raise them as new briefs.

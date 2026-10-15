@@ -9,6 +9,7 @@ import { AppError, forbidden } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
 import { addWatchers, recordActivity } from '../work/activity.js';
+import { SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import {
   assertWritable,
   canOpenSpace,
@@ -72,7 +73,8 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
             parentId: src.parentId,
             title: src.title,
             description: src.description,
-            searchText: src.searchText ?? '',
+            searchText: searchTextOf(src.description),
+            searchVersion: SEARCH_TEXT_VERSION,
             statusId: src.statusId,
             priority: src.priority,
             assigneeId: src.assigneeId,
@@ -168,6 +170,7 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
           await t.workItems.updateOne(
             { id: item.id },
             {
+              keyHistory: [...new Set([...(item.keyHistory ?? []), `${space.key}-${item.number}`])],
               spaceId: target.id,
               number,
               statusId: status.id,

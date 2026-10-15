@@ -404,7 +404,10 @@ describe('transfer', () => {
     const subNow = (await send('GET', `/items/${sub.id}`, c.member!)).json();
     expect(subNow.key).toBe(`${target.key}-2`);
     expect(subNow.parent.key).toBe(moved.key);
-    expect((await send('GET', `/items/${item.key}`, c.member!)).statusCode).toBe(404);
+    // The old key keeps working and leads to the moved item.
+    const viaOld = await send('GET', `/items/${item.key}`, c.member!);
+    expect(viaOld.statusCode).toBe(200);
+    expect(viaOld.json().id).toBe(moved.id);
     expect((await send('GET', `/items/${moved.id}/comments`, c.member!)).json().items).toHaveLength(1);
     expect((await send('GET', `/items/${moved.id}/links`, c.member!)).json().items).toHaveLength(1);
     const events = await activity(moved, c.member!);
