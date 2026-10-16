@@ -163,8 +163,10 @@ test('messaging settings, the webhook dialog and chat limits have no accessibili
     await page.goto(`/messages/${channelId}`);
     const toggle = page.getByRole('button', { name: 'Channel details' });
     await expect(toggle).toBeVisible();
-    if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
-    await expect(page.getByText('Incoming webhooks')).toBeVisible({ timeout: 8000 });
+    // Whether the panel starts open is applied just after load, so look before pressing.
+    const hook = page.getByText('Incoming webhooks');
+    if (!(await hook.isVisible({ timeout: 3000 }).catch(() => false)) && !(await hook.waitFor({ timeout: 2500 }).then(() => true, () => false))) await toggle.click();
+    await expect(hook).toBeVisible({ timeout: 8000 });
     const b = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).exclude('[data-nextjs-dev-tools-button]').analyze();
     expect(b.violations.map((v) => `${v.id}: ${v.nodes[0]?.target.join(' ')}`), `details (${theme})`).toEqual([]);
   }
