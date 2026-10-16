@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
+import type { SpaceFeature } from '@crew-deck/shared';
 import type { WorkItem } from '@/lib/work';
 import { refreshWork } from '@/lib/work-api';
 
@@ -123,6 +124,24 @@ export const useReorderBacklog = (space: string) => {
     mutationFn: ({ sprintId, ids }: { sprintId: string | null; ids: string[] }) =>
       api<{ ok: true }>(`/spaces/${space}/backlog/order`, { method: 'PUT', body: { sprintId, ids } }),
     onSettled: () => void qc.invalidateQueries({ queryKey: ['backlog'] }),
+  });
+};
+
+export const useSetSpaceFeatures = (space: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (features: SpaceFeature[]) =>
+      api<{ features: SpaceFeature[]; movedToBacklog: number }>(`/spaces/${space}/features`, {
+        method: 'PUT',
+        body: { features },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['space'] });
+      void qc.invalidateQueries({ queryKey: ['spaces'] });
+      void qc.invalidateQueries({ queryKey: ['backlog'] });
+      void qc.invalidateQueries({ queryKey: ['sla'] });
+      void refreshWork(qc);
+    },
   });
 };
 

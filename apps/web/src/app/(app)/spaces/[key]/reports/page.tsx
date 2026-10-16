@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Page() {
   const space = useSpace();
-  const scrum = space.boardType === 'scrum';
+  const scrum = space.features.includes('sprints');
   return (
     <Suspense fallback={<p className="text-muted-foreground text-sm">Loading…</p>}>
       <Tabs defaultValue={scrum ? 'sprint' : 'flow'} className="space-y-4">

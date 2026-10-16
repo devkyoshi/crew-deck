@@ -42,10 +42,10 @@ describe('isSlaPolicy', () => {
 
   it('rejects missing priorities, zero and fractional minutes', () => {
     expect(isSlaPolicy({ businessHours: true, targets: {} })).toBe(false);
-    const zero = structuredClone(DEFAULT_SLA);
+    const zero = JSON.parse(JSON.stringify(DEFAULT_SLA)) as typeof DEFAULT_SLA;
     zero.targets.high.responseMinutes = 0;
     expect(isSlaPolicy(zero)).toBe(false);
-    const half = structuredClone(DEFAULT_SLA);
+    const half = JSON.parse(JSON.stringify(DEFAULT_SLA)) as typeof DEFAULT_SLA;
     half.targets.low.resolveMinutes = 1.5;
     expect(isSlaPolicy(half)).toBe(false);
     expect(isSlaPolicy(null)).toBe(false);

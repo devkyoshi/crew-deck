@@ -142,7 +142,7 @@ export default function SpaceSettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      {space.boardType === 'service' && (
+      {space.features.includes('tickets') && (
         <Card>
           <CardHeader>
             <CardTitle>Response targets</CardTitle>

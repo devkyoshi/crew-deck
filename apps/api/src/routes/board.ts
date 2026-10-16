@@ -6,6 +6,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant } from '../db/client.js';
 import type { BoardDoc } from '../db/types.js';
 import { filterConditions, filterQuery, hasFilters, lookupConditions, type FilterQuery } from '../work/filters.js';
+import { featuresOfBoard } from '../work/space-features.js';
 import { liveTouch } from '../lib/live.js';
 import { forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
@@ -63,6 +64,7 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
   const presentBoard = (b: BoardDoc) => ({
     id: b.id,
     type: b.type,
+    features: featuresOfBoard(b),
     name: b.name,
     settings: readSettings(b.settings),
   });
@@ -71,14 +73,15 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
   const columnWhere = (
     spaceId: string,
     status: { id: string; category: string },
-    board: { type: string; settings: BoardSettings },
+    board: { type: string; features: string[]; settings: BoardSettings },
     extra: Record<string, unknown>[] = [],
   ): Record<string, unknown> => {
     const all: Record<string, unknown>[] = [
       ...extra,
       { spaceId, statusId: status.id, deletedAt: null, type: { $in: [...BOARD_TYPES_SHOWN] } },
     ];
-    if (board.type === 'kanban' && status.category === 'done') {
+    // Finished cards of a continuous board fade out after a while; a sprint board keeps them for the sprint.
+    if (!board.features.includes('sprints') && status.category === 'done') {
       const cutoff = new Date(Date.now() - board.settings.doneRetentionDays * 86_400_000);
       all.push({ $or: [{ resolvedAt: null }, { resolvedAt: { $gt: cutoff } }] });
     }
@@ -113,8 +116,9 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
         const board = presentBoard(boardRow);
         const statuses = await listStatuses(tx, space.id);
         // A Scrum board shows the running sprint only (nothing when no sprint is running).
-        const sprint = board.type === 'scrum' ? await tx.sprints.findOne({ spaceId: space.id, state: 'active' }) : null;
-        if (board.type === 'scrum') extra.push({ sprintId: sprint?.id ?? '__none__' });
+        const sprints = board.features.includes('sprints');
+        const sprint = sprints ? await tx.sprints.findOne({ spaceId: space.id, state: 'active' }) : null;
+        if (sprints) extra.push({ sprintId: sprint?.id ?? '__none__' });
 
         const columns = [];
         for (const status of statuses) {
@@ -167,7 +171,7 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
         const space = await resolveSpace(tx, actor, req.params.id);
         extra.push(...(await lookupConditions(tx, space.id, req.query)));
         const board = presentBoard(await loadBoard(tx, space.id));
-        if (board.type === 'scrum') {
+        if (board.features.includes('sprints')) {
           const sprint = await tx.sprints.findOne({ spaceId: space.id, state: 'active' });
           extra.push({ sprintId: sprint?.id ?? '__none__' });
         }

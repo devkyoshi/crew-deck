@@ -207,3 +207,76 @@ describe('plans', () => {
     expect(res.json().code).toBe('feature_locked');
   });
 });
+
+describe('spaces with several features', () => {
+  const make = async (features: string[], cookie = c.owner!) => {
+    const res = await send('POST', '/spaces', cookie, { key: key(), name: 'Mixed', features });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json() as Json;
+  };
+
+  it('combine sprints and tickets in one space, and report both', async () => {
+    const sp = await make(['sprints', 'epics', 'tickets']);
+    expect(sp.features).toEqual(['sprints', 'epics', 'tickets']);
+    expect(sp.boardType).toBe('scrum');
+    // Not a desk-only space, so it keeps the workspace's own columns.
+    const statuses = (await send('GET', `/spaces/${sp.id}/statuses`, c.owner!)).json().items as Json[];
+    expect(statuses.map((s) => s.name)).not.toEqual(['Open', 'In Progress', 'Waiting', 'Resolved']);
+    expect((await raise(sp, c.requester!)).statusCode).toBe(200);
+    expect((await send('POST', `/spaces/${sp.id}/items`, c.owner!, { type: 'epic', title: 'Goal' })).statusCode).toBe(200);
+  });
+
+  it('refuse epics and tickets where those features are off', async () => {
+    const sp = await make(['sprints']);
+    const epic = await send('POST', `/spaces/${sp.id}/items`, c.owner!, { type: 'epic', title: 'Goal' });
+    expect(epic.statusCode).toBe(422);
+    expect((await raise(sp, c.owner!)).statusCode).toBe(422);
+  });
+
+  it('still understand the older board types', async () => {
+    const scrum = (await send('POST', '/spaces', c.owner!, { key: key(), name: 'Old scrum', boardType: 'scrum' })).json() as Json;
+    expect(scrum.features).toContain('sprints');
+    const plain = (await send('POST', '/spaces', c.owner!, { key: key(), name: 'Plain' })).json() as Json;
+    expect(plain.features).toEqual(['epics', 'releases', 'roadmap', 'calendar']);
+    expect(plain.boardType).toBe('kanban');
+  });
+
+  it('give spaces with no stored features what their board type used to give', async () => {
+    const sp = await make(['tickets']);
+    await t.db.tenant(ids.acme).boards.updateOne({ spaceId: sp.id }, { features: undefined, type: 'scrum' });
+    const read = (await send('GET', `/spaces/${sp.id}`, c.owner!)).json() as Json;
+    expect(read.features).toContain('sprints');
+  });
+
+  it('change features later, and only admins can', async () => {
+    const sp = await make(['epics']);
+    expect((await send('PUT', `/spaces/${sp.id}/features`, c.requester!, { features: ['tickets'] })).statusCode).toBe(403);
+    const ok = await send('PUT', `/spaces/${sp.id}/features`, c.owner!, { features: ['epics', 'tickets'] });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect(ok.json().features).toEqual(['epics', 'tickets']);
+    expect((await raise(sp, c.requester!)).statusCode).toBe(200);
+  });
+
+  it('will not turn sprints off while one is running, and returns planned work afterwards', async () => {
+    const sp = await make(['sprints']);
+    const item = (await send('POST', `/spaces/${sp.id}/items`, c.owner!, { type: 'task', title: 'Plan me' })).json() as Json;
+    const sprint = (await send('POST', `/spaces/${sp.id}/sprints`, c.owner!, { name: 'S1' })).json() as Json;
+    const plan = await send('POST', '/items/sprint', c.owner!, { ids: [item.id], sprintId: sprint.id });
+    expect(plan.statusCode, plan.body).toBe(200);
+    // A running sprint blocks turning sprints off.
+    const started = await send('POST', `/sprints/${sprint.id}/start`, c.owner!, {
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    expect((await send('PUT', `/spaces/${sp.id}/features`, c.owner!, { features: [] })).statusCode).toBe(409);
+    expect((await send('POST', `/sprints/${sprint.id}/complete`, c.owner!, { destination: 'backlog' })).statusCode).toBe(200);
+    // Work left in the finished sprint goes back to the backlog by itself, so plan another to check the return.
+    const next = (await send('POST', `/spaces/${sp.id}/sprints`, c.owner!, { name: 'S2' })).json() as Json;
+    await send('POST', '/items/sprint', c.owner!, { ids: [item.id], sprintId: next.id });
+    const off = await send('PUT', `/spaces/${sp.id}/features`, c.owner!, { features: [] });
+    expect(off.statusCode, off.body).toBe(200);
+    expect(off.json().movedToBacklog).toBe(1);
+    expect((await send('GET', `/spaces/${sp.id}/backlog`, c.owner!)).statusCode).toBe(422);
+  });
+});

@@ -70,3 +70,4 @@ export const ALLOWED_CHILDREN: Record<ItemType, readonly ItemType[]> = {
 
 export * from './workspace';
 export * from './sla';
+export * from './space-features';

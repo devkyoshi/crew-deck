@@ -840,7 +840,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       </div>
 
-      {data.board.type === 'scrum' && data.sprint && (
+      {data.board.features.includes('sprints') && data.sprint && (
         <div className="bg-primary/5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-sm">
           <span className="font-medium">{data.sprint.name}</span>
           <span className="text-muted-foreground">{dateRange(data.sprint)}</span>
@@ -850,7 +850,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
           </Link>
         </div>
       )}
-      {data.board.type === 'scrum' && !data.sprint && !filtered && (
+      {data.board.features.includes('sprints') && !data.sprint && !filtered && (
         <div className="rounded-xl border border-dashed">
           <EmptyState
             icon={Kanban}
@@ -864,7 +864,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
           />
         </div>
       )}
-      {totalAll === 0 && !filtered && data.board.type !== 'scrum' && (
+      {totalAll === 0 && !filtered && !data.board.features.includes('sprints') && (
         <div className="rounded-xl border border-dashed">
           <EmptyState
             icon={Kanban}

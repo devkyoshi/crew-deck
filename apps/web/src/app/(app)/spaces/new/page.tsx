@@ -14,7 +14,7 @@ export default function NewSpacePage() {
           <ArrowLeft /> Spaces
         </Link>
       </Button>
-      <PageHeader title="Create space" description="Set up a new space in four quick steps." />
+      <PageHeader title="Create space" description="Set up a new space in a few quick steps." />
       <CreateSpaceWizard />
     </>
   );

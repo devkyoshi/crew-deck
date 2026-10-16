@@ -81,12 +81,16 @@ function readColumns(key: string, fallback: ColumnId[]): ColumnId[] {
 }
 
 /** Every item of the space as a sortable table, sharing the board's filters, selection and bulk actions. */
-export function ListView() {
+export function ListView({ ticketsOnly = false }: { ticketsOnly?: boolean } = {}) {
   const space = useSpace();
   const me = useMe();
   const vocab = useVocabulary();
   const { params, push } = useUrlState();
-  const filters = useMemo(() => parseFilters(new URLSearchParams(params.toString())), [params]);
+  const filters = useMemo(() => {
+    const parsed = parseFilters(new URLSearchParams(params.toString()));
+    // The tickets queue is the list narrowed to tickets, whatever the URL says about type.
+    return ticketsOnly ? { ...parsed, type: ['ticket' as const] } : parsed;
+  }, [params, ticketsOnly]);
   const filterStr = filterString(filters);
   const sort = (LIST_SORTS as readonly string[]).includes(params.get('sort') ?? '')
     ? (params.get('sort') as ListSort)
@@ -95,7 +99,7 @@ export function ListView() {
   const list = useItemList(space.key, filterStr, sort, dir);
   const statuses = useStatuses(space.key);
   const [selected, setSelected] = useState<string[]>([]);
-  const isService = space.boardType === 'service';
+  const isService = ticketsOnly;
   const defaults = isService ? SERVICE_COLUMNS : DEFAULT_COLUMNS;
   const prefKey = `list:${me.user.id}:${isService ? 'queue' : 'columns'}`;
   const [columns, setColumns] = useState<ColumnId[]>(defaults);

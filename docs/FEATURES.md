@@ -77,6 +77,7 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Backlog and sprints (Scrum) (W6)                                     | Built   | `scrum_sprints`    |
 | Burndown and sprint report (W6)                                      | Built   | `burndown_reports` |
 | Service desk: ticket queue with response and resolve targets          | Built   | `service_desk`     |
+| Per-space features: pick sprints, epics, releases, roadmap, calendar and tickets for each space, in groups; combine freely | Built | `scrum_sprints` (sprints), `service_desk` (tickets) |
 | Live updates on boards, lists, backlogs and items (W7)               | Built   |                    |
 | Personal dashboards with tiles (W13) | Built | |
 | Time tracking, roadmap timeline, due-date calendar (W12) | Built | `roadmap` (timeline) |

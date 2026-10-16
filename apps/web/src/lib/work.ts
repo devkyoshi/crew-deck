@@ -1,4 +1,5 @@
 import type {
+  SpaceFeature,
   SlaState,
   BoardType,
   ItemType,
@@ -127,7 +128,7 @@ export interface BoardSettings {
 
 export interface BoardData {
   space: { id: string; key: string; name: string; status: 'active' | 'archived' };
-  board: { id: string; type: BoardType; name: string; settings: BoardSettings };
+  board: { id: string; type: BoardType; features: SpaceFeature[]; name: string; settings: BoardSettings };
   /** The running sprint on a Scrum board (null when none is running, or on Kanban). */
   sprint?: { id: string; name: string; goal: string | null; startDate: string | null; endDate: string | null } | null;
   statuses: {

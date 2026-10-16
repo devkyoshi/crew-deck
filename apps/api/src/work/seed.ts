@@ -1,5 +1,16 @@
-import { DEFAULT_STATUSES, SERVICE_STATUSES, WORKSPACE_TEMPLATES, isWorkType, type StatusTemplate } from '@crew-deck/shared';
+import {
+  DEFAULT_STATUSES,
+  SERVICE_STATUSES,
+  WORKSPACE_TEMPLATES,
+  featuresFromBoardType,
+  isWorkType,
+  normalizeFeatures,
+  type BoardType,
+  type SpaceFeature,
+  type StatusTemplate,
+} from '@crew-deck/shared';
 import type { TenantDb } from '../db/client.js';
+import { boardFieldsFor } from './space-features.js';
 
 /**
  * Gives a new space its board, item counter and starting columns. This replaces the Postgres trigger
@@ -10,9 +21,13 @@ import type { TenantDb } from '../db/client.js';
 export async function seedSpaceWork(
   t: TenantDb,
   spaceId: string,
-  opts: { statuses?: readonly StatusTemplate[]; boardType?: 'kanban' | 'scrum' | 'service' } = {},
+  opts: { statuses?: readonly StatusTemplate[]; features?: readonly SpaceFeature[]; boardType?: BoardType } = {},
 ) {
-  let statuses = opts.statuses ?? (opts.boardType === 'service' ? SERVICE_STATUSES : undefined);
+  // `boardType` is the older way to say the same thing and still works for callers that use it.
+  const features = opts.features ? normalizeFeatures(opts.features) : featuresFromBoardType(opts.boardType);
+  // A desk that is only tickets starts with ticket columns; any other mix uses the workspace's own.
+  const deskOnly = features.includes('tickets') && !features.includes('sprints') && !features.includes('epics');
+  let statuses = opts.statuses ?? (deskOnly ? SERVICE_STATUSES : undefined);
   if (!statuses) {
     const org = await t.organization();
     statuses =
@@ -20,7 +35,7 @@ export async function seedSpaceWork(
         ? WORKSPACE_TEMPLATES[org.workType].statuses
         : DEFAULT_STATUSES;
   }
-  await t.boards.insert({ spaceId, type: opts.boardType ?? 'kanban' });
+  await t.boards.insert({ spaceId, ...boardFieldsFor(features) });
   await t.spaceCounters.insert({ spaceId });
   await t.spaceStatuses.insert(
     statuses.map((s, position) => ({

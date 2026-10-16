@@ -6,6 +6,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant } from '../db/client.js';
 import { assertFeature, hasFeature, loadPlan } from '../plans/index.js';
 import { endOfDay, createdVsResolved, cumulativeFlow, cycleTimes, lastDays, trackItems } from '../work/flow.js';
+import { featuresOfBoard } from '../work/space-features.js';
 import { resolveSpace } from './spaces.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -37,7 +38,7 @@ export async function reportRoutes(app: FastifyInstance, deps: AuthDeps) {
 
         const board = await t.boards.findOne({ spaceId: space.id });
         let velocity: { name: string; committed: number; completed: number; endDate: string | null }[] | null = null;
-        if (board?.type === 'scrum') {
+        if (featuresOfBoard(board).includes('sprints')) {
           const closed = await t.sprints.find({ spaceId: space.id, state: 'closed' }, { sort: { closedAt: -1 }, limit: 6 });
           velocity = closed
             .reverse()

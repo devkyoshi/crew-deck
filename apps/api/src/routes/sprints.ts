@@ -10,10 +10,12 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { DATE_RE, isRealDate, localDate } from '../lib/time.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertFeature, loadPlan } from '../plans/index.js';
+import { normalizeFeatures, SPACE_FEATURES, type SpaceFeature } from '@crew-deck/shared';
 import { recordActivity } from '../work/activity.js';
 import { notifyOne } from '../work/notify.js';
 import { assertWritable, hydrateItems, loadBoard, presentItem, resolveItem, type SpaceRow } from '../work/service.js';
 import { daysBetween, points, setItemsSprint, snapshotSprint, SPRINT_ITEM_TYPES } from '../work/sprints.js';
+import { assertPlanAllows, boardFieldsFor, featuresOfBoard } from '../work/space-features.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
 import { liveTouch } from '../lib/live.js';
 
@@ -32,8 +34,8 @@ const conflict = (message: string) => new AppError(409, 'conflict', message);
 
 async function assertScrum(t: TenantDb, space: SpaceRow) {
   const board = await loadBoard(t, space.id);
-  if (board.type !== 'scrum') {
-    throw new AppError(422, 'not_scrum', 'This space uses a Kanban board. Switch it to Scrum to plan sprints.');
+  if (!featuresOfBoard(board).includes('sprints')) {
+    throw new AppError(422, 'not_scrum', 'This space does not use sprints. A space admin can turn them on in Board settings.');
   }
   return board;
 }
@@ -537,7 +539,65 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
     });
   });
 
-  // ---- Board type ------------------------------------------------------------------------------------------
+  // ---- Features ----------------------------------------------------------------------------------------------
+
+  /**
+   * Switches a space's features. Adding sprints or tickets needs the plan to include them. Taking sprints
+   * away needs the running sprint finished first, and returns work planned into later sprints to the
+   * backlog (the sprints are kept). Nothing else is deleted: epics, tickets and the rest stay in the data.
+   */
+  const applyFeatures = async (
+    t: TenantDb,
+    actor: Actor,
+    space: SpaceRow,
+    next: readonly SpaceFeature[],
+  ) => {
+    const board = await loadBoard(t, space.id);
+    const before = featuresOfBoard(board);
+    const after = normalizeFeatures(next);
+    const sameSet = before.length === after.length && before.every((f) => after.includes(f));
+    if (sameSet) return { features: before, type: board.type, movedToBacklog: 0 };
+    const turningOnSprints = after.includes('sprints') && !before.includes('sprints');
+    const turningOffSprints = before.includes('sprints') && !after.includes('sprints');
+    if (turningOffSprints && (await t.sprints.exists({ spaceId: space.id, state: 'active' }))) {
+      throw conflict('A sprint is running. Complete it before turning sprints off.');
+    }
+    // Only features being added are checked, so a lapsed plan never blocks other changes.
+    const added = after.filter((f) => !before.includes(f));
+    if (added.length) assertPlanAllows(await loadPlan(t, actor.orgId), added);
+    let moved = 0;
+    if (turningOffSprints) {
+      // Work planned into sprints goes back to the backlog; the sprints themselves are kept.
+      const planned = await t.sprints.find({ spaceId: space.id, state: 'planned' }, { projection: { id: 1 } });
+      const items = await t.workItems.find({ sprintId: { $in: planned.map((p) => p.id) } }, { projection: { id: 1, sprintId: 1, estimate: 1 } });
+      await setItemsSprint(t, items, null);
+      moved = items.length;
+    }
+    void turningOnSprints;
+    const fields = boardFieldsFor(after);
+    await t.boards.updateOne({ id: board.id }, { ...fields, updatedAt: new Date() });
+    liveTouch({ orgId: t.orgId, spaceId: space.id, kind: 'updated', itemId: null });
+    return { ...fields, movedToBacklog: moved };
+  };
+
+  r.put(
+    '/spaces/:id/features',
+    {
+      preHandler: requireAuth,
+      schema: { params: idParam, body: z.object({ features: z.array(z.enum(SPACE_FEATURES)).max(SPACE_FEATURES.length) }) },
+    },
+    async (req) => {
+      const actor = actorOf(req);
+      return withTenantTx(deps.db, actor.orgId, async (t) => {
+        const space = await resolveSpace(t, actor, req.params.id);
+        if (!can(actor, 'board.manage', spaceCtx(space))) throw forbidden();
+        assertWritable(space);
+        return applyFeatures(t, actor, space, req.body.features);
+      });
+    },
+  );
+
+  // The older switch between a plain board and Scrum: it only turns sprints on or off.
 
   r.put(
     '/spaces/:id/board-type',
@@ -548,24 +608,10 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
         const space = await resolveSpace(t, actor, req.params.id);
         if (!can(actor, 'board.manage', spaceCtx(space))) throw forbidden();
         assertWritable(space);
-        const board = await loadBoard(t, space.id);
-        if (board.type === 'service') throw conflict('A service desk keeps its board type.');
-        if (board.type === req.body.type) return { type: board.type, movedToBacklog: 0 };
-        if (await t.sprints.exists({ spaceId: space.id, state: 'active' })) {
-          throw conflict('A sprint is running. Complete it before changing the board type.');
-        }
-        let moved = 0;
-        if (req.body.type === 'scrum') {
-          assertFeature(await loadPlan(t, actor.orgId), 'scrum_sprints', 'Scrum boards');
-        } else {
-          // Work planned into sprints goes back to the backlog; the sprints themselves are kept.
-          const planned = await t.sprints.find({ spaceId: space.id, state: 'planned' }, { projection: { id: 1 } });
-          const items = await t.workItems.find({ sprintId: { $in: planned.map((p) => p.id) } }, { projection: { id: 1, sprintId: 1, estimate: 1 } });
-          await setItemsSprint(t, items, null);
-          moved = items.length;
-        }
-        await t.boards.updateOne({ id: board.id }, { type: req.body.type, updatedAt: new Date() });
-        return { type: req.body.type, movedToBacklog: moved };
+        const current = featuresOfBoard(await loadBoard(t, space.id));
+        const next = req.body.type === 'scrum' ? [...current, 'sprints' as const] : current.filter((f) => f !== 'sprints');
+        const out = await applyFeatures(t, actor, space, next);
+        return { type: out.type, movedToBacklog: out.movedToBacklog };
       });
     },
   );

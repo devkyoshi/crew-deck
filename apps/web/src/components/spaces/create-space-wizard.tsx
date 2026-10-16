@@ -1,24 +1,21 @@
 'use client';
 
-import { useHasFeature } from '@/lib/plans';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, Kanban, Lock, Ticket, Timer, Users } from 'lucide-react';
+import { Globe, Lock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { DEFAULT_STATUSES, WORKSPACE_TEMPLATES, isWorkType } from '@crew-deck/shared';
-import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  DEFAULT_STATUSES,
+  FEATURE_GROUPS,
+  WORKSPACE_TEMPLATES,
+  isWorkType,
+  type SpaceFeature,
+} from '@crew-deck/shared';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -42,9 +39,10 @@ import { useMe } from '@/components/shell/me-context';
 import { api, ApiError, type SpaceDetail, type SpaceRole, type SpaceVisibility } from '@/lib/api';
 import { SPACE_ICONS, spaceIcon, suggestKey } from '@/lib/space-icons';
 import { cn } from '@/lib/utils';
+import { FeaturePicker } from './feature-picker';
 import { SpaceIcon, VisibilityPill } from './space-bits';
 
-const STEPS = ['Basics', 'Visibility', 'Access', 'Review'];
+const STEPS = ['Basics', 'Visibility', 'Features', 'Access', 'Review'];
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Enter a name').max(80, 'Keep it under 80 characters'),
@@ -56,7 +54,6 @@ const schema = z.object({
   icon: z.string(),
   description: z.string().trim().max(1000, 'Keep it under 1000 characters'),
   visibility: z.enum(['open', 'private']),
-  boardType: z.enum(['kanban', 'scrum', 'service']),
 });
 type Values = z.infer<typeof schema>;
 
@@ -76,6 +73,8 @@ export function CreateSpaceWizard() {
   const [groupsSel, setGroupsSel] = useState<PickedGroup[]>([]);
   const [roles, setRoles] = useState<Record<string, SpaceRole>>({});
   const [submitting, setSubmitting] = useState(false);
+  // A plain board and list to start; the presets and groups on the Features step add to it.
+  const [features, setFeatures] = useState<SpaceFeature[]>([]);
 
   const {
     register,
@@ -87,7 +86,7 @@ export function CreateSpaceWizard() {
     formState: { errors },
   } = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', key: '', icon: 'folder', description: '', visibility: 'open', boardType: 'kanban' },
+    defaultValues: { name: '', key: '', icon: 'folder', description: '', visibility: 'open' },
   });
   const v = watch();
   const roleOf = (id: string) => roles[id] ?? 'member';
@@ -109,7 +108,7 @@ export function CreateSpaceWizard() {
           description: values.description || undefined,
           icon: values.icon,
           visibility: values.visibility,
-          boardType: values.boardType,
+          features,
           members: [
             ...others.map((p) => ({ type: 'user', id: p.id, role: roleOf(p.id) })),
             ...groupsSel.map((g) => ({ type: 'group', id: g.id, role: roleOf(g.id) })),
@@ -130,30 +129,27 @@ export function CreateSpaceWizard() {
     }
   }
 
-  const scrumAllowed = useHasFeature('scrum_sprints');
-  const serviceAllowed = useHasFeature('service_desk');
   const nameReg = register('name');
 
+  const descriptions = [
+    'Name your space and pick how it looks.',
+    'Choose who can find and open it.',
+    'Pick what this space needs. You can change it any time in the board settings.',
+    'Add people and groups, and decide what each can do.',
+    'Check everything, then create the space.',
+  ];
+
   return (
-    <Card className="mx-auto max-w-2xl">
-      <CardHeader className="gap-4">
+    <div className="mx-auto max-w-2xl">
+      <header className="space-y-4">
         <Stepper steps={STEPS} current={step} />
         <div>
-          <CardTitle>{STEPS[step]}</CardTitle>
-          <CardDescription>
-            {
-              [
-                'Name your space and pick how it looks.',
-                'Choose who can find and open it.',
-                'Add people and groups, and decide what each can do.',
-                'Check everything, then create the space.',
-              ][step]
-            }
-          </CardDescription>
+          <h2 className="text-lg font-semibold tracking-tight">{STEPS[step]}</h2>
+          <p className="text-muted-foreground text-sm">{descriptions[step]}</p>
         </div>
-      </CardHeader>
+      </header>
 
-      <CardContent className="space-y-5">
+      <div className="space-y-5 py-6">
         {step === 0 && (
           <>
             <div className="space-y-1.5">
@@ -232,7 +228,7 @@ export function CreateSpaceWizard() {
         )}
 
         {step === 1 && (
-          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Visibility">
+          <div className="divide-y" role="radiogroup" aria-label="Visibility">
             {(
               [
                 {
@@ -254,97 +250,34 @@ export function CreateSpaceWizard() {
                 <button
                   key={o.id}
                   type="button"
-                  aria-pressed={on}
+                  role="radio"
+                  aria-checked={on}
                   onClick={() => setValue('visibility', o.id)}
-                  className={cn(
-                    'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors',
-                    on && 'border-primary bg-accent ring-primary/30 ring-2',
-                  )}
+                  className="hover:bg-accent/40 flex w-full items-start gap-3 py-4 text-left outline-none first:pt-0 focus-visible:ring-2"
                 >
-                  <o.icon className="text-primary size-5" aria-hidden />
-                  <div className="font-medium">{o.title}</div>
-                  <p className="text-muted-foreground text-xs">{o.text}</p>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border',
+                      on && 'border-primary',
+                    )}
+                  >
+                    {on && <span className="bg-primary size-2 rounded-full" />}
+                  </span>
+                  <o.icon className="text-primary mt-0.5 size-5 shrink-0" aria-hidden />
+                  <span>
+                    <span className="block font-medium">{o.title}</span>
+                    <span className="text-muted-foreground block text-xs">{o.text}</span>
+                  </span>
                 </button>
               );
             })}
           </div>
         )}
 
-        {step === 1 && (
-          <div className="space-y-2" role="group" aria-label="Board type">
-            <h3 className="text-sm font-medium">Board type</h3>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                aria-pressed={v.boardType === 'kanban'}
-                onClick={() => setValue('boardType', 'kanban')}
-                className={cn(
-                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors',
-                  v.boardType === 'kanban' && 'border-primary bg-accent ring-primary/30 ring-2',
-                )}
-              >
-                <Kanban className="text-primary size-5" aria-hidden />
-                <div className="font-medium">Kanban</div>
-                <p className="text-muted-foreground text-xs">
-                  Continuous flow. Work moves across columns as it progresses.
-                </p>
-                <p className="text-muted-foreground text-[11px]" data-testid="starting-columns">
-                  Starts with: {startingColumns}
-                </p>
-              </button>
-              <button
-                type="button"
-                aria-pressed={v.boardType === 'scrum'}
-                disabled={!scrumAllowed}
-                onClick={() => setValue('boardType', 'scrum')}
-                className={cn(
-                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                  v.boardType === 'scrum' && 'border-primary bg-accent ring-primary/30 ring-2',
-                )}
-              >
-                <Timer className="text-primary size-5" aria-hidden />
-                <div className="flex items-center gap-2 font-medium">
-                  Scrum
-                  {!scrumAllowed && (
-                    <span className="bg-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
-                      <Lock className="size-3" aria-hidden /> Team plan
-                    </span>
-                  )}
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  A backlog and sprints with start and end dates, plus sprint reports.
-                </p>
-              </button>
-              <button
-                type="button"
-                aria-pressed={v.boardType === 'service'}
-                disabled={!serviceAllowed}
-                data-testid="board-type-service"
-                onClick={() => setValue('boardType', 'service')}
-                className={cn(
-                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                  v.boardType === 'service' && 'border-primary bg-accent ring-primary/30 ring-2',
-                )}
-              >
-                <Ticket className="text-primary size-5" aria-hidden />
-                <div className="flex items-center gap-2 font-medium">
-                  Service desk
-                  {!serviceAllowed && (
-                    <span className="bg-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
-                      <Lock className="size-3" aria-hidden /> Team plan
-                    </span>
-                  )}
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  A request queue for QA or IT support. Anyone can raise a ticket; response and resolve targets
-                  track each one.
-                </p>
-              </button>
-            </div>
-          </div>
-        )}
+        {step === 2 && <FeaturePicker value={features} onChange={setFeatures} />}
 
-        {step === 2 && (
+        {step === 3 && (
           <>
             <div className="bg-muted/50 flex items-center justify-between rounded-xl p-3 text-sm">
               <PersonLabel
@@ -406,9 +339,9 @@ export function CreateSpaceWizard() {
           </>
         )}
 
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-2xl border p-4">
+        {step === 4 && (
+          <div className="space-y-6">
+            <div className="flex items-start gap-3">
               <SpaceIcon icon={v.icon} spaceKey={v.key || 'X'} />
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{v.name}</div>
@@ -419,15 +352,18 @@ export function CreateSpaceWizard() {
               </div>
               <VisibilityPill visibility={v.visibility} />
             </div>
-            <div className="rounded-2xl border p-4 text-sm">
-              <div className="flex items-center gap-2 font-medium">
-                <Kanban className="size-4" aria-hidden /> Kanban board
-              </div>
+            <section className="border-t pt-4 text-sm" aria-labelledby="review-features">
+              <h3 id="review-features" className="font-medium">
+                What it has
+              </h3>
               <p className="text-muted-foreground mt-1">
-                Starts with To Do, In Progress, In Review and Done. You can change the columns later.
+                A board and a list{FEATURE_GROUPS.flatMap((g) => g.features).filter((f) => features.includes(f.key)).map((f) => `, ${f.label.toLowerCase()}`).join('')}.
               </p>
-            </div>
-            <div className="rounded-2xl border p-4 text-sm">
+              <p className="text-muted-foreground mt-1 text-xs" data-testid="starting-columns">
+                Starts with: {features.includes('tickets') && !features.includes('sprints') && !features.includes('epics') ? 'Open → In Progress → Waiting → Resolved' : startingColumns}. You can change the columns later.
+              </p>
+            </section>
+            <section className="border-t pt-4 text-sm">
               <div className="mb-2 flex items-center gap-2 font-medium">
                 <Users className="size-4" aria-hidden /> {1 + others.length + groupsSel.length} with
                 access
@@ -445,12 +381,12 @@ export function CreateSpaceWizard() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           </div>
         )}
-      </CardContent>
+      </div>
 
-      <CardFooter className="justify-between">
+      <footer className="flex justify-between border-t pt-4">
         <Button
           type="button"
           variant="outline"
@@ -468,8 +404,8 @@ export function CreateSpaceWizard() {
             {submitting ? 'Creating…' : 'Create space'}
           </Button>
         )}
-      </CardFooter>
-    </Card>
+      </footer>
+    </div>
   );
 }
 

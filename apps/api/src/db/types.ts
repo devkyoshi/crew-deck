@@ -263,7 +263,10 @@ export interface BoardDoc {
   id: string;
   orgId: string;
   spaceId: string;
+  /** Legacy: the closest board type to `features`. New code reads `features`. */
   type: 'kanban' | 'scrum' | 'service';
+  /** What the space has switched on (see SPACE_FEATURES). Missing on spaces made before features existed. */
+  features?: string[];
   name: string;
   settings: Record<string, unknown>;
   createdAt: Date;

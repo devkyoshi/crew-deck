@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Archive, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
+import type { SpaceFeature } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -98,22 +99,17 @@ export default function SpaceLayout({
   }
 
   const base = `/spaces/${space.key}`;
+  const has = (f: SpaceFeature) => space.features.includes(f);
   const tabs = [
     { href: base, label: 'Overview' },
-    ...(space.boardType === 'scrum' ? [{ href: `${base}/backlog`, label: 'Backlog' }] : []),
-    ...(space.boardType === 'service'
-      ? [
-          { href: `${base}/list`, label: 'Queue' },
-          { href: `${base}/board`, label: 'Board' },
-        ]
-      : [
-          { href: `${base}/board`, label: 'Board' },
-          { href: `${base}/list`, label: 'List' },
-          { href: `${base}/epics`, label: 'Epics' },
-          { href: `${base}/roadmap`, label: 'Roadmap' },
-          { href: `${base}/calendar`, label: 'Calendar' },
-          { href: `${base}/releases`, label: 'Releases' },
-        ]),
+    ...(has('tickets') ? [{ href: `${base}/tickets`, label: 'Tickets' }] : []),
+    ...(has('sprints') ? [{ href: `${base}/backlog`, label: 'Backlog' }] : []),
+    { href: `${base}/board`, label: 'Board' },
+    { href: `${base}/list`, label: 'List' },
+    ...(has('epics') ? [{ href: `${base}/epics`, label: 'Epics' }] : []),
+    ...(has('roadmap') ? [{ href: `${base}/roadmap`, label: 'Roadmap' }] : []),
+    ...(has('calendar') ? [{ href: `${base}/calendar`, label: 'Calendar' }] : []),
+    ...(has('releases') ? [{ href: `${base}/releases`, label: 'Releases' }] : []),
     { href: `${base}/documents`, label: 'Documents' },
     { href: `${base}/reports`, label: 'Reports' },
     { href: `${base}/members`, label: 'Members' },

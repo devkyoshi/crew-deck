@@ -18,7 +18,8 @@ import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
 import { assertTransition, loadWorkflow, resolutionFor, resolutionSchema } from '../work/workflow.js';
 import { refreshSearchText, SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
-import { boardTypeOf, loadSlaPolicy, markFirstResponse, slaDueDates, workCalendar } from '../work/sla.js';
+import { loadFeatures } from '../work/space-features.js';
+import { loadSlaPolicy, markFirstResponse, slaDueDates, workCalendar } from '../work/sla.js';
 import {
   assertAssignable,
   assertMentionable,
@@ -233,15 +234,15 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         events.length = 0;
         const space = await resolveSpace(tx, actor, req.params.id);
         // Anyone who can see a service desk may raise a ticket in it; everything else needs member rights.
-        const boardType = await boardTypeOf(tx, space.id);
-        if (b.type === 'ticket' && boardType !== 'service') {
-          throw new AppError(422, 'validation_error', 'Tickets belong in a service desk', {
-            type: 'Tickets can only be raised in a service desk',
+        const features = await loadFeatures(tx, space.id);
+        if (b.type === 'ticket' && !features.includes('tickets')) {
+          throw new AppError(422, 'validation_error', 'This space does not take tickets', {
+            type: 'Turn on tickets in Board settings to raise one here',
           });
         }
-        if (boardType === 'service' && b.type === 'epic') {
-          throw new AppError(422, 'validation_error', 'A service desk holds tickets', {
-            type: 'Use a ticket in a service desk',
+        if (b.type === 'epic' && !features.includes('epics')) {
+          throw new AppError(422, 'validation_error', 'This space does not use epics', {
+            type: 'Turn on epics in Board settings first',
           });
         }
         const allowed =

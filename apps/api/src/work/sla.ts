@@ -68,10 +68,6 @@ export function slaDueDates(policy: SlaPolicy, priority: Priority, from: Date, c
   return { response: add(target.responseMinutes), resolve: add(target.resolveMinutes) };
 }
 
-export async function boardTypeOf(t: TenantDb, spaceId: string) {
-  return (await t.boards.findOne({ spaceId }))?.type ?? 'kanban';
-}
-
 /**
  * Notes that the team has answered a ticket: the first time anyone but the person who raised it
  * comments, assigns, or moves it. Stops the response clock; later calls change nothing.

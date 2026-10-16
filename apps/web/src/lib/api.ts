@@ -1,4 +1,4 @@
-import type { ErrorResponse } from '@crew-deck/shared';
+import type { ErrorResponse, SpaceFeature } from '@crew-deck/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -200,7 +200,10 @@ export interface SpaceMemberSummary {
 }
 
 export interface SpaceDetail extends Space {
+  /** Legacy: the closest board type to `features`. */
   boardType: 'kanban' | 'scrum' | 'service';
+  /** What this space has switched on beyond the basics. */
+  features: SpaceFeature[];
   members: SpaceMemberSummary[];
   permissions: { edit: boolean; manageMembers: boolean; delete: boolean; viewAudit: boolean };
 }

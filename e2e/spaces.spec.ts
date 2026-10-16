@@ -27,7 +27,8 @@ test('a member creates a private space, others cannot see it, and admins can arc
   await page.getByRole('button', { name: 'rocket' }).click();
   await page.getByLabel('Description').fill('Everything for the launch');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByRole('button', { name: /Private/ }).click();
+  await page.getByRole('radio', { name: /Private/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('combobox', { name: 'People to add' }).click();
   await page.getByPlaceholder('Search by name or email').fill(teammate.name);
@@ -119,6 +120,7 @@ test('the directory filters by visibility and my spaces, and the key must be val
     page.getByText('Use 2 to 10 letters or digits, starting with a letter'),
   ).toBeVisible();
   await page.getByLabel('Key').fill(`D${tag}Y`);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();

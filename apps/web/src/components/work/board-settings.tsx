@@ -1,7 +1,8 @@
 'use client';
 
-import { useSetBoardType } from '@/lib/sprints-api';
-import { useHasFeature } from '@/lib/plans';
+import { useSetSpaceFeatures } from '@/lib/sprints-api';
+import { useSpace } from '@/components/spaces/space-context';
+import { FeaturePicker } from '@/components/spaces/feature-picker';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,7 +23,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
-import { STATUS_COLORS, type StatusColor } from '@crew-deck/shared';
+import { STATUS_COLORS, type SpaceFeature, type StatusColor } from '@crew-deck/shared';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -221,9 +222,9 @@ export function BoardSettingsSheet({
 
           <section aria-labelledby="bs-other" className="space-y-2">
             <h3 id="bs-other" className="text-sm font-semibold">
-              Board type
+              Features
             </h3>
-            <BoardTypeSwitch spaceKey={spaceKey} type={board.type} />
+            <FeaturesEditor />
           </section>
         </div>
       </SheetContent>
@@ -553,39 +554,41 @@ function StatusRow({
   );
 }
 
-/** Kanban or Scrum. Scrum needs the plan's sprints feature; switching back keeps sprints and returns planned work. */
-function BoardTypeSwitch({ spaceKey, type }: { spaceKey: string; type: 'kanban' | 'scrum' | 'service' }) {
-  const setType = useSetBoardType(spaceKey);
-  const scrumAllowed = useHasFeature('scrum_sprints');
-  if (type === 'service') {
-    return <p className="text-muted-foreground text-sm">Service desk: tickets are worked from the queue against response targets.</p>;
-  }
-  const other = type === 'kanban' ? 'scrum' : 'kanban';
+/**
+ * What this space has switched on. Saving applies it; sprints and tickets need the plan to include them.
+ * Turning sprints off needs the running sprint finished first and returns planned work to the backlog.
+ * Nothing is deleted: epics, tickets and the rest stay in the data if their feature is switched off.
+ */
+function FeaturesEditor() {
+  const space = useSpace();
+  const setFeatures = useSetSpaceFeatures(space.key);
+  const [draft, setDraft] = useState<SpaceFeature[]>(space.features);
+  useEffect(() => setDraft(space.features), [space.features]);
+  const dirty = draft.length !== space.features.length || draft.some((f) => !space.features.includes(f));
   return (
-    <div className="space-y-2">
-      <p className="text-muted-foreground text-sm">
-        {type === 'kanban'
-          ? 'Kanban: continuous flow, work moves across the columns.'
-          : 'Scrum: a backlog and sprints. The board shows the running sprint.'}
-      </p>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={setType.isPending || (other === 'scrum' && !scrumAllowed)}
-        onClick={() =>
-          setType.mutate(other, {
-            onSuccess: (r) =>
-              toast.success(
-                `Switched to ${other === 'scrum' ? 'Scrum' : 'Kanban'}${r.movedToBacklog ? `; ${r.movedToBacklog} planned items are back in the backlog` : ''}`,
-              ),
-            onError: (e) => toastError(e, 'Could not switch'),
-          })
-        }
-      >
-        Switch to {other === 'scrum' ? 'Scrum' : 'Kanban'}
-      </Button>
-      {other === 'scrum' && !scrumAllowed && (
-        <p className="text-muted-foreground text-xs">Scrum boards are part of the Team plan and above.</p>
+    <div className="space-y-4">
+      <FeaturePicker value={draft} onChange={setDraft} idPrefix="bs-feature" />
+      {dirty && (
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setDraft(space.features)}>
+            Reset
+          </Button>
+          <Button
+            size="sm"
+            disabled={setFeatures.isPending}
+            onClick={() =>
+              setFeatures.mutate(draft, {
+                onSuccess: (r) =>
+                  toast.success(
+                    `Features saved${r.movedToBacklog ? `; ${r.movedToBacklog} planned items are back in the backlog` : ''}`,
+                  ),
+                onError: (e) => toastError(e, 'Could not save the features'),
+              })
+            }
+          >
+            Save features
+          </Button>
+        </div>
       )}
     </div>
   );

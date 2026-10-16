@@ -40,8 +40,6 @@ import { useVocabulary } from './use-vocabulary';
 type Parent = { id: string; key: string; title: string; type: ItemType } | null;
 
 const TYPES: ItemType[] = ['story', 'task', 'bug', 'epic', 'subtask'];
-/** A service desk holds tickets (and the odd task or bug); epics and stories belong on a board. */
-const SERVICE_TYPES: ItemType[] = ['ticket', 'task', 'bug', 'subtask'];
 
 export function CreateItemDialog({
   spaceKey,
@@ -66,7 +64,12 @@ export function CreateItemDialog({
 }) {
   const vocab = useVocabulary();
   const me = useMe();
-  const isService = useSpace().boardType === 'service';
+  const features = useSpace().features;
+  // Tickets only where the space takes them, epics only where it uses them.
+  const hasTickets = features.includes('tickets');
+  const hasEpics = features.includes('epics');
+  // A space that is only a ticket queue opens on "ticket" rather than "task".
+  const isService = hasTickets && !hasEpics && !features.includes('sprints');
   const create = useCreateItem(spaceKey);
   const firstTodo = statuses.find((s) => s.category === 'todo') ?? statuses[0];
 
@@ -185,7 +188,9 @@ export function CreateItemDialog({
           )}
 
           <div role="radiogroup" aria-label="Type" className="flex flex-wrap gap-1.5">
-            {(isService ? SERVICE_TYPES : TYPES.filter((t) => vocab.allowedTypes.includes(t) || t === type)).map((t) => (
+            {[...(hasTickets ? (['ticket'] as ItemType[]) : []), ...TYPES]
+              .filter((t) => t === 'ticket' || t === type || (vocab.allowedTypes.includes(t) && (t !== 'epic' || hasEpics)))
+              .map((t) => (
               <button
                 key={t}
                 type="button"

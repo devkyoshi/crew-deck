@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
-import { assertFeature, assertWithinLimit, countSpaces, loadPlan } from '../plans/index.js';
+import { assertWithinLimit, countSpaces, loadPlan } from '../plans/index.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
@@ -15,6 +15,8 @@ import {
   type SpaceView,
 } from '../spaces/access.js';
 import { seedSpaceWork } from '../work/seed.js';
+import { assertPlanAllows, featuresOfBoard } from '../work/space-features.js';
+import { featuresFromBoardType, normalizeFeatures, SPACE_FEATURES } from '@crew-deck/shared';
 
 export { isOrgAdmin };
 
@@ -134,7 +136,9 @@ const createBody = z.object({
   description: descriptionSchema.optional(),
   icon: iconSchema.default('folder'),
   visibility: visibilitySchema.default('open'),
-  boardType: z.enum(['kanban', 'scrum', 'service']).default('kanban'),
+  /** What the space switches on. Older callers send `boardType` instead; a plain board is the default. */
+  features: z.array(z.enum(SPACE_FEATURES)).max(SPACE_FEATURES.length).optional(),
+  boardType: z.enum(['kanban', 'scrum', 'service']).optional(),
   members: z
     .array(z.object({ type: z.enum(['user', 'group']), id: z.string().uuid(), role: roleSchema }))
     .max(200)
@@ -154,13 +158,18 @@ const patchBody = z
 
 const param = z.object({ id: z.string().min(1).max(64) });
 
+async function boardInfo(tx: TenantDb, spaceId: string) {
+  const board = await tx.boards.findOne({ spaceId });
+  return { boardType: board?.type ?? 'kanban', features: featuresOfBoard(board) };
+}
+
 export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   const detail = async (tx: TenantDb, actor: Actor, row: SpaceView) => ({
     ...row,
-    boardType: (await tx.boards.findOne({ spaceId: row.id }, { projection: { type: 1 } }))?.type ?? 'kanban',
+    ...(await boardInfo(tx, row.id)),
     members: await memberSummary(tx, row.id),
     permissions: presentPermissions(actor, row),
   });
@@ -221,12 +230,8 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
       return await withTenantTx(deps.db, actor.orgId, async (tx) => {
         const plan = await loadPlan(tx, actor.orgId);
         assertWithinLimit(plan, 'spaces', await countSpaces(tx, actor.orgId));
-        if (b.boardType === 'scrum') {
-          assertFeature(plan, 'scrum_sprints', 'Scrum boards');
-        }
-        if (b.boardType === 'service') {
-          assertFeature(plan, 'service_desk', 'Service desks');
-        }
+        const features = b.features ? normalizeFeatures(b.features) : featuresFromBoardType(b.boardType);
+        assertPlanAllows(plan, features);
         // Keys are unique per workspace and never reused, deleted spaces included.
         if (await tx.spaces.exists({ key: b.key })) throw keyTaken();
 
@@ -260,7 +265,7 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         });
         const spaceId = created.id;
         // Board, counter and starting columns (the old database trigger), from the workspace template.
-        await seedSpaceWork(tx, spaceId, { boardType: b.boardType });
+        await seedSpaceWork(tx, spaceId, { features });
 
         // The creator is always the first space admin, whatever else was chosen.
         const byPrincipal = new Map<

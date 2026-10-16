@@ -10,6 +10,7 @@ import { liveTouch } from '../lib/live.js';
 import { can } from '../permissions/can.js';
 import { assertWritable, listStatuses } from '../work/service.js';
 import { loadSlaPolicy } from '../work/sla.js';
+import { featuresOfBoard } from '../work/space-features.js';
 import { loadWorkflow, workflowSchema } from '../work/workflow.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
 
@@ -87,7 +88,7 @@ export async function workWorkflowRoutes(app: FastifyInstance, deps: AuthDeps) {
       const space = await resolveSpace(t, actor, req.params.id);
       const board = await t.boards.findOne({ spaceId: space.id });
       return {
-        enabled: board?.type === 'service',
+        enabled: featuresOfBoard(board).includes('tickets'),
         policy: await loadSlaPolicy(t, space.id),
         permissions: { manage: can(actor, 'board.manage', spaceCtx(space)) && space.status === 'active' },
       };
@@ -106,8 +107,8 @@ export async function workWorkflowRoutes(app: FastifyInstance, deps: AuthDeps) {
         assertWritable(space);
         const board = await t.boards.findOne({ spaceId: space.id });
         if (!board) throw notFound('Board');
-        if (board.type !== 'service') {
-          throw new AppError(409, 'not_service_desk', 'Only a service desk has response targets');
+        if (!featuresOfBoard(board).includes('tickets')) {
+          throw new AppError(409, 'not_service_desk', 'Only a space with tickets has response targets');
         }
         if (!isSlaPolicy(req.body)) throw new AppError(422, 'validation_error', 'Those targets are not valid');
         await t.boards.updateOne({ id: board.id }, { settings: { ...board.settings, sla: req.body }, updatedAt: new Date() });

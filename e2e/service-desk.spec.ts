@@ -8,13 +8,13 @@ test('a member raises a ticket in a service desk and the queue shows its deadlin
 
   // The owner sets up a QA desk.
   await signInAsOwner(page);
-  const created = await apiCall(page, 'POST', '/spaces', { key, name: `QA desk ${tag}`, boardType: 'service' });
+  const created = await apiCall(page, 'POST', '/spaces', { key, name: `QA desk ${tag}`, features: ['tickets'] });
   expect(created.status, created.text).toBe(200);
   await page.goto(`/spaces/${key}`);
 
-  // A desk has a Queue instead of the board-only tabs: no Epics, Roadmap or Releases.
-  const tabs = page.getByRole('navigation').filter({ has: page.getByRole('link', { name: 'Queue' }) });
-  await expect(tabs.getByRole('link', { name: 'Queue' })).toBeVisible();
+  // A desk shows Tickets and leaves out the tabs it did not ask for: no Epics, Roadmap or Releases.
+  const tabs = page.getByRole('navigation').filter({ has: page.getByRole('link', { name: 'Tickets' }) });
+  await expect(tabs.getByRole('link', { name: 'Tickets' })).toBeVisible();
   await expect(tabs.getByRole('link', { name: 'Epics' })).toHaveCount(0);
   await expect(tabs.getByRole('link', { name: 'Roadmap' })).toHaveCount(0);
 
@@ -27,7 +27,7 @@ test('a member raises a ticket in a service desk and the queue shows its deadlin
   try {
     const member = await ctx.newPage();
     await signInAsMember(member);
-    await member.goto(`/spaces/${key}/list`);
+    await member.goto(`/spaces/${key}/tickets`);
     await member.getByTestId('new-ticket').click();
     const title = `Login fails ${rand()}`;
     await member.getByLabel('Title').fill(title);
@@ -41,4 +41,38 @@ test('a member raises a ticket in a service desk and the queue shows its deadlin
   } finally {
     await ctx.close();
   }
+});
+
+test('the create-space wizard picks features in groups, and a mixed space gets both sets of tabs', async ({ page }) => {
+  const tag = rand(2).toUpperCase();
+  const key = `M${tag}X`;
+  await signInAsOwner(page);
+  await page.goto('/spaces/new');
+  // The wizard sits on the page, not in a card.
+  await expect(page.locator('[data-slot="card"]')).toHaveCount(0);
+  await page.getByLabel('Name', { exact: true }).fill(`Mixed ${tag}`);
+  await page.getByLabel('Key').fill(key);
+  const next = () => page.getByRole('button', { name: 'Next', exact: true }).click();
+  await next(); // Visibility
+  await next(); // Features
+
+  // Ticking a group ticks all of its features; unticking one leaves the group half-ticked.
+  const delivery = page.getByTestId('feature-group-delivery');
+  await delivery.click();
+  for (const f of ['sprints', 'epics', 'releases']) await expect(page.getByTestId(`feature-${f}`)).toBeChecked();
+  await page.getByTestId('feature-releases').click();
+  await expect(delivery).toHaveAttribute('data-state', 'indeterminate');
+  await page.getByTestId('feature-tickets').click();
+
+  await next(); // Access
+  await next(); // Review
+  await expect(page.getByText(/A board and a list, backlog and sprints, epics, tickets/)).toBeVisible();
+  await page.getByRole('button', { name: 'Create space' }).click();
+
+  const tabs = page.getByRole('navigation').filter({ has: page.getByRole('link', { name: 'Tickets' }) });
+  for (const name of ['Tickets', 'Backlog', 'Board', 'List', 'Epics']) {
+    await expect(tabs.getByRole('link', { name })).toBeVisible();
+  }
+  await expect(tabs.getByRole('link', { name: 'Releases' })).toHaveCount(0);
+  await expect(tabs.getByRole('link', { name: 'Roadmap' })).toHaveCount(0);
 });

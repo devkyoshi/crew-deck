@@ -75,7 +75,10 @@ test('a construction company signs up and its first space starts with constructi
   await page.goto(`http://${slug}.localhost:3000/spaces/new`);
   await page.getByLabel('Name', { exact: true }).fill('Riverside');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(page.getByTestId('starting-columns')).toHaveText(
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByTestId('starting-columns')).toContainText(
     'Starts with: Planned → On site → Inspection → Complete',
   );
 
