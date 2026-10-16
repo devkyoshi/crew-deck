@@ -12,6 +12,8 @@ export interface ChannelView {
   hasOlder: boolean;
   hasNewer: boolean;
   lastSeq: number;
+  /** Older messages exist but the plan's history window hides them. */
+  historyLimited?: boolean;
 }
 
 /**

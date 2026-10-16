@@ -5,6 +5,7 @@ import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
 import { listUserOrgs, loadAuthUser } from '../auth/service.js';
 import { withTenant } from '../db/client.js';
+import { loadMessagingSettings } from '../messaging/settings.js';
 import { loadPlan } from '../plans/index.js';
 import { ADMIN_ACTIONS, can } from '../permissions/can.js';
 
@@ -17,11 +18,13 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
     const org = req.org!;
     const orgs = await listUserOrgs(deps.db, user.id);
     const actor = { userId: user.id, orgId: org.id, orgRole: user.orgRole };
-    const { plan, branding, modules } = await withTenant(deps.db, org.id, async (t) => {
+    const { plan, branding, modules, chat } = await withTenant(deps.db, org.id, async (t) => {
       const o = await t.organization();
       const settings = await t.tenantSettings.findOne({});
       return {
         plan: await loadPlan(t, org.id),
+        // What the UI needs to know about the workspace's chat rules (the server enforces them).
+        chat: { channelCreation: (await loadMessagingSettings(t)).channelCreation },
         modules: settings?.enabledModules ?? ['members', 'spaces', 'checkin'],
         branding: {
           logoUrl: o?.logoUrl ?? null,
@@ -57,6 +60,7 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
         trialEndsAt: plan.trialEndsAt,
         features: plan.features,
       },
+      chat,
       impersonatedBy: req.impersonatedBy ?? null,
       orgRole: user.orgRole,
       // Mirrors can() for the UI. The server still enforces every action itself.

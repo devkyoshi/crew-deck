@@ -25,7 +25,9 @@ export type LimitKey =
   | 'audit_days'
   | 'sites'
   | 'work_items'
-  | 'max_attachment_mb';
+  | 'max_attachment_mb'
+  | 'channels'
+  | 'message_history_days';
 
 export interface PlanInfo {
   key: string;
@@ -63,14 +65,16 @@ export const LIMIT_LABEL: Record<LimitKey, string> = {
   sites: 'Sites',
   work_items: 'Work items',
   max_attachment_mb: 'Attachment size',
+  channels: 'Chat channels',
+  message_history_days: 'Chat history',
 };
 
 export function formatLimit(key: LimitKey, value: number | undefined) {
   if (value === undefined) return 'Unlimited';
   if (key === 'max_attachment_mb') return `${value} MB`;
   if (key === 'storage_mb') return value >= 1024 ? `${value / 1024} GB` : `${value} MB`;
-  if (key === 'audit_days')
-    return value >= 365 ? `${Math.round(value / 365)} year` : `${value} days`;
+  if (key === 'audit_days' || key === 'message_history_days')
+    return value >= 365 ? `${Math.round(value / 365)} year${value >= 730 ? 's' : ''}` : `${value} days`;
   return String(value);
 }
 
@@ -91,6 +95,8 @@ export const COMPARISON: { label: string; value: (p: PlanInfo) => string }[] = [
   },
   { label: 'Storage', value: (p) => formatLimit('storage_mb', p.limits.storage_mb) },
   { label: 'Attachment size', value: (p) => formatLimit('max_attachment_mb', p.limits.max_attachment_mb) },
+  { label: 'Chat channels', value: (p) => formatLimit('channels', p.limits.channels) },
+  { label: 'Chat history', value: (p) => formatLimit('message_history_days', p.limits.message_history_days) },
   { label: 'Kanban boards, list view, epics and search', value: () => 'Included' },
   {
     label: 'Scrum backlog and sprints',

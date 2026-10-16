@@ -120,6 +120,10 @@ export interface ChannelDTO {
   lastMessageAt: string | null;
   createdAt: string;
   memberCount: number;
+  /** Days messages are kept here, when the channel has its own setting (null: the workspace default). */
+  retentionDays: number | null;
+  /** The CRM deal or company this channel follows, if any. */
+  crm: { type: 'deal' | 'company'; id: string } | null;
   /** For direct messages: the other people (everyone but the caller, or the caller for a self-DM). */
   people?: PersonDTO[];
   /** True when the caller can read but not post (a space viewer in a space's channel). */
@@ -384,3 +388,59 @@ export interface ProfileCardDTO {
   /** Open work items assigned to them in spaces you can see. */
   openItems: number;
 }
+
+// ---- Admin settings, retention, export, webhooks (M5) -------------------------------------------------------
+
+export const RETENTION_MIN_DAYS = 1;
+export const RETENTION_MAX_DAYS = 3650;
+
+/** The workspace's rules for chat. Only the owner changes them. */
+export const messagingSettingsSchema = z.object({
+  channelCreation: z.enum(['all', 'admins']),
+  broadcastLimit: z.number().int().min(0).max(10_000),
+  defaultChannelIds: z.array(z.string().max(64)).max(20),
+  retentionDays: z.number().int().min(RETENTION_MIN_DAYS).max(RETENTION_MAX_DAYS).nullable(),
+  spaceChannels: z.boolean(),
+  announcementDefault: z.boolean(),
+  leaveSetsDnd: z.boolean(),
+});
+export type MessagingSettingsDTO = z.infer<typeof messagingSettingsSchema>;
+
+export const MESSAGING_SETTINGS_DEFAULTS: MessagingSettingsDTO = {
+  channelCreation: 'all',
+  broadcastLimit: BROADCAST_MENTION_LIMIT,
+  defaultChannelIds: [],
+  retentionDays: null,
+  spaceChannels: true,
+  announcementDefault: false,
+  leaveSetsDnd: false,
+};
+
+export interface MessagingSettingsResponse extends MessagingSettingsDTO {
+  /** Names of the default channels, so the screen can show them. */
+  defaultChannels: { id: string; name: string }[];
+}
+
+export type ExportStatus = 'queued' | 'running' | 'done' | 'failed';
+export interface ChatExportDTO {
+  id: string;
+  status: ExportStatus;
+  createdAt: string;
+  finishedAt: string | null;
+  expiresAt: string | null;
+  sizeBytes: number | null;
+  counts: { channels: number; messages: number } | null;
+  error: string | null;
+}
+
+export interface WebhookDTO {
+  id: string;
+  channelId: string;
+  name: string;
+  createdAt: string;
+  createdBy: { id: string; name: string | null } | null;
+  lastUsedAt: string | null;
+}
+
+export const MAX_WEBHOOK_TEXT_CHARS = 4000;
+export const MAX_WEBHOOKS_PER_CHANNEL = 10;

@@ -8,6 +8,7 @@ import { effectiveRole } from '../spaces/access.js';
 import { announceMembership, memberCounts } from './channels.js';
 import { runLater, type MessagingCtx } from './context.js';
 import { channelDTO } from './dto.js';
+import { loadMessagingSettings } from './settings.js';
 
 /** What caused a sync-driven change; recorded on every audit entry (brief section 4). */
 const cause = (space: Pick<SpaceDoc, 'id' | 'key'>) => ({ type: 'space', id: space.id, key: space.key });
@@ -127,8 +128,10 @@ async function doSync(
   const t = ctx.db.tenant(orgId);
   const space = await t.spaces.findOne({ id: spaceId });
   if (!space) return null;
-  // A deleted space keeps its channel (read-only) but never gets a new one.
-  if (space.deletedAt && !(await t.channels.exists({ spaceId }))) return null;
+  // A deleted space keeps its channel (read-only) but never gets a new one. Neither does any space
+  // while the workspace has space channels switched off; existing ones keep following their space.
+  const existing = await t.channels.exists({ spaceId });
+  if (!existing && (space.deletedAt || !(await loadMessagingSettings(t)).spaceChannels)) return null;
   let channel = await ensureSpaceChannel(ctx, t, space);
 
   const type = typeOf(space);

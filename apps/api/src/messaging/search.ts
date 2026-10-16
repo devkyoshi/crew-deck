@@ -3,6 +3,7 @@ import type { TenantDb } from '../db/client.js';
 import type { MessageDoc } from '../db/types.js';
 import { escapeRegex } from '../lib/pagination.js';
 import type { Actor } from '../permissions/can.js';
+import { historyFloor, loadPlan } from '../plans/index.js';
 import type { MessagingCtx } from './context.js';
 import { hydrate } from './dto.js';
 
@@ -208,6 +209,9 @@ export const mongoSearch: SearchService = {
     ];
     if (parsed.text) and.push({ $text: { $search: parsed.text, $language: 'none' } });
     if (from.ids.length) and.push({ authorId: { $in: from.ids } });
+    // The plan's history window applies to search too.
+    const floor = historyFloor(await loadPlan(t));
+    if (floor) and.push({ createdAt: { $gte: floor } });
     if (parsed.after) and.push({ createdAt: { $gte: new Date(`${parsed.after}T00:00:00Z`) } });
     if (parsed.before) and.push({ createdAt: { $lt: new Date(`${parsed.before}T00:00:00Z`) } });
     // Links are flagged when the message is saved (a link mark's text is not its address); bare addresses in older messages are found by text.

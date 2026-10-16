@@ -69,6 +69,8 @@ const LIMITS: LimitKey[] = [
   'sites',
   'storage_mb',
   'max_attachment_mb',
+  'channels',
+  'message_history_days',
 ];
 const fail = (e: unknown) =>
   toast.error(e instanceof ApiError ? e.message : 'Something went wrong');

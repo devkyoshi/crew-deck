@@ -258,6 +258,8 @@ const INDEXES: Record<string, Ix[]> = {
     // One DM per pair, one group DM per exact set of people.
     ['org_dm', { orgId: 1, dmKey: 1 }, { unique: true, partialFilterExpression: { dmKey: { $type: 'string' } } }],
     ['org_type', { orgId: 1, type: 1, isArchived: 1 }],
+    // At most one channel per CRM record.
+    ['org_crm', { orgId: 1, 'crmLink.type': 1, 'crmLink.id': 1 }, { unique: true, partialFilterExpression: { 'crmLink.id': { $type: 'string' } } }],
     // At most one channel per space.
     ['org_space', { orgId: 1, spaceId: 1 }, { unique: true, partialFilterExpression: { spaceId: { $type: 'string' } } }],
   ],
@@ -283,6 +285,17 @@ const INDEXES: Record<string, Ix[]> = {
   message_reactions: [
     ['pk', { orgId: 1, messageId: 1, userId: 1, emoji: 1 }, U],
     ['channel', { orgId: 1, channelId: 1, messageId: 1 }],
+  ],
+  messaging_settings: [['org', { orgId: 1 }, U]],
+  incoming_webhooks: [
+    ['id', { id: 1 }, U],
+    // Looked up by the hash of the secret in the address, from any host, so it is unique across workspaces.
+    ['token', { tokenHash: 1 }, U],
+    ['channel', { orgId: 1, channelId: 1 }],
+  ],
+  chat_exports: [
+    ['id', { id: 1 }, U],
+    ['org', { orgId: 1, createdAt: -1 }],
   ],
   message_links: [
     ['message', { orgId: 1, messageId: 1 }],

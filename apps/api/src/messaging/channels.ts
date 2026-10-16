@@ -15,7 +15,9 @@ import type { ChannelDoc, ChannelMemberDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { escapeRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
+import { assertWithinLimit, countChannels, loadPlan } from '../plans/index.js';
 import { channelResource, isReadOnlyInSpace, loadChannel, requireChannel } from './access.js';
+import { loadMessagingSettings } from './settings.js';
 import { effectiveRoles } from '../spaces/access.js';
 import { runLater, type MessagingCtx } from './context.js';
 import { notifyAdded } from './notify.js';
@@ -79,6 +81,21 @@ export async function ensureBootstrap(ctx: MessagingCtx, t: TenantDb, userId: st
     });
     if (added) {
       // Joining a channel starts you at its present, not at the top of its history.
+      await t.readCursors.upsert(
+        { channelId: ch.id, userId },
+        { lastReadSeq: ch.lastSeq, lastReadAt: new Date() },
+      );
+      joined.push(ch.id);
+    }
+  }
+  // The channels the owner chose for new members (a space's channel follows the space, so not that).
+  const extra = (await loadMessagingSettings(t)).defaultChannelIds;
+  const chosen = extra.length
+    ? await t.channels.find({ id: { $in: extra }, type: { $in: ['public', 'private'] }, spaceId: null, isArchived: false })
+    : [];
+  for (const ch of chosen) {
+    const added = await t.channelMembers.insertIgnore({ channelId: ch.id, userId, role: 'member' });
+    if (added) {
       await t.readCursors.upsert(
         { channelId: ch.id, userId },
         { lastReadSeq: ch.lastSeq, lastReadAt: new Date() },
@@ -332,8 +349,10 @@ export async function createChannel(
   actor: Actor,
   input: CreateChannelInput,
 ): Promise<ChannelDTO> {
-  if (!can(actor, 'channel.create')) throw forbidden();
   const t = ctx.db.tenant(actor.orgId);
+  const settings = await loadMessagingSettings(t);
+  if (!can(actor, 'channel.create', { channelCreation: settings.channelCreation })) throw forbidden();
+  assertWithinLimit(await loadPlan(t), 'channels', await countChannels(t));
   const extra = (await activeMemberIds(t, input.memberIds ?? [])).filter(
     (id) => id !== actor.userId,
   );
@@ -346,7 +365,7 @@ export async function createChannel(
         slug: input.name,
         topic: input.topic ?? null,
         description: input.description ?? null,
-        isAnnouncement: input.isAnnouncement ?? false,
+        isAnnouncement: input.isAnnouncement ?? settings.announcementDefault,
         createdBy: actor.userId,
       });
       await tx.channelMembers.insert([

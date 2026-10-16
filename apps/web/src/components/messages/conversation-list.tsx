@@ -77,6 +77,7 @@ import {
   useThreadsList,
   useUpdateMyMembership,
   type MyChannelDTO,
+  useCanCreateChannel,
 } from '@/lib/messaging-api';
 import { cn } from '@/lib/utils';
 import { BrowseChannelsDialog, CreateChannelDialog, NewMessageDialog } from './dialogs';
@@ -485,6 +486,7 @@ export function ConversationList({
   const sectionApi = useSectionMutations();
   const { dnd } = useStatusMutations();
   const [filter, setFilter] = useState('');
+  const canCreate = useCanCreateChannel();
   const [dialog, setDialog] = useState<'new' | 'create' | 'browse' | 'status' | null>(null);
   const [sectionDialog, setSectionDialog] = useState<
     { mode: 'create'; assign?: string } | { mode: 'rename'; section: SidebarSectionDTO } | null
@@ -612,9 +614,11 @@ export function ConversationList({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuItem onSelect={() => setDialog('create')}>
-              <Plus /> Create a channel
-            </DropdownMenuItem>
+            {canCreate && (
+              <DropdownMenuItem onSelect={() => setDialog('create')}>
+                <Plus /> Create a channel
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => setDialog('browse')}>
               <Search /> Browse channels
             </DropdownMenuItem>

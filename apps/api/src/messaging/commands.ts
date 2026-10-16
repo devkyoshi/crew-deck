@@ -1,5 +1,6 @@
 import type { CommandResult, SlashCommandDTO } from '@crew-deck/shared';
 import type { TenantDb } from '../db/client.js';
+import { loadSettings } from '../checkin/service.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { Actor } from '../permissions/can.js';
 import { loadVisibleSpaces } from '../spaces/access.js';
@@ -42,10 +43,7 @@ export function parseDuration(input: string): number | null {
 const KEY = /^[A-Za-z][A-Za-z0-9]{1,9}-\d+$/;
 const LOCATIONS = ['onsite', 'remote', 'offsite'] as const;
 
-const checkinOn = async (t: TenantDb) => {
-  const s = await t.tenantSettings.findOne({});
-  return !!(s as { checkinEnabled?: boolean } | null)?.checkinEnabled;
-};
+const checkinOn = async (t: TenantDb) => (await loadSettings(t)).checkinEnabled;
 
 const COMMANDS: Command[] = [
   {

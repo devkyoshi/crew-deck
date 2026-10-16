@@ -9,8 +9,10 @@ import {
   CreateChannelDialog,
   NewMessageDialog,
 } from '@/components/messages/dialogs';
+import { useCanCreateChannel } from '@/lib/messaging-api';
 
 export default function MessagesHome() {
+  const canCreate = useCanCreateChannel();
   const [dialog, setDialog] = useState<'new' | 'create' | 'browse' | null>(null);
   return (
     <div className="flex h-full items-center justify-center p-6">
@@ -26,9 +28,11 @@ export default function MessagesHome() {
             <Button variant="outline" onClick={() => setDialog('browse')}>
               <Search /> Browse channels
             </Button>
-            <Button variant="outline" onClick={() => setDialog('create')}>
-              <Plus /> Create a channel
-            </Button>
+            {canCreate && (
+              <Button variant="outline" onClick={() => setDialog('create')}>
+                <Plus /> Create a channel
+              </Button>
+            )}
           </div>
         }
       />

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { channelNameSchema, NOTIFICATION_LEVELS } from '@crew-deck/shared';
+import { openCrmChannel } from '../messaging/crm-channels.js';
 import { checkinBadges, profileCard } from '../messaging/people.js';
 import { getActivityRules, setActivityRules } from '../messaging/activity-bot.js';
 import { executeCommand, listCommands } from '../messaging/commands.js';
@@ -132,6 +133,23 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
       },
     },
     async (req) => ({ result: await executeCommand(ctx, actorOf(req), req.body) }),
+  );
+
+  // "Open channel" on a CRM deal or company.
+  r.post(
+    '/crm/:kind/:id/channel',
+    {
+      ...pre,
+      schema: { params: z.object({ kind: z.enum(['deals', 'companies']), id: z.string().uuid() }) },
+    },
+    async (req) => ({
+      channel: await openCrmChannel(
+        ctx,
+        actorOf(req),
+        req.params.kind === 'deals' ? 'deal' : 'company',
+        req.params.id,
+      ),
+    }),
   );
 
   // The card behind a name (profile popover).

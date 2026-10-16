@@ -8,6 +8,7 @@ import type { CleanDoc } from '../work/rich-text.js';
 import type { MessagingCtx } from './context.js';
 import { peopleOf } from './dto.js';
 import { inQuietHours, type QuietHours } from './quiet.js';
+import { silencedByLeave } from './settings.js';
 
 /**
  * Chat notifications (brief section 7). Events that notify: direct messages, @mentions, replies in
@@ -164,7 +165,9 @@ export async function notifyOne(
   });
   if (prefs.inApp) {
     const silent =
-      inQuietHours(s.quiet, s.tz, now) || (await ctx.presence?.isDnd(t.orgId, d.userId)) === true;
+      inQuietHours(s.quiet, s.tz, now) ||
+      (await ctx.presence?.isDnd(t.orgId, d.userId)) === true ||
+      (await silencedByLeave(t, d.userId, now));
     const people = await peopleOf(t, [d.actorId]);
     const actorName = d.actorId
       ? (people.get(d.actorId)?.name ?? people.get(d.actorId)?.email ?? null)
@@ -238,6 +241,7 @@ export async function emailUnseenMessages(
     const s = await settingsOf(t, n.userId);
     if (inQuietHours(s.quiet, s.tz, now)) continue;
     if (opts.isDnd && (await opts.isDnd(n.orgId, n.userId))) continue;
+    if (await silencedByLeave(t, n.userId, now)) continue;
     await queueEmail(t, n.userId, n.id);
     queued++;
   }

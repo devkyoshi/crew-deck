@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Briefcase, Palette, ShieldAlert, Timer } from 'lucide-react';
+import { ArrowRight, Briefcase, MessageSquare, Palette, ShieldAlert, Timer } from 'lucide-react';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { IconTile } from '@/components/shared/pastel';
@@ -42,6 +42,18 @@ export default function SettingsIndexPage() {
               <div className="font-medium">Kind of work</div>
               <div className="text-muted-foreground text-xs">
                 What the workspace is for, and the modules and columns that fit
+              </div>
+            </div>
+            <ArrowRight className="text-muted-foreground size-4" aria-hidden />
+          </Card>
+        </Link>
+        <Link href="/admin/settings/messaging" className="group focus-visible:outline-none">
+          <Card className="hover:border-primary/40 group-focus-visible:ring-ring/50 flex-row items-center gap-3 p-4 shadow-none transition-colors group-focus-visible:ring-[3px]">
+            <IconTile tone="amber" icon={MessageSquare} />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">Messaging</div>
+              <div className="text-muted-foreground text-xs">
+                Who can create channels, how long messages are kept, and exports
               </div>
             </div>
             <ArrowRight className="text-muted-foreground size-4" aria-hidden />

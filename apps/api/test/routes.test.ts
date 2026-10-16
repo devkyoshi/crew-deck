@@ -17,6 +17,7 @@ const PUBLIC = [
   /^\/api\/v1\/public\//,
   /^\/api\/v1\/files\/:id$/, // signed, short-lived file links (the signature is the permission)
   /^\/api\/v1\/platform\/auth\/(login|logout)$/, // the platform console's own sign-in and sign-out
+  /^\/api\/v1\/hooks\/:token$/, // incoming webhooks: the secret in the address is the credential
 ];
 
 const t = makeApp();

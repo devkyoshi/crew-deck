@@ -300,6 +300,23 @@ const mkItem = async (who: string, space: { id: string }, title: string, extra: 
   expect(res.statusCode, res.body).toBeLessThan(300);
   return res.json() as Json;
 };
+/** Switches the check-in module on or off for the workspace (a settings row is made when there is none). */
+const checkinModule = async (on: boolean) => {
+  const tdb = t.db.tenant(orgId);
+  const modules = on ? ['checkin', 'crm'] : ['crm'];
+  if (await tdb.tenantSettings.findOne({})) await tdb.tenantSettings.updateOne({}, { enabledModules: modules });
+  else
+    await tdb.tenantSettings.insert({
+      timezone: 'UTC',
+      workDays: [1, 2, 3, 4, 5],
+      workStart: '09:00',
+      workEnd: '17:30',
+      autoCloseTime: '20:00',
+      requireNote: false,
+      enabledModules: modules,
+      updatedAt: new Date(),
+    });
+};
 const inChannel = async (who: string, channelId: string) =>
   (await api(who, 'GET', `/channels/${channelId}/messages`)).json().messages as Json[];
 
@@ -558,10 +575,14 @@ describe('slash commands', () => {
   });
 
   it('/checkin and /checkout are offered only when check-in is on, and hand the request to the client', async () => {
-    const tdb = t.db.tenant(orgId);
-    const before = (await api('ann', 'GET', '/commands')).json().commands.map((c: Json) => c.name);
-    expect(before).not.toContain('checkin');
-    await tdb.tenantSettings.upsert({}, { checkinEnabled: true } as never);
+    try {
+      await checkinModule(false);
+      const off = (await api('ann', 'GET', '/commands')).json().commands.map((c: Json) => c.name);
+      expect(off).not.toContain('checkin');
+      expect((await run('ann', 'checkin', 'remote')).statusCode).toBe(404);
+    } finally {
+      await checkinModule(true);
+    }
     const names = (await api('ann', 'GET', '/commands')).json().commands.map((c: Json) => c.name);
     expect(names).toEqual(expect.arrayContaining(['checkin', 'checkout']));
     const res = (await run('ann', 'checkin', 'remote Working from home')).json().result;
@@ -576,8 +597,6 @@ describe('slash commands', () => {
 
 describe('check-in badges and the profile card', () => {
   it('shows where people work today as a status, never times', async () => {
-    const tdb = t.db.tenant(orgId);
-    await tdb.tenantSettings.upsert({}, { checkinEnabled: true } as never);
     const out = await api('cy', 'POST', '/checkin', { locationType: 'remote', note: 'WFH' });
     expect(out.statusCode, out.body).toBeLessThan(300);
 
@@ -603,13 +622,16 @@ describe('check-in badges and the profile card', () => {
   });
 
   it('shows nothing when the check-in module is off', async () => {
-    const tdb = t.db.tenant(orgId);
+    await checkinModule(true);
     await api('cy', 'POST', '/checkin', { locationType: 'onsite' });
-    await tdb.tenantSettings.upsert({}, { checkinEnabled: false } as never);
-    const presence = await api('bob', 'GET', `/presence?ids=${u.cy!.id}`);
-    expect((presence.json().people as Json[])[0]!.checkin).toBeNull();
-    await tdb.tenantSettings.upsert({}, { checkinEnabled: true } as never);
-    await api('cy', 'POST', '/checkout', {});
+    try {
+      await checkinModule(false);
+      const presence = await api('bob', 'GET', `/presence?ids=${u.cy!.id}`);
+      expect((presence.json().people as Json[])[0]!.checkin).toBeNull();
+    } finally {
+      await checkinModule(true);
+      await api('cy', 'POST', '/checkout', {});
+    }
   });
 
   it("counts open work only in spaces the viewer can see and finds nobody in another workspace", async () => {

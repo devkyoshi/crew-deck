@@ -43,6 +43,8 @@ export interface Me {
     trialEndsAt: string | null;
     features: string[];
   };
+  /** The workspace's chat rules the screens depend on. */
+  chat: { channelCreation: 'all' | 'admins' };
   /** Email of the platform admin when this is a read-only impersonated session. */
   impersonatedBy: string | null;
   orgRole: 'owner' | 'admin' | 'member';

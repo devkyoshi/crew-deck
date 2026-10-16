@@ -21,6 +21,8 @@ import { CI, withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { assertWithinLimit, countPipelines, loadPlan } from '../plans/index.js';
 import { containsRegex, offsetOf, pageQuery } from '../lib/pagination.js';
+import type { MessagingCtx } from '../messaging/context.js';
+import { announceDealMoved } from '../messaging/crm-channels.js';
 import type { Actor } from '../permissions/can.js';
 
 const title = z.string().trim().min(1, 'Enter a title').max(160);
@@ -28,7 +30,7 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD'
 
 type Filter = Record<string, unknown>;
 
-export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
+export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps & { chat?: MessagingCtx }) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -651,7 +653,9 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const moved: { fromStage: string | null; toStage: string; status: 'open' | 'won' | 'lost' }[] = [];
+      const result = await withTenantTx(deps.db, actor.orgId, async (tx) => {
+        moved.length = 0;
         await crmGuard(tx, actor, 'edit');
         const deal = await tx.crmDeals.findOne({ id: req.params.id, deletedAt: null });
         if (!deal) throw notFound('Deal');
@@ -697,6 +701,7 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
         );
         if (changedStage) {
           const from = await tx.crmStages.get(deal.stageId);
+          moved.push({ fromStage: from?.name ?? null, toStage: stage.name, status: state.status });
           await writeAudit(tx, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -714,6 +719,10 @@ export async function crmDealRoutes(app: FastifyInstance, deps: AuthDeps) {
         const [out] = await dealRows(tx, actor, { id: deal.id }, 1);
         return out!;
       });
+      // The deal's chat channel (if it has one) hears about the new stage once the move is saved.
+      if (moved[0] && deps.chat)
+        announceDealMoved(deps.chat, actor.orgId, { dealId: req.params.id, actorId: actor.userId, ...moved[0] });
+      return result;
     },
   );
 }

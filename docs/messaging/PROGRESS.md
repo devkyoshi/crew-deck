@@ -12,7 +12,7 @@
 | M2 | Rich messaging | Review | Built and tested, awaiting owner sign-off. Details below |
 | M3 | Search and notifications | Review | Built and tested, awaiting owner sign-off. Details below |
 | M4 | Platform integration | Review | Built and tested, awaiting owner sign-off. Details below |
-| M5 | Admin and extensibility | Not started | |
+| M5 | Admin and extensibility | Review | Built and tested, awaiting owner sign-off. Details below |
 | M6 | Hardening | Not started | |
 
 ## M1: what was built
@@ -22,6 +22,17 @@
 - **Gateway** (`apps/realtime`): Socket.IO, handshake by tenant host and session cookie, server-chosen rooms, `message:send` (acknowledged after storing), `message:edit`, `message:delete`, `read:update`, `typing:start`, `presence:update`, `sync`; revoke on logout, deactivation and role change; five-minute session re-check.
 - **Web** (`apps/web/src/components/messages`, `apps/web/src/app/(app)/messages`): conversation list, virtualized conversation, composer, message rows, pending and failed states, details panel, new message, create channel (four steps), channel browser, connection banner, typing indicator, skeletons and empty states, phone layout. Components are on the `/design` page.
 - **Tests:** `apps/api/test/messaging.test.ts` (34), `apps/api/test/realtime.test.ts` (19, runs the gateway with real socket clients, including the cross-workspace attack cases, reconnect sync, removed members and deactivation), `apps/web/src/lib/messaging-logic.test.ts` (16), `e2e/messaging.spec.ts` (browser, including an accessibility scan).
+
+## M5: what was built
+
+- **Settings and plan limits:** `messaging/settings.ts`, `routes/messaging-admin.ts` (`GET/PUT /admin/messaging-settings`), enforcement in `channels.ts` (creation rule, channel limit, announcement default, default channels), `messages.ts` (`@channel` threshold, plan history window), `space-channels.ts` (space channels off), `notify.ts` (on leave pauses notifications), plan keys `channels` and `message_history_days` in `plans/index.ts` and `db/reference.ts`.
+- **Retention:** `messaging/retention.ts` (purge, per-channel override, hourly BullMQ job), `GET /admin/retention`, `PUT /admin/channels/:id/retention`.
+- **Export:** `messaging/export.ts` (`POST/GET /admin/export`, `GET /admin/export/:id`, `/file`).
+- **Webhooks and bots:** `messaging/webhooks.ts`, `bot.ts` (webhook bots `wh:<id>`), `POST /channels/:id/webhooks`, `GET /channels/:id/webhooks`, `DELETE /webhooks/:id`, public `POST /hooks/:token`.
+- **CRM:** `messaging/crm-channels.ts`, `POST /crm/:deals|companies/:id/channel`, hooks in the CRM deal and activity routes.
+- **Web:** Settings > Messaging (rules, default channels, retention with per-channel limits, export), webhooks in the channel details, retention note, "Open channel" on CRM deals and companies, hidden "Create a channel" when limited, "Older messages are hidden" note, plan limits on the plans pages.
+- Tests: `apps/api/test/messaging-m5.test.ts` (18), `e2e/messaging-m5.spec.ts` (5); earlier tests updated for the new fields.
+- **Not done in M5 (and why):** message edit window and DM restrictions (the brief marks both as later); "add everyone now" for a new default channel (only new people are added); a legal hold; cards and bots for third-party apps beyond webhooks (the brief puts an app directory and OAuth out of scope); webhook posts do not support formatting, attachments or mentions by design.
 
 ## M4: what was built
 
@@ -72,6 +83,7 @@
 
 ## Log (newest first)
 
+- 2026-10-16: M5 built and verified (typecheck, lint, API, gateway, browser tests). Waiting for owner review.
 - 2026-10-16: M4 built and verified (typecheck, lint, API, gateway, browser tests). Waiting for owner review.
 - 2026-10-16: M3 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M2 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M5: admin and extensibility
+
+- **Messaging settings** (Settings > Messaging, workspace owner only): who can create channels (everyone or admins), the limit above which only admins can use `@channel` and `@here`, whether new channels are announcement-only, whether every space gets a channel, whether being on leave pauses notifications, and the channels new people join besides #general and #announcements. Members stop seeing "Create a channel" when it is limited to admins, and the server refuses it too.
+- **Retention:** keep messages for a number of days for the whole workspace, or give a channel its own limit. An hourly job deletes what is older (a thread goes when its last activity is older), with its files, reactions, mentions, pins and saved copies, and records each purge in the audit log. The channel says "Messages in this channel are deleted after N days".
+- **Export:** the owner can make a copy of the public channels (messages, reactions, file names, people) as a compressed file, ready to download for 7 days. Private channels and direct messages are left out on purpose.
+- **Plan limits:** a channel limit and a chat history window (older messages are hidden, not deleted) per plan, shown on the plans page.
+- **Incoming webhooks:** owners and admins add a webhook to a channel and copy its secret address once. Another tool posts `{"text": "..."}` to it and the text appears as a bot message under the webhook's name. Plain text only (no mentions or cards), JSON only, rate limited, revoked at once, and audited.
+- **Open channel from CRM:** on a deal or company, "Open channel" makes a private channel that receives stage changes and new activities and notes.
+- ADR-084 to ADR-088. 18 new API tests, 5 new browser tests.
+
 ## 2026-10-16 - Messaging, phase M4: platform integration
 
 - **Space channels:** every space has a channel named after its key (`#eng`), public for an open space and private for a private one. People are added when they get access to the space (directly or through a group) and removed when they lose it, within seconds; viewers can read but not post or reply; space admins own the channel. Nobody can leave it or add people by hand (they can mute it). Archiving a space archives its channel; restoring brings it back. A nightly repair, and a repair at start-up, fix any drift, and every sync-driven change is written to the audit log with the space as the cause. Open a space's channel from its page (`/spaces/:key/channel`) or from the **Chat** button on its board and backlog.

@@ -60,11 +60,25 @@ function Intro({
   name,
   kind,
   topic,
+  limited = false,
 }: {
   name: string;
   kind: 'channel' | 'dm' | 'private';
   topic: string | null;
+  /** Older messages are hidden by the plan's history window. */
+  limited?: boolean;
 }) {
+  if (limited) {
+    return (
+      <div className="bg-muted/50 space-y-1 rounded-lg border border-dashed p-4">
+        <h2 className="text-base font-semibold">Older messages are hidden</h2>
+        <p className="text-muted-foreground text-sm">
+          Your plan shows a limited history. Older messages are kept, and show again if the plan
+          includes more history.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       <h2 className="text-xl font-bold">
@@ -487,6 +501,7 @@ export function Conversation({
               name={perms.isDm ? name : (channel.name ?? '')}
               kind={kind}
               topic={channel.topic}
+              limited={view.historyLimited === true}
             />
           }
           renderMessage={(m, grouped, highlighted) => (

@@ -48,4 +48,15 @@ Proposed for the work items module; details, behaviour and wiring are in [work-i
 | Releases: versions and release notes (`releases`)        | No    | Yes       | Yes       |
 | Burndown and sprint report (`burndown_reports`)        | No    | No        | Yes       |
 
+## Messaging limits
+
+Enforced in the API since M5. A limit stops new things; it never deletes. Numbers are the shipped defaults and can be changed per workspace by a platform admin.
+
+|                                                  | Free    | Team     | Business  |
+| ------------------------------------------------ | ------- | -------- | --------- |
+| **Channels** people made (`channels`)            | 10      | 200      | Unlimited |
+| **Message history shown** (`message_history_days`) | 90 days | 2 years  | Unlimited |
+
+Direct messages and a space's own channel do not count toward `channels`. Older messages past the history window are kept and show again if the plan grows; they are hidden from the conversation and from search. File storage and attachment size reuse `storage_mb` and `max_attachment_mb`.
+
 Kanban boards, statuses, comments, links and search are included in every plan. Storage (`storage_mb`) is enforced since W3, and deleting an item frees its files. The pricing page and plan comparison list all of these since W8.

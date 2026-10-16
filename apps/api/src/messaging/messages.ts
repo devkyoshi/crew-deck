@@ -1,5 +1,4 @@
 import {
-  BROADCAST_MENTION_LIMIT,
   HISTORY_PAGE,
   MAX_FILES_PER_MESSAGE,
   MAX_MESSAGE_CHARS,
@@ -23,6 +22,8 @@ import { loadChannel, requireChannel } from './access.js';
 import { runLater, type MessagingCtx } from './context.js';
 import { hydrate, hydrateOne, peopleOf } from './dto.js';
 import { itemKeysIn, storeItemLinks } from './item-links.js';
+import { historyFloor, loadPlan } from '../plans/index.js';
+import { loadMessagingSettings } from './settings.js';
 import { hasAnyLink, linksIn } from './link-preview.js';
 import { notifyMessage } from './notify.js';
 
@@ -274,11 +275,12 @@ export async function sendMessage(
 
   const isAdmin = actor.orgRole === 'owner' || actor.orgRole === 'admin';
   if (clean.targets.some((x) => x.type === 'channel' || x.type === 'here') && !isAdmin) {
-    if ((await t.channelMembers.count({ channelId: input.channelId })) > BROADCAST_MENTION_LIMIT) {
+    const limit = (await loadMessagingSettings(t)).broadcastLimit;
+    if ((await t.channelMembers.count({ channelId: input.channelId })) > limit) {
       throw new AppError(
         403,
         'mention_restricted',
-        `Only admins can use @channel and @here in channels with more than ${BROADCAST_MENTION_LIMIT} people`,
+        `Only admins can use @channel and @here in channels with more than ${limit} people`,
       );
     }
   }
@@ -531,6 +533,8 @@ export interface History {
   lastSeq: number;
   hasOlder: boolean;
   hasNewer: boolean;
+  /** Older messages exist but the plan's history window hides them. */
+  historyLimited: boolean;
 }
 
 /**
@@ -546,7 +550,9 @@ export async function listMessages(
   const t = ctx.db.tenant(actor.orgId);
   const { channel } = await loadChannel(t, actor, channelId);
   const limit = Math.min(Math.max(q.limit ?? HISTORY_PAGE, 1), 100);
-  const base = { channelId, ...TIMELINE };
+  // The plan's history window: older messages are kept but not shown.
+  const floor = historyFloor(await loadPlan(t));
+  const base = { channelId, ...TIMELINE, ...(floor ? { createdAt: { $gte: floor } } : {}) };
 
   let rows: MessageDoc[];
   let hasOlder: boolean;
@@ -578,7 +584,15 @@ export async function listMessages(
     hasNewer = false;
     rows = page.slice(0, limit).reverse();
   }
-  return { messages: await hydrate(t, rows), lastSeq: channel.lastSeq, hasOlder, hasNewer };
+  const historyLimited =
+    !!floor && !hasOlder && (await t.messages.exists({ channelId, ...TIMELINE, createdAt: { $lt: floor } }));
+  return {
+    messages: await hydrate(t, rows),
+    lastSeq: channel.lastSeq,
+    hasOlder,
+    hasNewer,
+    historyLimited,
+  };
 }
 
 /**

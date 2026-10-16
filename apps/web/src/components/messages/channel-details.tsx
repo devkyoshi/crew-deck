@@ -68,6 +68,7 @@ import {
 } from '@/lib/messaging-api';
 import { AddPeopleDialog } from './dialogs';
 import { PersonAvatar } from './person-avatar';
+import { WebhooksSection } from './webhooks-section';
 import { CheckinPill, useCheckinOf, useTrackPeople } from './profile-popover';
 
 type Channel = ChannelDTO & Partial<MyChannelDTO>;
@@ -315,6 +316,7 @@ export function ChannelDetails({
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null);
   // A space's channel follows the space: people come and go with their access to it.
   const isSpace = !!channel.spaceId;
+  const canHook = useMe().permissions.includes('webhook.manage');
   const spaceKey = (channel.name ?? '').replace(/-space$/, '').toUpperCase();
 
   return (
@@ -359,6 +361,22 @@ export function ChannelDetails({
         />
         {isSpace && perms.member && (
           <ActivityRules channel={channel} canManage={perms.canManage && !channel.isArchived} />
+        )}
+        {channel.retentionDays != null && (
+          <p className="text-muted-foreground bg-muted/40 rounded-lg border p-3 text-xs">
+            Messages in this channel are deleted after {channel.retentionDays} days.
+          </p>
+        )}
+        {channel.crm && (
+          <Link
+            href={`/crm/${channel.crm.type === 'deal' ? 'deals' : 'companies'}/${channel.crm.id}`}
+            className="text-primary block text-xs hover:underline"
+          >
+            Open the CRM {channel.crm.type}
+          </Link>
+        )}
+        {canHook && !perms.isDm && (
+          <WebhooksSection channelId={channel.id} archived={channel.isArchived} />
         )}
 
         {perms.member && (

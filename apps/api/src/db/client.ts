@@ -83,6 +83,9 @@ const TENANT = {
   pins: 'pins',
   savedMessages: 'saved_messages',
   messageLinks: 'message_links',
+  messagingSettings: 'messaging_settings',
+  incomingWebhooks: 'incoming_webhooks',
+  chatExports: 'chat_exports',
   activityRules: 'activity_rules',
   chatActivityEvents: 'chat_activity_events',
   threadFollows: 'thread_follows',
@@ -165,6 +168,9 @@ export interface TenantDocs {
   pins: T.PinDoc;
   savedMessages: T.SavedMessageDoc;
   messageLinks: T.MessageLinkDoc;
+  messagingSettings: T.MessagingSettingsDoc;
+  incomingWebhooks: T.IncomingWebhookDoc;
+  chatExports: T.ChatExportDoc;
   activityRules: T.ActivityRuleDoc;
   chatActivityEvents: T.ChatActivityEventDoc;
   threadFollows: T.ThreadFollowDoc;
@@ -407,6 +413,27 @@ const DEFAULTS: Record<string, () => Document> = {
   pins: () => ({ pinnedAt: now() }),
   savedMessages: () => ({ savedAt: now() }),
   messageLinks: () => ({ createdAt: now() }),
+  messagingSettings: () => ({
+    channelCreation: 'all',
+    broadcastLimit: 50,
+    defaultChannelIds: [],
+    retentionDays: null,
+    spaceChannels: true,
+    announcementDefault: false,
+    leaveSetsDnd: false,
+    updatedAt: now(),
+  }),
+  incomingWebhooks: () => ({ createdAt: now(), revokedAt: null, lastUsedAt: null }),
+  chatExports: () => ({
+    status: 'queued',
+    storageKey: null,
+    sizeBytes: null,
+    counts: null,
+    error: null,
+    createdAt: now(),
+    finishedAt: null,
+    expiresAt: null,
+  }),
   activityRules: () => ({ updatedAt: now() }),
   chatActivityEvents: () => ({ at: now(), postedAt: null }),
   threadFollows: () => ({ lastReadSeq: 0, createdAt: now() }),
@@ -442,6 +469,7 @@ const NO_ID = new Set<string>([
   'pins',
   'savedMessages',
   'messageLinks',
+  'messagingSettings',
   'activityRules',
   'threadFollows',
 ]);
@@ -743,6 +771,9 @@ export class TenantDb {
   readonly pins!: TenantRepos['pins'];
   readonly savedMessages!: TenantRepos['savedMessages'];
   readonly messageLinks!: TenantRepos['messageLinks'];
+  readonly messagingSettings!: TenantRepos['messagingSettings'];
+  readonly incomingWebhooks!: TenantRepos['incomingWebhooks'];
+  readonly chatExports!: TenantRepos['chatExports'];
   readonly activityRules!: TenantRepos['activityRules'];
   readonly chatActivityEvents!: TenantRepos['chatActivityEvents'];
   readonly threadFollows!: TenantRepos['threadFollows'];

@@ -22,6 +22,7 @@ import type {
 import { api, ApiError, qs, type Member, type Page } from '@/lib/api';
 import { mergeMessages, type ChannelView } from '@/lib/messaging-logic';
 import { useHydrated } from '@/components/checkin/use-hydrated';
+import { useMe } from '@/components/shell/me-context';
 
 export {
   conversationName,
@@ -141,8 +142,15 @@ export async function fetchView(
     lastSeq: number;
     hasOlder: boolean;
     hasNewer: boolean;
+    historyLimited?: boolean;
   }>(`/channels/${channelId}/messages${qs({ limit: 50, ...query })}`);
-  return { messages: r.messages, lastSeq: r.lastSeq, hasOlder: r.hasOlder, hasNewer: r.hasNewer };
+  return {
+    messages: r.messages,
+    lastSeq: r.lastSeq,
+    hasOlder: r.hasOlder,
+    hasNewer: r.hasNewer,
+    historyLimited: r.historyLimited === true,
+  };
 }
 
 export const useMessages = (channelId: string) =>
@@ -160,7 +168,13 @@ export async function loadOlder(qc: QueryClient, channelId: string) {
   if (!view || !first || !view.hasOlder) return;
   const older = await fetchView(channelId, { before_seq: first.seq });
   qc.setQueryData<ChannelView>(keys.messages(channelId), (cur) =>
-    cur ? { ...mergeMessages(cur, older.messages), hasOlder: older.hasOlder } : cur,
+    cur
+      ? {
+          ...mergeMessages(cur, older.messages),
+          hasOlder: older.hasOlder,
+          historyLimited: older.historyLimited,
+        }
+      : cur,
   );
 }
 
@@ -377,6 +391,12 @@ export function channelPerms(
     canReply: member && !channel.isArchived && !channel.readOnly,
     canPin: member && !channel.isArchived && (isDm || owner || isAdmin),
   };
+}
+
+/** Whether I may create channels here: everyone, unless the workspace limited it to admins. */
+export function useCanCreateChannel() {
+  const me = useMe();
+  return me.chat.channelCreation === 'all' || me.orgRole !== 'member';
 }
 
 /** For the sidebar: unread direct messages (a count) and how many channels have unread messages. */

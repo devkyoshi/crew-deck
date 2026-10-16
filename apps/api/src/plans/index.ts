@@ -12,6 +12,8 @@ export const LIMIT_KEYS = [
   'sites',
   'work_items',
   'max_attachment_mb',
+  'channels',
+  'message_history_days',
 ] as const;
 export type LimitKey = (typeof LIMIT_KEYS)[number];
 
@@ -121,6 +123,8 @@ const LIMIT_WORDS: Record<LimitKey, string> = {
   sites: 'sites',
   work_items: 'work items',
   max_attachment_mb: 'MB per attachment',
+  channels: 'channels',
+  message_history_days: 'days of message history',
 };
 
 /** Throws when adding `adding` more would pass the plan's limit. Existing data is never touched. */
@@ -165,6 +169,16 @@ export const countPipelines = (t: TenantDb, _orgId?: string) => t.crmPipelines.c
 
 export const countSites = (t: TenantDb, _orgId?: string) => t.sites.count();
 
+/** Channels people made (public and private). Direct messages and a space's own channel do not count. */
+export const countChannels = (t: TenantDb, _orgId?: string) =>
+  t.channels.count({ type: { $in: ['public', 'private'] }, spaceId: null });
+
+/** The oldest message a plan shows, or null for the whole history. Older messages are kept, not shown. */
+export function historyFloor(plan: EffectivePlan, now = new Date()): Date | null {
+  const days = plan.limits.message_history_days;
+  return days === undefined ? null : new Date(now.getTime() - days * 86_400_000);
+}
+
 /** Work items that are not deleted, across every space. Deleted items never count toward the limit. */
 export const countWorkItems = (t: TenantDb, _orgId?: string) =>
   t.workItems.count({ deletedAt: null });
@@ -188,6 +202,7 @@ export async function loadUsage(tx: TenantDb, orgId: string): Promise<Usage> {
     pipelines: await countPipelines(tx, orgId),
     sites: await countSites(tx, orgId),
     work_items: await countWorkItems(tx, orgId),
+    channels: await countChannels(tx, orgId),
     storage_mb: Math.ceil((await storageBytes(tx)) / (1024 * 1024)),
   };
 }

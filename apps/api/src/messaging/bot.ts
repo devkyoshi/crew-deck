@@ -10,16 +10,20 @@ import { insertMessage, publishNew, threadEvent } from './messages.js';
 export const BOTS = {
   activity: { id: 'activity', name: 'Activity' },
   tasks: { id: 'tasks', name: 'Tasks' },
+  crm: { id: 'crm', name: 'CRM' },
 } as const;
 export type BotId = keyof typeof BOTS;
 
 export interface BotPost {
-  botId: BotId;
+  /** A built-in bot, or `wh:<id>` for an incoming webhook. */
+  botId: BotId | `wh:${string}`;
   channelId: string;
   /** Plain text; work item keys in it get cards. */
   text: string;
   /** Reply in this message's thread. */
   threadRootId?: string | null;
+  /** Plain text exactly as given: no work item cards. For text that comes from outside (webhooks). */
+  plain?: boolean;
   /** Items to show cards for even when their keys are not in the text. */
   itemIds?: string[];
 }
@@ -37,7 +41,7 @@ export async function postAsBot(
   const t = ctx.db.tenant(orgId);
   const channel = await t.channels.get(post.channelId);
   if (!channel || channel.isArchived) return null;
-  const keys = itemKeysIn(null, post.text);
+  const keys = post.plain ? [] : itemKeysIn(null, post.text);
   const stored = await ctx.db.tx(orgId, async (tx) => {
     const msg = await insertMessage(tx, post.channelId, {
       kind: 'bot',

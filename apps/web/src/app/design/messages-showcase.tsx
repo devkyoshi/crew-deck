@@ -76,6 +76,8 @@ const channel = (over: Partial<MyChannelDTO>): MyChannelDTO => ({
   lastMessageAt: null,
   createdAt: new Date(now).toISOString(),
   memberCount: 12,
+  retentionDays: null,
+  crm: null,
   role: 'member',
   notificationLevel: 'all',
   mutedUntil: null,

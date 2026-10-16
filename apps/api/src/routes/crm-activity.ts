@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { writeAudit } from '../audit/service.js';
+import type { MessagingCtx } from '../messaging/context.js';
+import { announceCrmActivity } from '../messaging/crm-channels.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { assertActiveMember, crmGuard, idParam, ownerNames, uuid } from '../crm/helpers.js';
@@ -29,7 +31,7 @@ async function assertLinked(tx: TenantDb, _orgId: string, type: CrmRecordType, i
   }
 }
 
-export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
+export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps & { chat?: MessagingCtx }) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -130,7 +132,7 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const b = req.body;
         await assertActiveMember(tx, actor.orgId, b.assigneeId, 'assigneeId');
@@ -155,6 +157,14 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
         });
         return (await activityById(tx, row.id))!;
       });
+      if (deps.chat)
+        announceCrmActivity(deps.chat, actor.orgId, {
+          linkedType: req.body.linkedType ?? null,
+          linkedId: req.body.linkedId ?? null,
+          actorId: actor.userId,
+          what: `logged a ${req.body.type}: ${req.body.subject}`,
+        });
+      return out;
     },
   );
 
@@ -291,7 +301,7 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
     },
     async (req) => {
       const actor = actorOf(req);
-      return withTenantTx(deps.db, actor.orgId, async (tx) => {
+      const note = await withTenantTx(deps.db, actor.orgId, async (tx) => {
         await crmGuard(tx, actor, 'edit');
         const b = req.body;
         await assertLinked(tx, actor.orgId, b.linkedType, b.linkedId);
@@ -305,6 +315,14 @@ export async function crmActivityRoutes(app: FastifyInstance, deps: AuthDeps) {
         });
         return (await presentNotes(tx, [row]))[0]!;
       });
+      if (deps.chat)
+        announceCrmActivity(deps.chat, actor.orgId, {
+          linkedType: req.body.linkedType,
+          linkedId: req.body.linkedId,
+          actorId: actor.userId,
+          what: 'added a note.',
+        });
+      return note;
     },
   );
 

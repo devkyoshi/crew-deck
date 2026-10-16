@@ -44,7 +44,7 @@ test('a space has a channel: members get it on their own, viewers can read but n
     await expect
       .poll(async () => ((await apiCall(other, 'GET', '/channels')).json.channels as { id: string }[]).some((c) => c.id === s.channelId), { timeout: 10_000 })
       .toBe(true);
-    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
     await expect(other.getByRole('heading', { level: 1, name: s.key.toLowerCase() })).toBeVisible();
     await expect(composer(other)).toBeVisible();

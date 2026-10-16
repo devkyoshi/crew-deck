@@ -348,6 +348,26 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-088: Open channel on a CRM record posts from the routes that change it
+
+- A channel can follow one deal or company (`crmLink`, unique per record). Opening it needs permission to edit CRM records, makes a private channel with the person as owner, and asking again returns it (and adds the person to it). Stage changes, new activities and new notes on the record (and, for a company's channel, on its deals) are posted by the CRM bot after the change is saved, from the CRM routes (which now take the messaging context), never inside the CRM transaction. The text names the person and the stage or subject; note text is not copied. The people in the channel are chosen by someone with CRM rights, so they are trusted with those words.
+
+## ADR-087: Incoming webhooks are secrets that post plain text
+
+- The address carries a 43 character random secret; only its SHA-256 is stored and the secret is shown once at creation. `POST /hooks/:token` has no session and no tenant host (the secret is the credential and finds the workspace), accepts only `application/json` up to 16 KB, takes `{text}` only (4000 characters), is limited per webhook and per workspace through the existing message limiter, and answers a bad, malformed or revoked secret the same way (404). It posts as the webhook's bot (`wh:<id>`, named after the webhook, so a rename follows) through `postAsBot`: no mentions and no work item cards come from outside text, and no notifications are sent. Owners and admins can make up to 10 per channel for channels they can see; revoking is immediate. A webhook is never allowed on a direct message.
+
+## ADR-086: Export covers public channels only
+
+- Admins cannot read private channels or direct messages anywhere else in the product, so an export does not either. The file is NDJSON, gzip-compressed, written through the storage driver under the workspace's own prefix, one export at a time per workspace, readable only by the owner, removed after 7 days. File bodies are not included (names and sizes only). Revisit if a compliance mode is ever added.
+
+## ADR-085: Retention deletes whole threads by last activity, on an hourly job
+
+- The workspace default and an optional per-channel override (set by the owner without needing access to the channel's content) give a cutoff. Root messages older than it whose last reply is also older are deleted with all their replies; replies never expire on their own. Each run handles up to 1000 roots per channel and the rest on the next run. Direct messages follow the workspace default (an owner can override a DM only through the database; the admin screen does not name DMs). A BullMQ tick every hour queues one job per workspace (the same pattern as the other jobs); each purge writes an audit entry from the system.
+
+## ADR-084: Chat rules live in one settings document; the plan decides limits
+
+- `messaging_settings` (one per workspace, defaults when absent) holds the channel-creation rule, the `@channel` threshold, default channels, retention, space channels on or off, announcement default and leave-as-do-not-disturb. Only the owner reads or changes it, and each change is audited with before and after. The rules the screens need (who can create channels) are included in `/me`; everything is still enforced in the services. Plan limits for channels and history reuse the plans module: the channel limit counts only channels people made, and the history window is applied to the message list and to search while the data is kept.
+
 ## ADR-083: Check-in badges are a status, and the profile card counts rather than lists
 
 - The presence lookup now also says where someone works today (`onsite`, `remote`, `offsite`, or `leave`), worked out in their own timezone from the check-in module's work-day record. It never carries a check-in or check-out time or a note, matching the check-in module's privacy rule, and it is empty when the workspace has check-in switched off. A person who is not checked in has no badge (leave is shown when planned for today).

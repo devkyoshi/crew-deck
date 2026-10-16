@@ -804,6 +804,10 @@ export interface ChannelDoc {
   slug: string | null;
   topic: string | null;
   description: string | null;
+  /** Days to keep messages here, overriding the workspace default. Null: follow the default. */
+  retentionDays?: number | null;
+  /** A CRM deal or company this channel follows ("Open channel" on the record). */
+  crmLink?: { type: 'deal' | 'company'; id: string } | null;
   /** Null unless this is a space's channel (M4). */
   spaceId: string | null;
   /** Hash of the sorted member ids: one DM per pair, one group DM per exact set of people. */
@@ -887,6 +891,55 @@ export interface MessageReactionDoc {
   userId: string;
   emoji: string;
   createdAt: Date;
+}
+
+/** One row per workspace: the rules for chat (brief section 4 and 7). Absent means every default. */
+export interface MessagingSettingsDoc {
+  orgId: string;
+  /** Who may create channels: every member, or only workspace admins. */
+  channelCreation: 'all' | 'admins';
+  /** In channels with more people than this only admins may use @channel and @here. */
+  broadcastLimit: number;
+  /** Channels new members are put in (besides #general and #announcements). */
+  defaultChannelIds: string[];
+  /** Keep messages this many days; null keeps them forever. */
+  retentionDays: number | null;
+  /** Make a channel for every space. */
+  spaceChannels: boolean;
+  /** New channels start as announcement-only. */
+  announcementDefault: boolean;
+  /** Being on leave today silences notifications, like do not disturb. */
+  leaveSetsDnd: boolean;
+  updatedAt: Date;
+}
+
+/** A secret address that posts into one channel. Only the hash of the secret is kept. */
+export interface IncomingWebhookDoc {
+  id: string;
+  orgId: string;
+  channelId: string;
+  /** The name the bot posts under. */
+  name: string;
+  tokenHash: string;
+  createdBy: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+  lastUsedAt: Date | null;
+}
+
+/** A request for a copy of the workspace's chat. */
+export interface ChatExportDoc {
+  id: string;
+  orgId: string;
+  requestedBy: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  storageKey: string | null;
+  sizeBytes: number | null;
+  counts: { channels: number; messages: number } | null;
+  error: string | null;
+  createdAt: Date;
+  finishedAt: Date | null;
+  expiresAt: Date | null;
 }
 
 /** A work item a message shows a card for (its key or link appears in the message). */

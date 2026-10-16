@@ -45,6 +45,7 @@ import { liveRoutes } from './routes/live.js';
 import { LiveHub, registerLive } from './lib/live.js';
 import { messagingRoutes } from './routes/messaging.js';
 import { registerSpaceChannelSync } from './routes/space-sync-hook.js';
+import { hookRoutes, messagingAdminRoutes } from './routes/messaging-admin.js';
 import { RedisEventSink, type EventSink } from './messaging/events.js';
 import { Presence } from './messaging/presence.js';
 import type { EnqueueLinkPreviews } from './messaging/link-preview.js';
@@ -194,6 +195,8 @@ export function buildApp({
     messaging: messagingCtx,
   });
   registerSpaceChannelSync(app, messagingCtx);
+  app.register(messagingAdminRoutes, { prefix: '/api/v1', ...authDeps, messaging: messagingCtx });
+  app.register(hookRoutes, { prefix: '/api/v1', messaging: messagingCtx });
   app.register(invitationRoutes, {
     prefix: '/api/v1',
     ...authDeps,
@@ -224,8 +227,8 @@ export function buildApp({
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(checkinRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(crmRecordRoutes, { prefix: '/api/v1', ...authDeps });
-  app.register(crmDealRoutes, { prefix: '/api/v1', ...authDeps });
-  app.register(crmActivityRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(crmDealRoutes, { prefix: '/api/v1', ...authDeps, chat: messagingCtx });
+  app.register(crmActivityRoutes, { prefix: '/api/v1', ...authDeps, chat: messagingCtx });
   app.register(crmIoRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(auditRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(platformRoutes, {

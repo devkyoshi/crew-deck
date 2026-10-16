@@ -57,6 +57,8 @@ export type Action =
   | 'crm.edit'
   | 'crm.admin'
   | 'channel.create'
+  | 'messaging.settings'
+  | 'webhook.manage'
   | 'channel.view'
   | 'channel.join'
   | 'channel.post'
@@ -105,6 +107,8 @@ export interface Resource {
   isAnnouncement?: boolean;
   /** Space channels: the caller only has viewer access to the space, so they read but cannot post. */
   isSpaceViewer?: boolean;
+  /** For creating channels: who the workspace lets do it. */
+  channelCreation?: 'all' | 'admins';
 }
 
 const isAdminLike = (role: OrgRole) => role === 'owner' || role === 'admin';
@@ -215,7 +219,13 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     // Messaging (brief section 7). Channel roles come from the channel; org admins keep their
     // moderation powers (archive, delete) without having to be a member.
     case 'channel.create':
-      return true; // every member for now; the tenant setting arrives with the admin settings (M5)
+      // Every member unless the workspace limits it to admins (the caller passes the setting).
+      return resource.channelCreation !== 'admins' || adminLike;
+    // Chat rules, retention and export are the owner's (brief section 7); incoming webhooks are for admins too.
+    case 'messaging.settings':
+      return actor.orgRole === 'owner';
+    case 'webhook.manage':
+      return adminLike;
     case 'channel.join':
       return resource.channelType === 'public' && !resource.channelRole;
     case 'channel.view':
@@ -270,4 +280,6 @@ export const ADMIN_ACTIONS: Action[] = [
   'settings.manage',
   'attendance.viewAll',
   'attendance.export',
+  'messaging.settings',
+  'webhook.manage',
 ];

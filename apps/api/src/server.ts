@@ -15,6 +15,7 @@ import { startMessageEmailJobs } from './messaging/notify.js';
 import { startLinkPreviewJobs } from './messaging/link-preview.js';
 import { sweepUnsentFiles } from './messaging/files.js';
 import { startActivityBotJobs } from './messaging/activity-bot.js';
+import { startRetentionJobs } from './messaging/retention.js';
 import { reconcileAll } from './messaging/space-channels.js';
 import { createStorage } from './storage/index.js';
 import { startSprintSnapshots } from './work/sprints.js';
@@ -55,11 +56,12 @@ const messageEmails = startMessageEmailJobs(db, (o, u) => chatPresence.isDnd(o, 
 });
 // Nightly repair of space channels (drift from missed events). Runs at startup too, which creates the
 // channels of spaces that existed before messaging did.
-const spaceSyncCtx = { db, events: new RedisEventSink(redis) };
+const spaceSyncCtx = { db, events: new RedisEventSink(redis), storage };
 const reconcileSpaces = () =>
   void reconcileAll(spaceSyncCtx, { error: (m) => console.error(m) });
 setTimeout(reconcileSpaces, 15_000).unref();
 const spaceRepair = setInterval(reconcileSpaces, 24 * 60 * 60 * 1000);
+const retention = await startRetentionJobs(redis, db, spaceSyncCtx, { error: (m) => console.error(m) });
 const activityBot = await startActivityBotJobs(redis, db, spaceSyncCtx, {
   error: (m) => console.error(m),
 });
@@ -99,6 +101,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     clearInterval(spaceRepair);
     await messageEmails.close();
     await activityBot.close();
+    await retention.close();
     await linkPreviews.close();
     await autoClose.close();
     await trials.close();

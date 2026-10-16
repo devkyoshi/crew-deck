@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorView } from '@/components/shared/error-view';
 import { PageHeader } from '@/components/shared/page-header';
 import { api, ApiError } from '@/lib/api';
+import { openCrmChannel } from '@/lib/messaging-admin-api';
 import { money, recordHref, useCrmAccess, type CrmRecordType, type DealDetail } from '@/lib/crm';
 import { CrmGate } from './crm-bits';
 import { ConvertDialog } from './convert-dialog';
@@ -135,6 +136,13 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
     retry: false,
   });
 
+  // A private channel for this record that hears about stage changes and new activities.
+  const openChat = useMutation({
+    mutationFn: () => openCrmChannel(def.plural === 'deals' ? 'deals' : 'companies', id),
+    onSuccess: ({ channel }) => router.push(`/messages/${channel.id}`),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not open the channel'),
+  });
+
   const remove = useMutation({
     mutationFn: () => api(`/crm/${def.plural}/${id}`, { method: 'DELETE' }),
     onSuccess: async () => {
@@ -188,6 +196,11 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
         action={
           <>
             {type === 'lead' && access?.canEdit && !converted && <ConvertDialog lead={r} />}
+            {(type === 'deal' || type === 'company') && access?.canEdit && (
+              <Button variant="outline" loading={openChat.isPending} onClick={() => openChat.mutate()}>
+                <MessageSquare className="size-4" aria-hidden /> Open channel
+              </Button>
+            )}
             {access?.canEdit && (
               <RecordDialog
                 title={`Edit ${def.singular}`}

@@ -10,7 +10,7 @@ import type {
 import type { TenantDb } from '../db/client.js';
 import type { ChannelDoc, MessageAttachmentDoc, MessageDoc } from '../db/types.js';
 
-const BOT_NAMES: Record<string, string> = { activity: 'Activity', tasks: 'Tasks' };
+const BOT_NAMES: Record<string, string> = { activity: 'Activity', tasks: 'Tasks', crm: 'CRM' };
 
 /** People for a set of ids: only members of this workspace resolve, deactivated ones are marked. */
 export async function peopleOf(
@@ -74,7 +74,12 @@ export async function hydrate(t: TenantDb, rows: MessageDoc[]): Promise<MessageD
   if (rows.length === 0) return [];
   const live = rows.filter((m) => !m.deletedAt).map((m) => m.id);
   const ids = rows.map((m) => m.id);
-  const [reactions, attachments, pins, mentions, itemLinks] = await Promise.all([
+  const hookIds = [
+    ...new Set(
+      rows.flatMap((m) => (m.kind === 'bot' && m.botId?.startsWith('wh:') ? [m.botId.slice(3)] : [])),
+    ),
+  ];
+  const [reactions, attachments, pins, mentions, itemLinks, hooks] = await Promise.all([
     live.length ? t.messageReactions.find({ messageId: { $in: live } }) : [],
     live.length
       ? t.messageAttachments.find({ messageId: { $in: live } }, { sort: { createdAt: 1 } })
@@ -82,7 +87,9 @@ export async function hydrate(t: TenantDb, rows: MessageDoc[]): Promise<MessageD
     t.pins.find({ messageId: { $in: ids } }),
     live.length ? t.messageMentions.find({ messageId: { $in: live } }) : [],
     live.length ? t.messageLinks.find({ messageId: { $in: live } }) : [],
+    hookIds.length ? t.incomingWebhooks.find({ id: { $in: hookIds } }) : [],
   ]);
+  const hookName = new Map(hooks.map((h) => [`wh:${h.id}`, h.name]));
   const itemsBy = new Map<string, { id: string; key: string }[]>();
   for (const l of itemLinks)
     itemsBy.set(l.messageId, [...(itemsBy.get(l.messageId) ?? []), { id: l.itemId, key: l.itemKey }]);
@@ -131,7 +138,7 @@ export async function hydrate(t: TenantDb, rows: MessageDoc[]): Promise<MessageD
       previews: deleted ? [] : (meta.previews ?? []),
       previewsPending: deleted ? false : meta.previewsPending === true,
       workItems: deleted ? [] : (itemsBy.get(m.id) ?? []),
-      bot: m.kind === 'bot' && m.botId ? { id: m.botId, name: BOT_NAMES[m.botId] ?? 'Bot' } : null,
+      bot: m.kind === 'bot' && m.botId ? { id: m.botId, name: BOT_NAMES[m.botId] ?? hookName.get(m.botId) ?? 'Bot' } : null,
       editedAt: m.editedAt ? m.editedAt.toISOString() : null,
       deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
       createdAt: m.createdAt.toISOString(),
@@ -157,6 +164,8 @@ export function channelDTO(c: ChannelDoc, memberCount: number, people?: PersonDT
     lastMessageAt: c.lastMessageAt ? c.lastMessageAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     memberCount,
+    retentionDays: c.retentionDays ?? null,
+    crm: c.crmLink ?? null,
     ...(people ? { people } : {}),
   };
 }
