@@ -43,6 +43,7 @@ Proposed for the work items module; details, behaviour and wiring are in [work-i
 | **Max attachment size** (`max_attachment_mb`)          | 5 MB  | 25 MB     | 100 MB    |
 | Scrum backlog and sprints (`scrum_sprints`)            | No    | Yes       | Yes       |
 | Filters shared with the space (`shared_filters`)       | No    | Yes       | Yes       |
+| Roadmap timeline (`roadmap`)                             | No    | Yes       | Yes       |
 | Flow reports (`advanced_reports`)                        | No    | No        | Yes       |
 | Releases: versions and release notes (`releases`)        | No    | Yes       | Yes       |
 | Burndown and sprint report (`burndown_reports`)        | No    | No        | Yes       |

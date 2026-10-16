@@ -208,10 +208,11 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ## W12: Roadmap, time tracking, calendar
 
-- [ ] Roadmap timeline for epics and versions with drag and keyboard alternative
-- [ ] Time tracking: original and remaining estimate, work logs, roll-ups
-- [ ] Calendar view of due dates
-- [ ] Tests, docs, owner review
+- [x] Roadmap timeline for epics and versions with drag and keyboard alternative
+- [x] Time tracking: original and remaining estimate, work logs, roll-ups
+- [x] Calendar view of due dates
+- [x] Tests, docs
+- [ ] Owner review and sign-off
 
 ## W13: Dashboards, parity sweep, hardening
 

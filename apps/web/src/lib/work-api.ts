@@ -127,6 +127,9 @@ export type ItemPatch = Partial<{
   labelIds: string[];
   resolution: Resolution;
   checklist: ChecklistEntry[];
+  startDate: string | null;
+  originalMinutes: number | null;
+  remainingMinutes: number | null;
   fixVersionIds: string[];
   affectsVersionIds: string[];
   componentIds: string[];

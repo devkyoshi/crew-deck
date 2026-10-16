@@ -28,6 +28,7 @@ export const FEATURE_KEYS = [
   'burndown_reports',
   'releases',
   'advanced_reports',
+  'roadmap',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 

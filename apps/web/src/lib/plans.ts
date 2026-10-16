@@ -12,7 +12,8 @@ export type FeatureKey =
   | 'shared_filters'
   | 'burndown_reports'
   | 'releases'
-  | 'advanced_reports';
+  | 'advanced_reports'
+  | 'roadmap';
 
 export type LimitKey =
   | 'seats'
@@ -97,6 +98,10 @@ export const COMPARISON: { label: string; value: (p: PlanInfo) => string }[] = [
   {
     label: 'Burndown and sprint reports',
     value: (p) => (p.features.includes('burndown_reports') ? 'Included' : 'Not included'),
+  },
+  {
+    label: 'Roadmap timeline',
+    value: (p) => (p.features.includes('roadmap') ? 'Included' : 'Not included'),
   },
   {
     label: 'Flow reports: velocity, cumulative flow, cycle time',

@@ -37,8 +37,8 @@ Legend: **Built** works today. **Partial** works but with a gap. **Missing** is 
 | Run sprints (`run_sprints`) | **Built** (backlog, sprints, reports); offered as ready at sign-up | `scrum_sprints` |
 | Work in scrum (`work_in_scrum`) | **Built** (Scrum board type, burndown); offered as ready at sign-up | `scrum_sprints`, `burndown_reports` |
 | Map work dependencies (`map_dependencies`) | Links ("blocks / is blocked by"), badges on cards, a Blocked filter and a warning when a blocked item moves are **Built** | — |
-| Plan a roadmap (`roadmap`) | Timeline of epics with dates | — |
-| Content calendar (`content_calendar`) | Calendar view of items by due date | — |
+| Plan a roadmap (`roadmap`) | **Built** (Roadmap tab, Team plan) | `roadmap` |
+| Content calendar (`content_calendar`) | **Built** (Calendar tab: items by due date and releases) | — |
 | Run approvals (`approvals`) | Approval step on an item or a request, with approver, decision and trail | — |
 | Handle requests and tickets (`service_requests`) | Request queue, request types and forms, SLAs, email intake | — |
 | Use checklists (`checklists`) | Checklists on items with progress on cards, and reusable templates, are **Built** | — |
@@ -53,6 +53,7 @@ summary, S3 storage, upgrade notice). Known gaps now:
 - **CSV export** is capped at 5,000 rows.
 - **Notifications** have no push notifications; emails need a Brevo key.
 - **Workflow rules** apply to moving between statuses only; they do not yet require fields or comments on a move.
+- **Time tracking** has no timesheets across items or people and no approval of time; the roadmap has no dependency lines between epics.
 - **Reports** do not yet split by assignee, label or epic, and cannot be exported.
 - **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
 - **Space documents** are files only: no online editing, version history, search inside files or per-folder permissions.

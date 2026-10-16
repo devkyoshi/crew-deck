@@ -86,6 +86,8 @@ export interface WorkItem {
   /** Open items that block this one / that this one blocks. */
   blockedBy?: number;
   blocks?: number;
+  startDate?: string | null;
+  time?: { original: number | null; remaining: number | null; spent: number };
   fixVersions?: VersionRef[];
   affectsVersions?: VersionRef[];
   components?: { id: string; name: string }[];

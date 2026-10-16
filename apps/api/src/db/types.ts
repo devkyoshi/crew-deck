@@ -313,6 +313,11 @@ export interface WorkItemDoc {
   searchText?: string;
   /** Which sources `searchText` was built from (see work/search-text.ts). */
   searchVersion?: number;
+  /** When work is planned to start (epics use it on the roadmap). */
+  startDate?: string | null;
+  /** Time planned and still expected, in minutes. */
+  originalMinutes?: number | null;
+  remainingMinutes?: number | null;
   /** Releases this item is planned for / was found in, and the parts of the product it touches. */
   fixVersionIds?: string[];
   affectsVersionIds?: string[];
@@ -577,6 +582,20 @@ export interface AttachmentDoc {
   image: string | null;
   size: number;
   storageKey: string;
+  createdAt: Date;
+}
+
+/** Time someone spent on an item. */
+export interface WorklogDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  itemId: string;
+  userId: string;
+  minutes: number;
+  /** The day the work was done (YYYY-MM-DD). */
+  date: string;
+  note: string;
   createdAt: Date;
 }
 

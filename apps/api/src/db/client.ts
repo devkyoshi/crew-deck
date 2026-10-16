@@ -70,6 +70,7 @@ const TENANT = {
   components: 'components',
   spaceFolders: 'space_folders',
   spaceFiles: 'space_files',
+  worklogs: 'worklogs',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -133,6 +134,7 @@ export interface TenantDocs {
   components: T.ComponentDoc;
   spaceFolders: T.SpaceFolderDoc;
   spaceFiles: T.SpaceFileDoc;
+  worklogs: T.WorklogDoc;
 }
 
 export interface GlobalDocs {
@@ -620,6 +622,7 @@ export class TenantDb {
   readonly components!: TenantRepos['components'];
   readonly spaceFolders!: TenantRepos['spaceFolders'];
   readonly spaceFiles!: TenantRepos['spaceFiles'];
+  readonly worklogs!: TenantRepos['worklogs'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

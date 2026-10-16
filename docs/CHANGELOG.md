@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-16 - Time tracking, roadmap and calendar (W12)
+
+- **Time tracking:** planned and remaining time on every item, a Log time form (like 1h 30m, with a day and a note), and the list of what was logged. Remaining time follows the logs.
+- **Roadmap tab** (Team plan): epics and releases on a timeline; drag a bar to move it, drag its ends to resize, or use the arrow keys or the dates dialog. Weeks, months or quarters. A table of the same dates is below.
+- **Calendar tab:** a month of what is due, with release dates.
+- Start date on items.
+- ADR-066.
+
 ## 2026-10-16 - Flow reports (W11)
 
 - **Reports > Flow** (every space, Business plan): cumulative flow, created against resolved, cycle time with 50/85/95 percent lines, and velocity for Scrum spaces. Each chart has a table of numbers.

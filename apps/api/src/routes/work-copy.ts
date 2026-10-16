@@ -83,6 +83,9 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
             reporterId: actor.userId,
             estimate: src.estimate,
             dueDate: src.dueDate,
+            startDate: src.startDate ?? null,
+            originalMinutes: src.originalMinutes ?? null,
+            remainingMinutes: src.originalMinutes ?? null,
             rank: await rankAtEnd(t, space.id, src.statusId),
             labelIds: src.labelIds ?? [],
             resolution: src.resolution ?? null,
@@ -200,6 +203,7 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
         const ids = moving.map((m) => m.id);
         await t.comments.updateMany({ itemId: { $in: ids } }, { spaceId: target.id });
         await t.attachments.updateMany({ itemId: { $in: ids } }, { spaceId: target.id });
+        await t.worklogs.updateMany({ itemId: { $in: ids } }, { spaceId: target.id });
         // Children of a moved epic stay where they are and no longer belong to it.
         if (row.type === 'epic') {
           await t.workItems.updateMany({ parentId: row.id, deletedAt: null }, { parentId: null, updatedAt: now });

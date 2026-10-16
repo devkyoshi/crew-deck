@@ -61,6 +61,7 @@ export interface ItemRow extends WorkItemDoc {
   /** Open items that block this one, and open items this one blocks. */
   blockedBy: number;
   blocks: number;
+  timeSpentMinutes: number;
   fixVersions: { id: string; name: string; state: string }[];
   affectsVersions: { id: string; name: string; state: string }[];
   components: { id: string; name: string }[];
@@ -90,6 +91,11 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
     ),
   ]);
   const { blockedBy, blocks } = await openBlockCounts(t, ids, links);
+  const logged = await t.worklogs.aggregate<{ _id: string; minutes: number }>([
+    { $match: { itemId: { $in: ids } } },
+    { $group: { _id: '$itemId', minutes: { $sum: '$minutes' } } },
+  ]);
+  const spent = new Map(logged.map((l) => [l._id, l.minutes]));
   const versionIds = [...new Set(docs.flatMap((d) => [...(d.fixVersionIds ?? []), ...(d.affectsVersionIds ?? [])]))];
   const componentIds = [...new Set(docs.flatMap((d) => d.componentIds ?? []))];
   const [versionDocs, componentDocs] = await Promise.all([
@@ -156,6 +162,7 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
       childDone: childDone.get(d.id) ?? 0,
       blockedBy: blockedBy.get(d.id) ?? 0,
       blocks: blocks.get(d.id) ?? 0,
+      timeSpentMinutes: spent.get(d.id) ?? 0,
       fixVersions: versionsOf(d.fixVersionIds),
       affectsVersions: versionsOf(d.affectsVersionIds),
       components: (d.componentIds ?? []).flatMap((id) => {
@@ -242,6 +249,12 @@ export function presentItem(row: ItemRow, spaceKey: string) {
     reporter: person(row.reporterId, row.reporterName, row.reporterEmail, row.reporterAvatar)!,
     estimate: row.estimate === null ? null : Number(row.estimate),
     dueDate: row.dueDate,
+    startDate: row.startDate ?? null,
+    time: {
+      original: row.originalMinutes ?? null,
+      remaining: row.remainingMinutes ?? null,
+      spent: row.timeSpentMinutes,
+    },
     rank: row.rank,
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,

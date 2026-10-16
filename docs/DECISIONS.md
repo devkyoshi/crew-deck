@@ -348,6 +348,12 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-066: Time is minutes, the roadmap is epics and releases with dates (W12)
+
+- Planned and remaining time are whole minutes on the item; time worked is a work log (user, day, minutes, note) that cannot be dated in the future. Logging time lowers the remaining time by what was worked unless the person says what is left; editing or deleting a log moves it back. Members log time (and edit their own); space admins can delete any log. Time spent is the sum of an item's logs and is read with the item.
+- The roadmap draws epics that have a start or due date, and releases that have a date, on one timeline; progress is children done against children total. Dates are saved through the normal item update (with the version check), so drag, resize, arrow keys and the date dialog all use one path. Start may not be after due. The roadmap is a plan feature (`roadmap`, Team and up); everything else about dates is open on every plan.
+- The calendar shows any item with a due date, plus releases, a month at a time (up to two months per request).
+
 ## ADR-065: Flow reports are computed from the existing history (W11)
 
 - No new collection: each card's category over time is rebuilt from its creation, the status changes in its activity history (which store the category at the time) and its resolved time. Reports therefore cover a space's whole history without a backfill. A status deleted with a replacement moves cards without an event, and deleted cards leave the history; both are small and accepted.

@@ -406,7 +406,7 @@ Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised 
 - `status_changes` collection (item, from, to, at) fed by every status change, backfilled from `activity_events`.
 - Velocity (last six sprints), cumulative flow, control chart with cycle-time percentiles, created vs resolved; each with a data table. Plan gate `advanced_reports`.
 
-### W12: Roadmap, time tracking, calendar
+### W12: Roadmap, time tracking, calendar (built)
 
 - Roadmap timeline of epics and versions (start and due dates, drag and resize, zoom, date fields as the keyboard alternative). Plan gate `roadmap`.
 - Time tracking: original and remaining estimate, work logs (`worklogs`), roll-ups on epics. `can()` actions `worklog.add`, `worklog.editOwn`, `worklog.deleteAny`.

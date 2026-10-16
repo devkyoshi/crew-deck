@@ -52,6 +52,7 @@ import {
   useUpdateItem,
   type ItemPatch,
 } from '@/lib/work-api';
+import { TimeSection } from './time-section';
 import { ComponentPicker, VersionPicker } from './version-bits';
 import { BlockedMoveDialog, BlockedNotice, ChecklistSection, movesBlockedForward, ResolutionField } from './item-extras';
 import { TYPE_META, type ItemType, type Person, type WorkItem } from '@/lib/work';
@@ -442,6 +443,8 @@ export function ItemDetail({
 
           <ChecklistSection item={item} canEdit={canEdit} onChange={(next) => save({ checklist: next })} />
 
+          <TimeSection item={item} canEdit={canEdit} onSave={(patch) => save(patch)} />
+
           {showChildren && (
             <ChildrenSection
               parent={item}
@@ -519,6 +522,21 @@ export function ItemDetail({
               value={item.estimate}
               disabled={!canEdit}
               onChange={(estimate) => save({ estimate }, { estimate })}
+            />
+          </Field>
+
+          <Field label="Start date" htmlFor="f-start">
+            <Input
+              id="f-start"
+              type="date"
+              className="h-8"
+              disabled={!canEdit}
+              value={item.startDate ?? ''}
+              max={item.dueDate ?? undefined}
+              onChange={(e) => {
+                const startDate = e.target.value || null;
+                if (startDate !== (item.startDate ?? null)) save({ startDate }, { startDate });
+              }}
             />
           </Field>
 

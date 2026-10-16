@@ -32,6 +32,9 @@ export type Action =
   | 'attachment.add'
   | 'attachment.delete'
   | 'doc.add'
+  | 'worklog.add'
+  | 'worklog.editOwn'
+  | 'worklog.deleteAny'
   | 'doc.delete'
   | 'filter.share'
   | 'sprint.create'
@@ -156,6 +159,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'comment.create':
     case 'attachment.add':
     case 'doc.add':
+    case 'worklog.add':
     case 'filter.share':
     case 'sprint.create':
     case 'version.manage':
@@ -163,10 +167,12 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
 
     // People edit only their own comments, and only while they can still comment.
     case 'comment.editOwn':
+    case 'worklog.editOwn':
       return (
         resource.isAuthor === true && (adminLike || spaceAdmin || resource.spaceRole === 'member')
       );
     case 'comment.deleteAny':
+    case 'worklog.deleteAny':
       return adminLike || spaceAdmin;
     case 'attachment.delete':
     case 'doc.delete':

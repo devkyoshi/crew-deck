@@ -41,6 +41,7 @@ export const PLANS: PlanDoc[] = [
       'scrum_sprints',
       'shared_filters',
       'releases',
+      'roadmap',
     ],
   },
   {
@@ -62,6 +63,7 @@ export const PLANS: PlanDoc[] = [
       'burndown_reports',
       'releases',
       'advanced_reports',
+      'roadmap',
     ],
   },
   {
@@ -83,6 +85,7 @@ export const PLANS: PlanDoc[] = [
       'burndown_reports',
       'releases',
       'advanced_reports',
+      'roadmap',
     ],
   },
 ];

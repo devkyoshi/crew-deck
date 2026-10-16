@@ -104,6 +104,8 @@ export default function SpaceLayout({
     { href: `${base}/board`, label: 'Board' },
     { href: `${base}/list`, label: 'List' },
     { href: `${base}/epics`, label: 'Epics' },
+    { href: `${base}/roadmap`, label: 'Roadmap' },
+    { href: `${base}/calendar`, label: 'Calendar' },
     { href: `${base}/releases`, label: 'Releases' },
     { href: `${base}/documents`, label: 'Documents' },
     { href: `${base}/reports`, label: 'Reports' },

@@ -27,7 +27,7 @@
 | W10 | Versions and components | Review | 2026-10-16 | | | Versions with release flow and notes, components with default assignee, pickers, filters, Releases tab |
 | W14 | Space documents | Review | 2026-10-16 | | | Folder library per space: nested folders, upload, download, rename, move, delete |
 | W11 | Flow and reports | Review | 2026-10-16 | | | Velocity, cumulative flow, cycle time, created vs resolved; computed from history |
-| W12 | Roadmap, time tracking, calendar | Not started | | | | Timeline of epics, worklogs, due-date calendar |
+| W12 | Roadmap, time tracking, calendar | Review | 2026-10-16 | | | Timeline of epics and releases, time logs and estimates, due-date calendar |
 | W13 | Dashboards, parity sweep, hardening | Not started | | | | Gadget dashboards, JIRA-PARITY.md, a11y, e2e |
 
 ## Pricing track (runs alongside the phases, see `PRICING-GATES.md`)
@@ -57,6 +57,8 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 - The brief mentions SendGrid; the platform uses Brevo through `apps/api/src/email/`. Use the existing sender.
 
 ## Log (newest first)
+
+- 2026-10-16: W12 built and set to Review. **API:** item fields `startDate`, `originalMinutes`, `remainingMinutes`, collection `worklogs`, `routes/time-roadmap.ts` (work logs, `GET /spaces/:id/roadmap`, `GET /spaces/:id/calendar`), `can()` actions `worklog.add`, `worklog.editOwn`, `worklog.deleteAny`, feature `roadmap` (Team and up). **Web:** Time tracking section in the item panel (`time-section.tsx`), start date field, Roadmap tab (`roadmap-view.tsx`: drag, resize, keyboard, dialog, table), Calendar tab (`calendar-view.tsx`). Tests: `time-roadmap.test.ts` (7). Review list: log time on an item and watch Remaining; open Roadmap on a Team workspace, drag an epic bar, resize it, move it with arrow keys; open Calendar and click an item.
 
 - 2026-10-16: W11 built and set to Review. `work/flow.ts` (history rebuilt from creation, activity status changes and resolution), `routes/reports.ts` (`GET /spaces/:id/reports?days=`, `/reports/access`), feature `advanced_reports` (Business and up), web Reports > Flow (`flow-reports.tsx`) with SVG charts, legends and data tables; the Reports tab now exists in Kanban spaces too. Tests: `flow-reports.test.ts` (6, including hand-computed fixtures). Change from the plan: no `status_changes` collection (derived instead, ADR-065). Review list: on a Business workspace open Reports > Flow in a Kanban and a Scrum space; on a Free one see the upgrade note.
 

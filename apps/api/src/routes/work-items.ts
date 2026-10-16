@@ -46,6 +46,8 @@ import { resolveSpace, spaceCtx } from './spaces.js';
 const titleSchema = z.string().trim().min(1, 'Enter a title').max(255, 'Use 255 characters or fewer');
 const descriptionSchema = z.string().max(20000, 'That description is too long');
 const estimateSchema = z.number().min(0).max(999.9).multipleOf(0.5);
+/** Planned or remaining time, in whole minutes (up to 1,000 hours). */
+const minutesSchema = z.number().int().min(0).max(60_000);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD');
 
 const createBody = z.object({
@@ -60,6 +62,9 @@ const createBody = z.object({
   assigneeId: z.string().uuid().nullable().optional(),
   estimate: estimateSchema.nullable().optional(),
   dueDate: dateSchema.nullable().optional(),
+  startDate: dateSchema.nullable().optional(),
+  originalMinutes: minutesSchema.nullable().optional(),
+  remainingMinutes: minutesSchema.nullable().optional(),
   labelIds: z.array(z.string().uuid()).max(20).optional(),
   fixVersionIds: z.array(z.string().uuid()).max(20).optional(),
   affectsVersionIds: z.array(z.string().uuid()).max(20).optional(),
@@ -78,6 +83,9 @@ const patchBody = z
     assigneeId: z.string().uuid().nullable(),
     estimate: estimateSchema.nullable(),
     dueDate: dateSchema.nullable(),
+    startDate: dateSchema.nullable(),
+    originalMinutes: minutesSchema.nullable(),
+    remainingMinutes: minutesSchema.nullable(),
     labelIds: z.array(z.string().uuid()).max(20),
     fixVersionIds: z.array(z.string().uuid()).max(20),
     affectsVersionIds: z.array(z.string().uuid()).max(20),
@@ -282,6 +290,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
           componentIds,
           estimate: b.estimate ?? null,
           dueDate: b.dueDate ?? null,
+          startDate: b.startDate ?? null,
+          originalMinutes: b.originalMinutes ?? null,
+          remainingMinutes: b.remainingMinutes ?? b.originalMinutes ?? null,
           rank,
           resolvedAt: resolvedAtFor(status.category, null, now),
           createdAt: now,
@@ -381,6 +392,18 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         if (b.assigneeId !== undefined) set.assigneeId = b.assigneeId;
         if (b.estimate !== undefined) set.estimate = b.estimate;
         if (b.dueDate !== undefined) set.dueDate = b.dueDate;
+        if (b.startDate !== undefined) set.startDate = b.startDate;
+        if (b.originalMinutes !== undefined) set.originalMinutes = b.originalMinutes;
+        if (b.remainingMinutes !== undefined) set.remainingMinutes = b.remainingMinutes;
+        {
+          const start = set.startDate !== undefined ? set.startDate : (row.startDate ?? null);
+          const due = set.dueDate !== undefined ? set.dueDate : row.dueDate;
+          if (start && due && due < start) {
+            throw new AppError(422, 'invalid_dates', 'The due date cannot be before the start date', {
+              dueDate: 'Choose a date on or after the start',
+            });
+          }
+        }
         if (b.fixVersionIds !== undefined) set.fixVersionIds = await spaceRefs(tx, space, 'versions', b.fixVersionIds, 'fixVersionIds');
         if (b.affectsVersionIds !== undefined) set.affectsVersionIds = await spaceRefs(tx, space, 'versions', b.affectsVersionIds, 'affectsVersionIds');
         if (b.componentIds !== undefined) set.componentIds = await spaceRefs(tx, space, 'components', b.componentIds, 'componentIds');
