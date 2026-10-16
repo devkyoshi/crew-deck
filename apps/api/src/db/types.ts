@@ -1,3 +1,4 @@
+import type { ActivityEventType } from '@crew-deck/shared';
 /**
  * Document shapes for every MongoDB collection. Field names match the camelCase columns the old
  * Drizzle schema exposed, so route code keeps reading `row.orgId`, `row.createdAt` and so on.
@@ -298,6 +299,8 @@ export interface SpaceStatusDoc {
 
 export interface WorkItemDoc {
   id: string;
+  /** Set when the item was made from a chat message (M4). */
+  createdFromMessage?: { messageId: string; channelId: string; threadRootId: string | null };
   orgId: string;
   spaceId: string;
   number: number;
@@ -884,6 +887,43 @@ export interface MessageReactionDoc {
   userId: string;
   emoji: string;
   createdAt: Date;
+}
+
+/** A work item a message shows a card for (its key or link appears in the message). */
+export interface MessageLinkDoc {
+  orgId: string;
+  messageId: string;
+  channelId: string;
+  itemId: string;
+  /** The key as written, kept so the card can say what it is even without access. */
+  itemKey: string;
+  createdAt: Date;
+}
+
+/** What a space channel's activity bot posts. One per channel. */
+export interface ActivityRuleDoc {
+  orgId: string;
+  channelId: string;
+  spaceId: string;
+  eventTypes: ActivityEventType[];
+  updatedAt: Date;
+}
+
+/** A work event waiting to be posted by the activity bot (events within 60 seconds are coalesced). */
+export interface ChatActivityEventDoc {
+  id: string;
+  orgId: string;
+  channelId: string;
+  spaceId: string;
+  type: ActivityEventType;
+  itemId: string | null;
+  itemKey: string | null;
+  title: string | null;
+  actorId: string | null;
+  /** Free detail: the assignee, the sprint name. */
+  detail: Record<string, unknown>;
+  at: Date;
+  postedAt: Date | null;
 }
 
 export interface MessageMentionDoc {

@@ -4,7 +4,9 @@ import { useState } from 'react';
 import type { MessageDTO, MyChannelDTO } from '@crew-deck/shared';
 import { Composer } from '@/components/messages/composer';
 import { ConversationListItem } from '@/components/messages/conversation-list';
+import { ItemCardView } from '@/components/messages/item-card';
 import { MessageRow, PendingRow } from '@/components/messages/message-row';
+import { CheckinPill } from '@/components/messages/profile-popover';
 import { PersonAvatar, PresenceDot } from '@/components/messages/person-avatar';
 import { RichContent } from '@/components/messages/rich-content';
 import { MessageSkeletons } from '@/components/messages/status-bits';
@@ -53,6 +55,8 @@ const msg = (over: Partial<MessageDTO>): MessageDTO => ({
   mentions: [],
   previews: [],
   previewsPending: false,
+  workItems: [],
+  bot: null,
   editedAt: null,
   deletedAt: null,
   createdAt: new Date(now - 5 * 60_000).toISOString(),
@@ -424,6 +428,33 @@ export function MessagesShowcase() {
               p(t('Mention: '), { type: 'mention', attrs: { id: 'x', label: 'Ben Builder' } }),
             )}
           />
+        </div>
+      </Block>
+
+      <Block title="Work item cards (live data; a neutral card when you have no access) and check-in badges">
+        <div className="space-y-2">
+          <ItemCardView
+            card={{
+              access: true,
+              id: 'i1',
+              key: 'ENG-142',
+              spaceKey: 'ENG',
+              title: 'Checkout button fails on Safari',
+              type: 'bug',
+              status: { name: 'In Progress', category: 'in_progress', color: 'blue' },
+              priority: 'high',
+              assignee: { id: BEN.id, name: BEN.name, avatarUrl: null },
+              href: '#',
+            }}
+          />
+          <ItemCardView card={{ access: false, key: 'SEC-9' }} />
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium">Ben Builder</span>
+            <CheckinPill badge="onsite" />
+            <CheckinPill badge="remote" />
+            <CheckinPill badge="offsite" />
+            <CheckinPill badge="leave" />
+          </p>
         </div>
       </Block>
 

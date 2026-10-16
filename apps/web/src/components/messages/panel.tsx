@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useRouter } from 'next/navigation';
 
 /**
  * The right-hand panel of the Messages area: either the channel's details or one thread. The choice
@@ -40,6 +41,27 @@ const Ctx = createContext<PanelState>({
   closeThread: noop,
 });
 export const usePanel = () => useContext(Ctx);
+
+/**
+ * For a conversation shown outside the Messages area (the docked chat on a board): there is no side
+ * panel, so opening a thread takes the person to the full conversation with the thread open.
+ */
+export function DockedPanelScope({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const value = useMemo<PanelState>(
+    () => ({
+      open: false,
+      toggle: noop,
+      setOpen: noop,
+      thread: null,
+      openThread: (channelId, rootId) =>
+        router.push(`/messages/${channelId}?thread=${encodeURIComponent(rootId)}`),
+      closeThread: noop,
+    }),
+    [router],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
 
 const KEY = 'messages:details-open';
 const wide = () => window.matchMedia('(min-width: 1024px)').matches;

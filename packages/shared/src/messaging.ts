@@ -98,6 +98,10 @@ export interface MessageDTO {
   previews: LinkPreviewDTO[];
   /** Links are being looked up: the client reserves room for the cards. */
   previewsPending: boolean;
+  /** Work items named in the message (key or link). Their cards are read live, per viewer. */
+  workItems: { id: string; key: string }[];
+  /** For bot messages: who posted. */
+  bot: { id: string; name: string } | null;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -118,6 +122,8 @@ export interface ChannelDTO {
   memberCount: number;
   /** For direct messages: the other people (everyone but the caller, or the caller for a self-DM). */
   people?: PersonDTO[];
+  /** True when the caller can read but not post (a space viewer in a space's channel). */
+  readOnly?: boolean;
 }
 
 /** A channel as it appears in the caller's own list. */
@@ -285,4 +291,96 @@ export interface ParsedSearch {
   after: string | null;
   has: ('file' | 'link')[];
   is: 'thread'[];
+}
+
+// ---- Platform integration (M4) ----------------------------------------------------------------------
+
+/** The card under a message that names a work item. Access is decided per viewer on the server. */
+export type ItemCardDTO =
+  | {
+      access: true;
+      id: string;
+      key: string;
+      spaceKey: string;
+      title: string;
+      type: 'epic' | 'story' | 'task' | 'bug' | 'ticket' | 'subtask';
+      status: { name: string; category: 'todo' | 'in_progress' | 'done'; color: string | null };
+      priority: 'highest' | 'high' | 'medium' | 'low' | 'lowest';
+      assignee: { id: string; name: string | null; avatarUrl: string | null } | null;
+      href: string;
+    }
+  /** The person cannot open that space (or the item is gone): no title, no details. */
+  | { access: false; key: string };
+
+export const ACTIVITY_EVENT_TYPES = [
+  'item_created',
+  'item_assigned',
+  'item_done',
+  'sprint_started',
+  'sprint_completed',
+  'comment_added',
+] as const;
+export type ActivityEventType = (typeof ACTIVITY_EVENT_TYPES)[number];
+/** Conservative by default: comments are off, to avoid noise. */
+export const ACTIVITY_DEFAULTS: ActivityEventType[] = ['item_created', 'item_done'];
+export const ACTIVITY_COALESCE_SECONDS = 60;
+export const ACTIVITY_EVENT_LABELS: Record<ActivityEventType, string> = {
+  item_created: 'A work item is created',
+  item_assigned: 'A work item is assigned',
+  item_done: 'A work item is moved to Done',
+  sprint_started: 'A sprint starts',
+  sprint_completed: 'A sprint is completed',
+  comment_added: 'Someone comments on a work item',
+};
+
+export interface ActivityRulesDTO {
+  eventTypes: ActivityEventType[];
+}
+
+export interface SlashCommandDTO {
+  name: string;
+  description: string;
+  /** Shown in autocomplete, for example `/task create <title>`. */
+  usage: string;
+}
+
+/** What running a command asks the client to do. */
+export type CommandResult =
+  | { kind: 'ephemeral'; text: string; card?: ItemCardDTO; cards?: ItemCardDTO[] }
+  /** Open the create-work-item dialog with these values filled in. */
+  | { kind: 'open_create'; title: string; spaceId: string | null }
+  /** The client runs this request as the person (their own session and rights), then shows `text`. */
+  | { kind: 'call'; method: 'POST'; path: string; body: Record<string, unknown>; text: string }
+  | { kind: 'done'; text: string };
+
+export interface CreateFromMessageResult {
+  item: { id: string; key: string; spaceKey: string };
+  /** The bot's reply in the message's thread, already stored and published. */
+  replyId: string;
+}
+
+/** Where someone is working today. Status only, never times. */
+export type CheckinBadge = 'onsite' | 'remote' | 'offsite' | 'leave';
+export const CHECKIN_BADGE_LABELS: Record<CheckinBadge, string> = {
+  onsite: 'Onsite',
+  remote: 'Remote',
+  offsite: 'Offsite',
+  leave: 'On leave',
+};
+
+/** The card behind a name. */
+export interface ProfileCardDTO {
+  id: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+  /** IANA name, so the client can show their local time. */
+  timezone: string | null;
+  groups: string[];
+  status: { emoji: string | null; text: string | null } | null;
+  checkin: CheckinBadge | null;
+  presence: PresenceState;
+  /** Open work items assigned to them in spaces you can see. */
+  openItems: number;
 }

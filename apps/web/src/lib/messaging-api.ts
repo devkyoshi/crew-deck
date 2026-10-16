@@ -2,6 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  ActivityRulesDTO,
+  CheckinBadge,
+  CommandResult,
+  CreateFromMessageResult,
+  ItemCardDTO,
+  SlashCommandDTO,
   ParsedSearch,
   SearchHit,
   SidebarSectionDTO,
@@ -43,6 +49,8 @@ export interface BrowsedChannel extends ChannelDTO {
 export interface PresenceInfo {
   id: string;
   state: PresenceState;
+  /** Where they work today, as a status only. */
+  checkin: CheckinBadge | null;
   status: { emoji: string | null; text: string | null; expiresAt: string | null } | null;
 }
 
@@ -342,7 +350,7 @@ export const previewOf = (m: MessageDTO) =>
 
 /** UI mirror of the server's can() for channels. The API still enforces every action. */
 export function channelPerms(
-  channel: Pick<ChannelDTO, 'type' | 'isArchived' | 'isAnnouncement'> & {
+  channel: Pick<ChannelDTO, 'type' | 'isArchived' | 'isAnnouncement' | 'readOnly'> & {
     role?: 'owner' | 'member';
   },
   isAdmin: boolean,
@@ -355,14 +363,18 @@ export function channelPerms(
     member,
     owner,
     isArchived: channel.isArchived,
-    canPost: member && !channel.isArchived && (!channel.isAnnouncement || owner || isAdmin),
+    canPost:
+      member &&
+      !channel.isArchived &&
+      !channel.readOnly &&
+      (!channel.isAnnouncement || owner || isAdmin),
     canManage: !isDm && (isAdmin || owner),
     canDeleteChannel: !isDm && isAdmin,
     canModerate: !isDm && (owner || (isAdmin && (channel.type === 'public' || member))),
     canLeave: member && channel.type !== 'dm',
     /** Reacting and replying in a thread stay open to members of announcement channels. */
     canReact: member && !channel.isArchived,
-    canReply: member && !channel.isArchived,
+    canReply: member && !channel.isArchived && !channel.readOnly,
     canPin: member && !channel.isArchived && (isDm || owner || isAdmin),
   };
 }
@@ -716,4 +728,80 @@ export function useStatusMutations() {
       }) => api<{ ok: boolean }>('/me/status', { method: 'PUT', body }),
     }),
   };
+}
+
+// ---- Platform integration (M4) ------------------------------------------------------------------------------
+
+/** A work item's card for me. Cards read live data, so they are refetched when the tab regains focus. */
+export function useItemCard(ref: string) {
+  return useQuery({
+    queryKey: ['messaging', 'item-card', ref],
+    queryFn: async () => (await api<{ card: ItemCardDTO }>(`/items/${encodeURIComponent(ref)}/card`)).card,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/** Refresh every card on screen (a work item changed). */
+export function refreshItemCards(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ['messaging', 'item-card'] });
+}
+
+/** The channel that belongs to a space (created the first time it is asked for). */
+export function useSpaceChannel(spaceKey: string, enabled = true) {
+  return useQuery({
+    queryKey: ['messaging', 'space-channel', spaceKey],
+    queryFn: async () =>
+      (await api<{ channel: ChannelDTO & { member: boolean } }>(`/spaces/${spaceKey}/channel`)).channel,
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useActivityRules(channelId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['messaging', 'activity-rules', channelId],
+    queryFn: () => api<ActivityRulesDTO>(`/channels/${channelId}/activity-rules`),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSetActivityRules(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventTypes: string[]) =>
+      api<ActivityRulesDTO>(`/channels/${channelId}/activity-rules`, {
+        method: 'PUT',
+        body: { eventTypes },
+      }),
+    onSuccess: (data) => qc.setQueryData(['messaging', 'activity-rules', channelId], data),
+  });
+}
+
+/** The slash commands I can use (a module that is off hides its commands). */
+export function useCommands() {
+  return useQuery({
+    queryKey: ['messaging', 'commands'],
+    queryFn: async () => (await api<{ commands: SlashCommandDTO[] }>('/commands')).commands,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export async function executeCommand(name: string, args: string, channelId: string | null) {
+  return (
+    await api<{ result: CommandResult }>('/commands/execute', {
+      method: 'POST',
+      body: { name, args, channelId },
+    })
+  ).result;
+}
+
+/** Ties an item I just created to the message it came from; the Tasks bot answers in the thread. */
+export function linkItemToMessage(messageId: string, itemId: string) {
+  return api<CreateFromMessageResult>(`/messages/${messageId}/create-work-item`, {
+    method: 'POST',
+    body: { itemId },
+  });
 }

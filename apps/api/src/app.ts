@@ -44,6 +44,7 @@ import { sprintRoutes } from './routes/sprints.js';
 import { liveRoutes } from './routes/live.js';
 import { LiveHub, registerLive } from './lib/live.js';
 import { messagingRoutes } from './routes/messaging.js';
+import { registerSpaceChannelSync } from './routes/space-sync-hook.js';
 import { RedisEventSink, type EventSink } from './messaging/events.js';
 import { Presence } from './messaging/presence.js';
 import type { EnqueueLinkPreviews } from './messaging/link-preview.js';
@@ -176,21 +177,23 @@ export function buildApp({
   const authDeps = { db, config, sessions };
   app.register(meRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(memberRoutes, { prefix: '/api/v1', ...authDeps, events });
+  const messagingCtx = {
+    db,
+    events,
+    limiter: new RateLimiter(redis, messageLimits),
+    storage,
+    enqueueLinkPreviews,
+    presence: new Presence(redis),
+    defer: deferMessaging,
+  };
   app.register(messagingRoutes, {
     prefix: '/api/v1',
     ...authDeps,
     redis,
     storage,
-    messaging: {
-      db,
-      events,
-      limiter: new RateLimiter(redis, messageLimits),
-      storage,
-      enqueueLinkPreviews,
-      presence: new Presence(redis),
-      defer: deferMessaging,
-    },
+    messaging: messagingCtx,
   });
+  registerSpaceChannelSync(app, messagingCtx);
   app.register(invitationRoutes, {
     prefix: '/api/v1',
     ...authDeps,

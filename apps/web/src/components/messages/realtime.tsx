@@ -279,6 +279,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         useMessaging.getState().setStatus('connected');
         heartbeat();
         if (everConnected) resync(socket);
+        // The first connection may be a moment after the list was loaded: anything that changed in
+        // between (a channel I was just added to) would otherwise be missed until the next reload.
+        else void qc.invalidateQueries({ queryKey: keys.channels });
         everConnected = true;
       });
       socket.on('disconnect', (reason) => {

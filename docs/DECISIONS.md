@@ -348,6 +348,31 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-083: Check-in badges are a status, and the profile card counts rather than lists
+
+- The presence lookup now also says where someone works today (`onsite`, `remote`, `offsite`, or `leave`), worked out in their own timezone from the check-in module's work-day record. It never carries a check-in or check-out time or a note, matching the check-in module's privacy rule, and it is empty when the workspace has check-in switched off. A person who is not checked in has no badge (leave is shown when planned for today).
+- The profile card (`GET /people/:id/card`) answers only for active people of the caller's own workspace and gives open work as a count over the spaces the caller can already see, never a list. It reuses the presence store, so the badge shows in the direct message list and the members list without more requests.
+
+## ADR-082: Slash commands run on the server and answer only to the sender
+
+- A small registry (`name`, description, usage, availability check, handler) in `messaging/commands.ts`. The composer lists them when the text starts with `/`; `POST /commands/execute` runs one as the caller with the same services and `can()` rules as the screens. A command is never posted as a message. A module that is off hides its commands (`/checkin` and `/checkout` need check-in).
+- Results are one of: an ephemeral reply (shown only to the sender, with cards), "open the create dialog with this title", done, or "call": for check-in the server only parses and validates the words and hands back the request (`POST /checkin`) that the browser then makes as the person, so the check-in rules (sites, notes, day limits) are not copied into chat. `/status` and `/dnd` call the same small functions as their settings endpoints.
+
+## ADR-081: The activity bot buffers events and a worker posts them
+
+- Events come from the one place every change to an item already passes (the item history recorder) and from sprint start and complete. In the same transaction as the change they are stored in `chat_activity_events` when the space's channel exists, is not archived and its rules (`activity_rules`; defaults: created and done) ask for them. A BullMQ tick every 15 seconds queues one job per workspace with waiting events. A job posts the events of a channel once the oldest is a minute old, one message per kind ("4 items moved to Done: ENG-1, ENG-2…"), claiming each event with an atomic update so several API instances post once. Posts go through `postAsBot`, the same path every message takes (sequence number, links, publish after commit), never straight into the message collection. Titles are not copied into the text (the card is checked per viewer), posted events expire after a week.
+
+## ADR-080: Work item cards store ids only and are decided per viewer
+
+- A message keeps `message_links` (message, item id, the key as written) found when it is sent or edited from its text and the addresses of its links (at most five). The message payload carries only ids and keys; each card is fetched with `GET /items/:ref/card`, which answers `{access:false}` for an item in a space the viewer cannot open, for an item that does not exist, and for a bad key alike, so cards cannot probe for anything. Cards therefore show current data, and nothing about an item is ever copied into a message.
+- "Create work item" makes the item through the normal create endpoint (so every work rule, limit and permission applies) and then `POST /messages/:id/create-work-item` ties it to the message: only the item's reporter, only within 15 minutes, only once. That call stores `createdFromMessage` on the item and has the Tasks bot answer in the thread; the item page shows where it came from only to people who can open that conversation.
+
+## ADR-079: A space's channel follows the space; sync is idempotent and serialised
+
+- One channel per space (unique `(workspace, space)` index), named after the key (`eng`, or `eng-space` if a person already took the name), public for open spaces and private for private ones, archived with the space. Members are everyone with a role in the space directly or through a group (space admins become channel owners), and viewers are read-only: `loadChannel` works out `isSpaceViewer` for every REST and socket call, so posting, replying and thread replies are refused the same way everywhere. In an open space people without a role may join by themselves (the space is visible to everyone); in a private space anyone who loses their role is removed. Workspace admins are not removed.
+- Changes are driven by a root-level response hook that watches successful changes to spaces, space members, groups and workspace members and queues a sync, so those modules do not know about chat. `syncSpaceChannel` computes the wanted state and applies the difference; it is safe to repeat, runs one at a time per space in a process, and every added or removed person is audited with the space as the cause. Overlapping syncs from different processes are covered by the unique indexes and the repair. A nightly repair runs at start-up and every 24 hours; opening a space's channel also catches up a person whose access was granted a moment ago.
+- Not done: the tenant setting to switch space channels off (M5 admin settings) and the "on leave sets do not disturb" setting.
+
 ## ADR-078: Search runs inside the access rule, behind a `SearchService`
 
 - A MongoDB text index on `messages.bodyText` (no stemming, so names and codes match as typed). The channels searched are computed first (the ones the person is in plus public channels) and the query is `channelId in <those> and deleted is null and $text ...`: access is part of the query, never a filter on fetched results. A private channel, someone else's direct message or another workspace can never appear, and naming one in `in:` answers "does not match" exactly like a channel that does not exist. Org admins do not read private channels through search either.

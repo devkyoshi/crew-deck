@@ -41,6 +41,7 @@ import {
   Star,
   Trash2,
   Users,
+  Boxes,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SidebarSectionDTO } from '@crew-deck/shared';
@@ -69,7 +70,6 @@ import { ApiError } from '@/lib/api';
 import {
   conversationName,
   useChannels,
-  usePresence,
   useReadAll,
   useSectionMutations,
   useSections,
@@ -82,7 +82,13 @@ import { cn } from '@/lib/utils';
 import { BrowseChannelsDialog, CreateChannelDialog, NewMessageDialog } from './dialogs';
 import { PersonAvatar } from './person-avatar';
 import { StatusDialog } from './status-dialog';
-import { useMessaging } from './store';
+import { CheckinPill, useCheckinOf, useTrackPeople } from './profile-popover';
+
+/** A quiet "Remote" / "Onsite" word next to a person's name, when they are in today. */
+function DmCheckin({ userId }: { userId: string }) {
+  const badge = useCheckinOf(userId);
+  return badge ? <CheckinPill badge={badge} className="hidden xl:inline-flex" /> : null;
+}
 
 /** One row of the conversation list. Bold when unread; DMs and group DMs also show a count badge. */
 export function ConversationListItem({
@@ -122,7 +128,9 @@ export function ConversationListItem({
         )}
       >
         <span className="flex size-6 shrink-0 items-center justify-center">
-          {channel.type === 'public' ? (
+          {channel.spaceId ? (
+            <Boxes className="size-4" aria-label="Space channel" />
+          ) : channel.type === 'public' ? (
             <Hash className="size-4" aria-hidden />
           ) : channel.type === 'private' ? (
             <Lock className="size-3.5" aria-hidden />
@@ -133,6 +141,9 @@ export function ConversationListItem({
           )}
         </span>
         <span className="min-w-0 flex-1 truncate">{name}</span>
+        {channel.type === 'dm' && channel.people?.[0] && (
+          <DmCheckin userId={channel.people[0].id} />
+        )}
         {muted && (
           <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Muted" />
         )}
@@ -521,11 +532,7 @@ export function ConversationList({
       ),
     [channels.data],
   );
-  const presence = usePresence(dmPeople);
-  useEffect(() => {
-    const st = useMessaging.getState();
-    for (const p of presence.data ?? []) if (!st.presence[p.id]) st.setPresence(p.id, p.state);
-  }, [presence.data]);
+  useTrackPeople(dmPeople);
 
   const totalUnread = (channels.data ?? []).reduce((n, c) => n + (c.unread > 0 ? 1 : 0), 0);
   const threadUnread = hydrated ? (threads.data ?? []).reduce((n, t) => n + t.unread, 0) : 0;

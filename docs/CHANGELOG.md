@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M4: platform integration
+
+- **Space channels:** every space has a channel named after its key (`#eng`), public for an open space and private for a private one. People are added when they get access to the space (directly or through a group) and removed when they lose it, within seconds; viewers can read but not post or reply; space admins own the channel. Nobody can leave it or add people by hand (they can mute it). Archiving a space archives its channel; restoring brings it back. A nightly repair, and a repair at start-up, fix any drift, and every sync-driven change is written to the audit log with the space as the cause. Open a space's channel from its page (`/spaces/:key/channel`) or from the **Chat** button on its board and backlog.
+- **Docked chat:** a **Chat** button on a space's Board and Backlog opens the space channel in a panel on the right, with an unread badge, so people can talk while looking at the work.
+- **Work item cards:** a message that names an item (`ENG-142`) or links to one shows a card with its type, key, title, status, priority and assignee. The card reads live data and is checked for each viewer: someone without access to the space sees a neutral "You do not have access" card with no title.
+- **Create a work item from a message:** "Create work item" in a message's menu opens a prefilled dialog (title from the first line, the message and a link back as the description, the channel's space chosen). The Tasks bot then answers in the thread with the new item's card, and the item records where it came from.
+- **Activity bot:** in a space's channel the Activity bot posts compact messages for items created, assigned, moved to Done, sprints started or completed, and (off by default) comments. Space admins choose which in the channel details. Changes within a minute are combined ("4 items moved to Done"). The bot never posts in archived channels or direct messages.
+- **Slash commands:** type `/` in a conversation for a menu: `/task create <title>`, `/task ENG-142`, `/task mine`, `/status <emoji> <text>`, `/dnd <30m|2h|1d|off>`, and `/checkin`, `/checkout` when the check-in module is on. Replies are only visible to you.
+- **Check-in badges and profile card:** names and avatars open a card (title, groups, local time, status, where they work today, open work, Message and View profile). A small Onsite / Remote / Offsite / On leave word shows next to people in the direct message list and channel members. Status only, never times, and nothing when check-in is off.
+- Also fixed: the notification bell badge had low contrast in dark mode; mentions in messages were missing their `mention` class; several end-to-end tests had stale expectations (create-space wizard, onboarding, direct message names).
+- ADR-079 to ADR-083. 25 new API tests, 2 new gateway tests, 6 new browser tests.
+
 ## 2026-10-16 - Messaging, phase M3: search and notifications
 
 - **Search** (Messages > Search, and Ctrl+K): finds messages in the conversations you are in and in public channels, never anything else. Filters `from:`, `in:#channel`, `before:`, `after:`, `has:file`, `has:link`, `is:thread`, quoted phrases, filter chips, highlighted snippets, paging, and a Files tab. A filter that matches nobody says so.

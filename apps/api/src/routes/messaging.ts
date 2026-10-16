@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { channelNameSchema, NOTIFICATION_LEVELS, S2C } from '@crew-deck/shared';
+import { channelNameSchema, NOTIFICATION_LEVELS } from '@crew-deck/shared';
+import { checkinBadges, profileCard } from '../messaging/people.js';
+import { getActivityRules, setActivityRules } from '../messaging/activity-bot.js';
+import { executeCommand, listCommands } from '../messaging/commands.js';
+import { linkItemToMessage } from '../messaging/integration.js';
+import { itemCard } from '../messaging/item-links.js';
+import { spaceChannelFor } from '../messaging/space-channels.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import {
@@ -28,7 +34,8 @@ import {
   listMessages,
   sendMessage,
 } from '../messaging/messages.js';
-import { announcePresence, Presence } from '../messaging/presence.js';
+import { Presence } from '../messaging/presence.js';
+import { setCustomStatus, setDoNotDisturb } from '../messaging/me.js';
 import { markAllRead, markUnread, myUnreads, setRead } from '../messaging/read-state.js';
 import type { Redis } from 'ioredis';
 import { MAX_FILES_PER_MESSAGE } from '@crew-deck/shared';
@@ -78,6 +85,69 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
   const pre = { preHandler: requireAuth };
 
   // ---- Channels -----------------------------------------------------------------------------------
+
+  // ---- Platform integration (M4) ----------------------------------------------------------------
+
+  // A work item's card as this person may see it (a neutral "no access" card otherwise).
+  r.get(
+    '/items/:ref/card',
+    { ...pre, schema: { params: z.object({ ref: z.string().min(1).max(64) }) } },
+    async (req) => {
+      const actor = actorOf(req);
+      return { card: await itemCard(ctx.db.tenant(actor.orgId), actor, req.params.ref) };
+    },
+  );
+
+  // Ties an item the caller just created (through the normal create dialog) back to a message.
+  r.post(
+    '/messages/:id/create-work-item',
+    { ...pre, schema: { params: id, body: z.object({ itemId: z.string().min(1).max(64) }) } },
+    async (req, reply) => {
+      const out = await linkItemToMessage(ctx, actorOf(req), req.params.id, req.body.itemId);
+      reply.status(201);
+      return out;
+    },
+  );
+
+  r.get('/channels/:id/activity-rules', { ...pre, schema: { params: id } }, async (req) =>
+    getActivityRules(ctx, actorOf(req), req.params.id),
+  );
+  r.put(
+    '/channels/:id/activity-rules',
+    { ...pre, schema: { params: id, body: z.object({ eventTypes: z.array(z.string().max(40)).max(20) }) } },
+    async (req) => setActivityRules(ctx, actorOf(req), req.params.id, req.body.eventTypes),
+  );
+
+  r.get('/commands', pre, async (req) => ({ commands: await listCommands(ctx, actorOf(req)) }));
+  r.post(
+    '/commands/execute',
+    {
+      ...pre,
+      schema: {
+        body: z.object({
+          name: z.string().trim().min(1).max(40),
+          args: z.string().max(2000).default(''),
+          channelId: z.string().max(64).nullish(),
+        }),
+      },
+    },
+    async (req) => ({ result: await executeCommand(ctx, actorOf(req), req.body) }),
+  );
+
+  // The card behind a name (profile popover).
+  r.get(
+    '/people/:id/card',
+    { ...pre, schema: { params: id } },
+    async (req) => ({ person: await profileCard(ctx, actorOf(req), req.params.id) }),
+  );
+
+  // The channel that belongs to a space (created and filled the first time it is asked for).
+  r.get(
+    '/spaces/:id/channel',
+    // A space is addressed by its key or its id.
+    { ...pre, schema: { params: z.object({ id: z.string().min(1).max(64) }) } },
+    async (req) => ({ channel: await spaceChannelFor(ctx, actorOf(req), req.params.id) }),
+  );
 
   r.get('/channels', pre, async (req) => ({ channels: await listMyChannels(ctx, actorOf(req)) }));
 
@@ -521,9 +591,10 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
         { projection: { userId: 1 } },
       );
       const known = members.map((m) => m.userId);
-      const [states, statuses] = await Promise.all([
+      const [states, statuses, badges] = await Promise.all([
         presence.statesOf(actor.orgId, known),
         t.userStatuses.find({ userId: { $in: known } }),
+        checkinBadges(t, known),
       ]);
       const now = Date.now();
       const statusOf = new Map(
@@ -535,6 +606,8 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
         people: known.map((userId) => ({
           id: userId,
           state: states.get(userId) ?? 'offline',
+          // Where they are working today, as a status only (never times).
+          checkin: badges.get(userId) ?? null,
           status: statusOf.has(userId)
             ? {
                 emoji: statusOf.get(userId)!.emoji,
@@ -561,20 +634,7 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
     },
     async (req) => {
       const actor = actorOf(req);
-      const t = deps.db.tenant(actor.orgId);
-      const clear = !req.body.emoji && !req.body.text;
-      await t.userStatuses.upsert(
-        { userId: actor.userId },
-        {
-          emoji: clear ? null : req.body.emoji,
-          text: clear ? null : req.body.text,
-          expiresAt: clear ? null : (req.body.expiresAt ?? null),
-        },
-      );
-      ctx.events.toOrg(actor.orgId, S2C.presenceChanged, {
-        userId: actor.userId,
-        state: await presence.stateOf(actor.orgId, actor.userId),
-      });
+      await setCustomStatus(ctx, actor, req.body);
       return { ok: true };
     },
   );
@@ -596,9 +656,7 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
     },
     async (req) => {
       const actor = actorOf(req);
-      const change = await presence.setDnd(actor.orgId, actor.userId, req.body.minutes);
-      announcePresence(ctx, actor.orgId, actor.userId, change);
-      return { until: await presence.dndUntil(actor.orgId, actor.userId) };
+      return { until: await setDoNotDisturb(ctx, actor, req.body.minutes) };
     },
   );
 }

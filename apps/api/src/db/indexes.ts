@@ -258,6 +258,8 @@ const INDEXES: Record<string, Ix[]> = {
     // One DM per pair, one group DM per exact set of people.
     ['org_dm', { orgId: 1, dmKey: 1 }, { unique: true, partialFilterExpression: { dmKey: { $type: 'string' } } }],
     ['org_type', { orgId: 1, type: 1, isArchived: 1 }],
+    // At most one channel per space.
+    ['org_space', { orgId: 1, spaceId: 1 }, { unique: true, partialFilterExpression: { spaceId: { $type: 'string' } } }],
   ],
   channel_members: [
     ['pk', { orgId: 1, channelId: 1, userId: 1 }, U],
@@ -281,6 +283,16 @@ const INDEXES: Record<string, Ix[]> = {
   message_reactions: [
     ['pk', { orgId: 1, messageId: 1, userId: 1, emoji: 1 }, U],
     ['channel', { orgId: 1, channelId: 1, messageId: 1 }],
+  ],
+  message_links: [
+    ['message', { orgId: 1, messageId: 1 }],
+    ['item', { orgId: 1, itemId: 1 }],
+  ],
+  activity_rules: [['channel', { orgId: 1, channelId: 1 }, U]],
+  chat_activity_events: [
+    ['channel_pending', { orgId: 1, channelId: 1, postedAt: 1, at: 1 }],
+    // Posted events are kept a week for troubleshooting, then expire.
+    ['ttl', { postedAt: 1 }, { expireAfterSeconds: 7 * 24 * 3600, partialFilterExpression: { postedAt: { $type: 'date' } } }],
   ],
   message_mentions: [
     ['message', { orgId: 1, messageId: 1 }],

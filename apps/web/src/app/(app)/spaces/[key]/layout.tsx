@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SpaceProvider } from '@/components/spaces/space-context';
+import { DockedChat, DockedChatButton, useDockedChat } from '@/components/spaces/docked-chat';
 import {
   ArchivedPill,
   KeyChip,
@@ -33,6 +34,7 @@ export default function SpaceLayout({
   const { key } = use(params);
   const pathname = usePathname();
   const qc = useQueryClient();
+  const chat = useDockedChat();
 
   const query = useQuery({
     queryKey: ['space', key],
@@ -99,6 +101,8 @@ export default function SpaceLayout({
   }
 
   const base = `/spaces/${space.key}`;
+  // Chat sits beside the board and the backlog, where people look at work while they talk about it.
+  const chatHere = pathname.startsWith(`${base}/board`) || pathname.startsWith(`${base}/backlog`);
   const has = (f: SpaceFeature) => space.features.includes(f);
   const tabs = [
     { href: base, label: 'Overview' },
@@ -118,7 +122,7 @@ export default function SpaceLayout({
 
   return (
     <SpaceProvider value={space}>
-      <div className="space-y-6">
+      <div className={cn('space-y-6', chatHere && chat.open && 'xl:mr-[400px]')}>
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/spaces">
             <ArrowLeft /> Spaces
@@ -143,6 +147,13 @@ export default function SpaceLayout({
               <span className="text-muted-foreground text-xs" role="status">
                 Reconnecting…
               </span>
+            )}
+            {chatHere && (
+              <DockedChatButton
+                spaceKey={space.key}
+                open={chat.open}
+                onToggle={() => chat.setOpen(!chat.open)}
+              />
             )}
             <StarButton id={space.id} starred={space.starred} name={space.name} />
           </div>
@@ -190,6 +201,13 @@ export default function SpaceLayout({
 
         {children}
       </div>
+      {chatHere && chat.open && (
+        <DockedChat
+          spaceKey={space.key}
+          spaceName={space.name}
+          onClose={() => chat.setOpen(false)}
+        />
+      )}
     </SpaceProvider>
   );
 }

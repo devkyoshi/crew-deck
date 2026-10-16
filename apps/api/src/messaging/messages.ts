@@ -22,6 +22,7 @@ import { sanitizeDoc, type CleanDoc } from '../work/rich-text.js';
 import { loadChannel, requireChannel } from './access.js';
 import { runLater, type MessagingCtx } from './context.js';
 import { hydrate, hydrateOne, peopleOf } from './dto.js';
+import { itemKeysIn, storeItemLinks } from './item-links.js';
 import { hasAnyLink, linksIn } from './link-preview.js';
 import { notifyMessage } from './notify.js';
 
@@ -207,7 +208,7 @@ async function followThread(
   );
 }
 
-async function threadEvent(t: TenantDb, root: MessageDoc): Promise<ThreadEvent> {
+export async function threadEvent(t: TenantDb, root: MessageDoc): Promise<ThreadEvent> {
   const people = await peopleOf(t, (root.replyAuthors ?? []).slice(-3));
   return {
     channelId: root.channelId,
@@ -319,6 +320,7 @@ export async function sendMessage(
         metadata: links.length ? { previews: [], previewsPending: true } : {},
       });
       await storeMentions(tx, msg, targets, inChannel);
+      await storeItemLinks(tx, msg, itemKeysIn(clean.doc, clean.text));
       if (files.length)
         await tx.messageAttachments.updateMany(
           { id: { $in: fileIds }, messageId: null },
@@ -462,6 +464,7 @@ export async function editMessage(
       },
     );
     if (m) await storeMentions(tx, m, targets, !m.threadRootId || m.alsoInChannel);
+    if (m) await storeItemLinks(tx, m, itemKeysIn(clean.doc, clean.text));
     return m;
   });
   if (!updated) throw notFound('Message');
@@ -480,6 +483,7 @@ export async function dropMessageExtras(ctx: MessagingCtx, orgId: string, messag
     t.messageAttachments.deleteMany({ messageId: { $in: messageIds } }),
     t.messageReactions.deleteMany({ messageId: { $in: messageIds } }),
     t.messageMentions.deleteMany({ messageId: { $in: messageIds } }),
+    t.messageLinks.deleteMany({ messageId: { $in: messageIds } }),
     t.pins.deleteMany({ messageId: { $in: messageIds } }),
   ]);
   // The records are gone; the bytes follow.

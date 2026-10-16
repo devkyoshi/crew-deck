@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { create } from 'zustand';
-import type { PresenceState } from '@crew-deck/shared';
+import type { CheckinBadge, PresenceState } from '@crew-deck/shared';
 import type { AttachmentDTO } from '@crew-deck/shared';
 import type { MessageDoc } from '@/lib/messaging-api';
 
@@ -34,6 +34,8 @@ interface MessagingState {
   /** channelId -> userId -> when the "typing" signal expires (ms). */
   typing: Record<string, Record<string, number>>;
   presence: Record<string, PresenceState>;
+  /** Where people work today (status only). */
+  checkin: Record<string, CheckinBadge | null>;
   pending: Record<string, PendingMessage[]>;
   /** The conversation the person is looking at, so it does not count as unread. */
   activeChannelId: string | null;
@@ -42,6 +44,7 @@ interface MessagingState {
   setTyping: (channelId: string, userId: string, ttlMs?: number) => void;
   clearTyping: (channelId: string, userId: string) => void;
   setPresence: (userId: string, state: PresenceState) => void;
+  setCheckin: (userId: string, badge: CheckinBadge | null) => void;
   addPending: (m: PendingMessage) => void;
   updatePending: (clientMsgId: string, patch: Partial<PendingMessage>) => void;
   removePending: (clientMsgId: string) => void;
@@ -51,6 +54,7 @@ export const useMessaging = create<MessagingState>((set) => ({
   status: 'connecting',
   typing: {},
   presence: {},
+  checkin: {},
   pending: {},
   activeChannelId: null,
   setStatus: (status) => set({ status }),
@@ -69,6 +73,7 @@ export const useMessaging = create<MessagingState>((set) => ({
       return { typing: { ...s.typing, [channelId]: room } };
     }),
   setPresence: (userId, state) => set((s) => ({ presence: { ...s.presence, [userId]: state } })),
+  setCheckin: (userId, badge) => set((s) => ({ checkin: { ...s.checkin, [userId]: badge } })),
   addPending: (m) =>
     set((s) => ({
       pending: { ...s.pending, [m.channelId]: [...(s.pending[m.channelId] ?? []), m] },

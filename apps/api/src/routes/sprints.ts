@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { generateNKeysBetween } from 'fractional-indexing';
 import { z } from 'zod';
+import { bufferWorkEvent } from '../messaging/activity-bot.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { isDuplicateKey, withTenant, withTenantTx, type TenantDb } from '../db/client.js';
@@ -404,6 +405,7 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   async function notifySprint(actor: Actor, n: { space: SpaceRow; sprint: SprintDoc }, type: 'sprint_started' | 'sprint_completed') {
     const t = deps.db.tenant(actor.orgId);
+    await bufferWorkEvent(t, { type, spaceId: n.space.id, actorId: actor.userId, detail: { sprint: n.sprint.name } }).catch((e) => console.error(`activity bot: ${e.message}`));
     for (const userId of await spacePeople(t, n.space.id)) {
       if (userId === actor.userId) continue;
       await notifyOne(t, n.space, null, { userId, type, actorId: actor.userId, data: { sprint: n.sprint.name, sprintId: n.sprint.id } });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Archive,
@@ -13,8 +14,10 @@ import {
   UserMinus,
   UserPlus,
   X,
+  Boxes,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ACTIVITY_EVENT_LABELS, ACTIVITY_EVENT_TYPES } from '@crew-deck/shared';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,9 +63,12 @@ import {
   type ChannelDTO,
   type MyChannelDTO,
   type NotificationLevel,
+  useActivityRules,
+  useSetActivityRules,
 } from '@/lib/messaging-api';
 import { AddPeopleDialog } from './dialogs';
 import { PersonAvatar } from './person-avatar';
+import { CheckinPill, useCheckinOf, useTrackPeople } from './profile-popover';
 
 type Channel = ChannelDTO & Partial<MyChannelDTO>;
 
@@ -144,6 +151,51 @@ function About({ channel, canManage }: { channel: Channel; canManage: boolean })
   );
 }
 
+/** What the activity bot posts in a space's channel. Space admins change it; everyone else reads it. */
+function ActivityRules({ channel, canManage }: { channel: Channel; canManage: boolean }) {
+  const rules = useActivityRules(channel.id, true);
+  const save = useSetActivityRules(channel.id);
+  if (rules.isLoading || !rules.data) return null;
+  const on = new Set<string>(rules.data.eventTypes);
+  const toggle = (type: string, checked: boolean) => {
+    const next = new Set(on);
+    if (checked) next.add(type);
+    else next.delete(type);
+    save.mutate([...next], { onError: (e) => fail(e, 'Could not save the activity settings') });
+  };
+  return (
+    <section className="space-y-2">
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        Activity bot
+      </h3>
+      <p className="text-muted-foreground text-xs">
+        {canManage
+          ? 'Choose what the bot posts here. Changes made within a minute are combined into one post.'
+          : 'What the bot posts here. Space admins can change it.'}
+      </p>
+      <ul className="space-y-1.5">
+        {ACTIVITY_EVENT_TYPES.map((type) => (
+          <li key={type}>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={on.has(type)}
+                disabled={!canManage || save.isPending}
+                onCheckedChange={(v) => toggle(type, v === true)}
+              />
+              {ACTIVITY_EVENT_LABELS[type]}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function MemberCheckin({ userId }: { userId: string }) {
+  const badge = useCheckinOf(userId);
+  return badge ? <CheckinPill badge={badge} className="ml-1.5 align-middle" /> : null;
+}
+
 function Members({ channel, canManage }: { channel: Channel; canManage: boolean }) {
   const me = useMe().user.id;
   const members = useMembers(channel.id);
@@ -151,6 +203,7 @@ function Members({ channel, canManage }: { channel: Channel; canManage: boolean 
   const role = useSetMemberRole(channel.id);
   const [adding, setAdding] = useState(false);
   const isDm = channel.type === 'dm' || channel.type === 'group_dm';
+  useTrackPeople((members.data ?? []).map((m) => m.userId));
   const canAdd = !isDm && (canManage || (channel.type === 'public' && !!channel.role));
   return (
     <section>
@@ -179,6 +232,7 @@ function Members({ channel, canManage }: { channel: Channel; canManage: boolean 
                 {m.userId === me && (
                   <span className="text-muted-foreground font-normal"> (you)</span>
                 )}
+                <MemberCheckin userId={m.userId} />
               </p>
               {m.person?.deactivated && (
                 <p className="text-muted-foreground text-xs">Deactivated</p>
@@ -259,6 +313,9 @@ export function ChannelDetails({
   const archive = useArchiveChannel();
   const del = useDeleteChannel();
   const [confirm, setConfirm] = useState<'leave' | 'delete' | null>(null);
+  // A space's channel follows the space: people come and go with their access to it.
+  const isSpace = !!channel.spaceId;
+  const spaceKey = (channel.name ?? '').replace(/-space$/, '').toUpperCase();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -282,7 +339,27 @@ export function ChannelDetails({
         {!perms.isDm && (
           <About channel={channel} canManage={perms.canManage && !channel.isArchived} />
         )}
-        <Members channel={channel} canManage={perms.canManage && !channel.isArchived} />
+        {isSpace && (
+          <section className="bg-muted/40 space-y-1 rounded-lg border p-3 text-sm">
+            <p className="flex items-center gap-1.5 font-medium">
+              <Boxes className="size-4" aria-hidden /> Space channel
+            </p>
+            <p className="text-muted-foreground text-xs">
+              People are added and removed automatically as their access to the space changes.
+              Viewers can read but not post.
+            </p>
+            <Link href={`/spaces/${spaceKey}`} className="text-primary text-xs hover:underline">
+              Open the {spaceKey} space
+            </Link>
+          </section>
+        )}
+        <Members
+          channel={channel}
+          canManage={perms.canManage && !channel.isArchived && !isSpace}
+        />
+        {isSpace && perms.member && (
+          <ActivityRules channel={channel} canManage={perms.canManage && !channel.isArchived} />
+        )}
 
         {perms.member && (
           <section className="space-y-1.5">
@@ -316,7 +393,7 @@ export function ChannelDetails({
         )}
 
         <section className="space-y-2 border-t pt-4">
-          {perms.canLeave && (
+          {perms.canLeave && !isSpace && (
             <Button
               variant="outline"
               className="w-full justify-start"
@@ -325,7 +402,7 @@ export function ChannelDetails({
               <LogOut /> Leave {perms.isDm ? 'conversation' : 'channel'}
             </Button>
           )}
-          {perms.canManage && (
+          {perms.canManage && !isSpace && (
             <Button
               variant="outline"
               className="w-full justify-start"

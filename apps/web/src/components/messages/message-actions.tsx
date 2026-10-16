@@ -18,6 +18,7 @@ import { useMe } from '@/components/shell/me-context';
 import { ApiError } from '@/lib/api';
 import {
   patchMessageEverywhere,
+  useChannel,
   useDeleteMessage,
   useEditMessage,
   useMarkUnread,
@@ -27,6 +28,7 @@ import {
   type channelPerms,
   type MessageDoc,
 } from '@/lib/messaging-api';
+import { CreateWorkDialog, useCreatableSpaces } from './create-work-dialog';
 import { ImageLightbox } from './message-parts';
 import type { MessageRowProps } from './message-row';
 import { usePanel } from './panel';
@@ -61,6 +63,9 @@ export function useMessageActions({
   const del = useDeleteMessage();
   const markUnread = useMarkUnread();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [createFor, setCreateFor] = useState<MessageDTO | null>(null);
+  const creatable = useCreatableSpaces().spaces;
+  const channelSpaceId = useChannel(channelId).channel?.spaceId ?? null;
   const [toDelete, setToDelete] = useState<MessageDTO | null>(null);
   const [lightbox, setLightbox] = useState<{ images: AttachmentDTO[]; index: number } | null>(null);
 
@@ -125,6 +130,7 @@ export function useMessageActions({
           },
         ),
       onOpenImage: (images, index) => setLightbox({ images, index }),
+      onCreateItem: creatable.length > 0 ? setCreateFor : undefined,
     }),
     [
       me.id,
@@ -141,6 +147,7 @@ export function useMessageActions({
       panel,
       pin,
       save,
+      creatable.length,
     ],
   );
 
@@ -179,6 +186,13 @@ export function useMessageActions({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CreateWorkDialog
+        message={createFor}
+        defaultSpaceId={channelSpaceId}
+        spaces={creatable}
+        open={!!createFor}
+        onOpenChange={(o) => !o && setCreateFor(null)}
+      />
       {lightbox && (
         <ImageLightbox
           images={lightbox.images}

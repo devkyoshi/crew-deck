@@ -17,6 +17,7 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  SquareCheckBig,
 } from 'lucide-react';
 import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,9 @@ import { cn } from '@/lib/utils';
 import { Composer } from './composer';
 import { EmojiPickerButton } from './emoji-picker';
 import { AttachmentList, PreviewCards, ReactionBar, ThreadSummaryLink } from './message-parts';
+import { ItemCards } from './item-card';
 import { PersonAvatar } from './person-avatar';
+import { ProfilePopover } from './profile-popover';
 import { RichContent } from './rich-content';
 import type { PendingMessage } from './store';
 
@@ -79,6 +82,8 @@ export interface MessageRowProps {
   onTogglePin: (m: MessageDTO) => void;
   onToggleSave: (m: MessageDTO) => void;
   onOpenImage: (images: AttachmentDTO[], index: number) => void;
+  /** Turn the message into a work item. Absent when I cannot create work anywhere. */
+  onCreateItem?: (m: MessageDTO) => void;
 }
 
 function HoverToolbar({
@@ -155,6 +160,11 @@ function HoverToolbar({
               {m.pinned ? <PinOff /> : <Pin />} {m.pinned ? 'Unpin from channel' : 'Pin to channel'}
             </DropdownMenuItem>
           )}
+          {p.onCreateItem && (
+            <DropdownMenuItem onSelect={() => p.onCreateItem?.(m)}>
+              <SquareCheckBig /> Create work item
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => p.onMarkUnread(m)}>
             <MailOpen /> Mark unread
           </DropdownMenuItem>
@@ -181,7 +191,7 @@ function HoverToolbar({
 export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
   const m = p.message;
   const own = m.authorId === p.selfId && m.kind === 'user';
-  const name = m.author ? personName(m.author) : m.kind === 'bot' ? 'Bot' : 'Former member';
+  const name = m.author ? personName(m.author) : m.kind === 'bot' ? (m.bot?.name ?? 'Bot') : 'Former member';
 
   // Joins, leaves and topic changes: one quiet line.
   if (m.kind === 'system') {
@@ -232,6 +242,16 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
           >
             {timeOf(m.createdAt)}
           </time>
+        ) : m.author ? (
+          <ProfilePopover person={m.author}>
+            <button
+              type="button"
+              aria-label={`Profile of ${name}`}
+              className="focus-visible:ring-ring/50 rounded-full outline-none focus-visible:ring-[3px]"
+            >
+              <PersonAvatar person={m.author} presence={false} />
+            </button>
+          </ProfilePopover>
         ) : (
           <PersonAvatar person={m.author} presence={false} />
         )}
@@ -244,14 +264,21 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
         )}
         {!p.grouped && (
           <header className="flex items-baseline gap-2">
-            <span
-              className={cn(
-                'text-[14px] font-semibold',
-                m.author?.deactivated && 'text-muted-foreground',
-              )}
-            >
-              {name}
-            </span>
+            {m.author && m.kind === 'user' ? (
+              <ProfilePopover person={m.author}>
+                <button
+                  type="button"
+                  className={cn(
+                    'focus-visible:ring-ring/50 rounded text-[14px] font-semibold outline-none hover:underline focus-visible:ring-[3px]',
+                    m.author.deactivated && 'text-muted-foreground',
+                  )}
+                >
+                  {name}
+                </button>
+              </ProfilePopover>
+            ) : (
+              <span className="text-[14px] font-semibold">{name}</span>
+            )}
             {m.author?.deactivated && (
               <span className="text-muted-foreground text-xs">(deactivated)</span>
             )}
@@ -305,6 +332,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
               </div>
             )}
             <AttachmentList attachments={m.attachments} onOpenImage={p.onOpenImage} />
+            <ItemCards items={m.workItems ?? []} />
             <PreviewCards previews={m.previews} pending={m.previewsPending} />
             <ReactionBar
               message={m}

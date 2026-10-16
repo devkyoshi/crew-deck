@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ITEM_TYPES, MAX_CHECKLIST, PRIORITIES, type ItemType } from '@crew-deck/shared';
+import { itemSource } from '../messaging/integration.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
@@ -346,6 +347,8 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
       return {
         ...presentItem(row, space.key),
         permissions: itemPermissions(actor, space, row.reporterId),
+        // Where the item came from, when it was made from a chat message the viewer can open.
+        createdFromMessage: await itemSource(tx, actor, row.createdFromMessage),
       };
     });
   });

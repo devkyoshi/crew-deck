@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,6 +14,8 @@ import {
   MessageSquarePlus,
   Upload,
   Users,
+  Boxes,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
@@ -22,11 +25,13 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
 import { useHydrated } from '@/components/checkin/use-hydrated';
 import { useIsAdmin, useMe } from '@/components/shell/me-context';
-import { ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import {
   channelPerms,
   conversationName,
+  executeCommand,
   fetchView,
+  useCommands,
   keys,
   loadOlder,
   personName,
@@ -36,7 +41,10 @@ import {
   useMessages,
   type ChannelView,
 } from '@/lib/messaging-api';
+import type { CommandResult, ItemCardDTO } from '@crew-deck/shared';
 import { FilesView, PinsView } from './channel-tabs';
+import { CreateWorkDialog, useCreatableSpaces } from './create-work-dialog';
+import { ItemCardView } from './item-card';
 import { Composer, type ComposerHandle } from './composer';
 import { useMessageActions } from './message-actions';
 import { MessageList } from './message-list';
@@ -101,7 +109,30 @@ function LiveAnnouncer({ messages, selfId }: { messages: MessageDTO[]; selfId: s
 
 type Tab = 'messages' | 'pins' | 'files';
 
-export function Conversation({ channelId }: { channelId: string }) {
+/** `/task mine` → { name: 'task', args: 'mine' }, but only for commands the workspace offers. */
+function parseCommand(text: string, commands: { name: string }[] | undefined) {
+  const m = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  if (!m || !commands?.some((c) => c.name === m[1]!.toLowerCase())) return null;
+  return { name: m[1]!.toLowerCase(), args: (m[2] ?? '').trim() };
+}
+
+interface Ephemeral {
+  id: number;
+  text: string;
+  cards: ItemCardDTO[];
+}
+
+export function Conversation({
+  channelId,
+  docked = false,
+  onClose,
+}: {
+  channelId: string;
+  /** Docked only: closes the panel. */
+  onClose?: () => void;
+  /** Shown beside a board rather than in the Messages area: no back arrow or details button. */
+  docked?: boolean;
+}) {
   const router = useRouter();
   const search = useSearchParams();
   const qc = useQueryClient();
@@ -116,6 +147,11 @@ export function Conversation({ channelId }: { channelId: string }) {
   const members = useMembers(channelId, !!channel);
   const join = useJoinChannel();
   const composer = useRef<ComposerHandle>(null);
+  const commands = useCommands();
+  const creatable = useCreatableSpaces().spaces;
+  const [ephemeral, setEphemeral] = useState<Ephemeral[]>([]);
+  const [createTitle, setCreateTitle] = useState<string | null>(null);
+  const ephemeralId = useRef(0);
   const [tab, setTab] = useState<Tab>('messages');
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -206,6 +242,35 @@ export function Conversation({ channelId }: { channelId: string }) {
     );
   }
 
+  /** Shows a reply only the sender sees. */
+  const say = (text: string, cards: ItemCardDTO[] = []) =>
+    setEphemeral((cur) => [...cur.slice(-4), { id: ++ephemeralId.current, text, cards }]);
+
+  /** Runs a slash command and acts on what it asks for. Rejects (keeping the text) when it fails. */
+  async function runCommand(c: { name: string; args: string }) {
+    let result: CommandResult;
+    try {
+      result = await executeCommand(c.name, c.args, channelId);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'That command did not work');
+      throw e;
+    }
+    if (result.kind === 'ephemeral') say(result.text, result.cards ?? (result.card ? [result.card] : []));
+    else if (result.kind === 'open_create') setCreateTitle(result.title);
+    else if (result.kind === 'done') toast.success(result.text);
+    else {
+      try {
+        await api(result.path, { method: result.method, body: result.body });
+        toast.success(result.text);
+        void qc.invalidateQueries({ queryKey: ['checkin'] });
+        void qc.invalidateQueries({ queryKey: ['me', 'today'] });
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : 'That did not work');
+        throw e;
+      }
+    }
+  }
+
   const name = conversationName(channel, meUser.id);
   const kind = perms.isDm ? 'dm' : channel.type === 'private' ? 'private' : 'channel';
   const view: ChannelView | undefined = messages.data;
@@ -215,9 +280,11 @@ export function Conversation({ channelId }: { channelId: string }) {
     ? null
     : channel.isArchived
       ? 'This channel is archived. You can read it, but not post.'
-      : !perms.canPost
-        ? 'Only owners and admins can post here. You can still react and reply in threads.'
-        : null;
+      : channel.readOnly
+        ? 'You can read this channel because you can view the space. Only people with member access to the space can post.'
+        : !perms.canPost
+          ? 'Only owners and admins can post here. You can still react and reply in threads.'
+          : null;
 
   const canDrop = perms.canPost && tab === 'messages';
   const dropHandlers = canDrop
@@ -250,7 +317,7 @@ export function Conversation({ channelId }: { channelId: string }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          className="md:hidden"
+          className={docked ? 'hidden' : 'md:hidden'}
           aria-label="Back to conversations"
           onClick={() => router.push('/messages')}
         >
@@ -273,6 +340,13 @@ export function Conversation({ channelId }: { channelId: string }) {
             <p className="text-muted-foreground truncate text-xs">{channel.topic}</p>
           )}
         </div>
+        {channel.spaceId && !docked && (
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+            <Link href={`/spaces/${(channel.name ?? '').replace(/-space$/, '').toUpperCase()}`}>
+              <Boxes /> Space
+            </Link>
+          </Button>
+        )}
         {channel.isAnnouncement && (
           <Megaphone
             className="text-muted-foreground size-4 shrink-0"
@@ -282,8 +356,14 @@ export function Conversation({ channelId }: { channelId: string }) {
         {channel.isArchived && (
           <Archive className="text-muted-foreground size-4 shrink-0" aria-label="Archived" />
         )}
+        {docked && (
+          <Button asChild variant="ghost" size="sm">
+            <a href={`/messages/${channelId}`}>Open in Messages</a>
+          </Button>
+        )}
         <button
           type="button"
+          hidden={docked}
           onClick={panel.toggle}
           aria-label={`${channel.memberCount} members. Show details`}
           aria-expanded={panel.open}
@@ -302,9 +382,15 @@ export function Conversation({ channelId }: { channelId: string }) {
           </span>
           <span className="text-muted-foreground text-xs tabular-nums">{channel.memberCount}</span>
         </button>
+        {docked && onClose && (
+          <Button variant="ghost" size="icon-sm" aria-label="Close chat" onClick={onClose}>
+            <X />
+          </Button>
+        )}
         <Button
           variant={panel.open ? 'secondary' : 'ghost'}
           size="icon-sm"
+          className={docked ? 'hidden' : undefined}
           aria-label="Channel details"
           aria-pressed={panel.open}
           onClick={panel.toggle}
@@ -415,6 +501,34 @@ export function Conversation({ channelId }: { channelId: string }) {
       )}
 
       {view && tab === 'messages' && <LiveAnnouncer messages={view.messages} selfId={meUser.id} />}
+      {ephemeral.length > 0 && (
+        <ul className="space-y-2 px-4 pb-2" aria-label="Only visible to you">
+          {ephemeral.map((e) => (
+            <li key={e.id} className="bg-muted/40 rounded-lg border border-dashed p-3">
+              <p className="text-muted-foreground mb-1 flex items-center gap-2 text-xs">
+                Only visible to you
+                <button
+                  type="button"
+                  className="hover:text-foreground ml-auto underline"
+                  onClick={() => setEphemeral((cur) => cur.filter((x) => x.id !== e.id))}
+                >
+                  Dismiss
+                </button>
+              </p>
+              <p className="text-sm">{e.text}</p>
+              {e.cards.length > 0 && (
+                <ul className="mt-2 space-y-1.5">
+                  {e.cards.map((c) => (
+                    <li key={c.access ? c.id : c.key}>
+                      <ItemCardView card={c} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       <TypingIndicator channelId={channelId} selfId={meUser.id} people={people} />
 
       <div className="px-3 pb-3 sm:px-4 sm:pb-4">
@@ -430,6 +544,7 @@ export function Conversation({ channelId }: { channelId: string }) {
             channelId={channelId}
             autoFocus
             placeholder={perms.isDm ? `Message ${name}` : `Message #${channel.name}`}
+            commands={commands.data}
             onTyping={() => rt.typing(channelId)}
             onEditLast={() => {
               const last = [...(view?.messages ?? [])]
@@ -437,7 +552,11 @@ export function Conversation({ channelId }: { channelId: string }) {
                 .find((m) => m.authorId === meUser.id && m.kind === 'user' && !m.deletedAt);
               if (last) actions.setEditingId(last.id);
             }}
-            onSubmit={(doc, text, extra) => rt.send(channelId, doc, text, { files: extra.files })}
+            onSubmit={async (doc, text, extra) => {
+              const command = parseCommand(text, commands.data);
+              if (!command) return rt.send(channelId, doc, text, { files: extra.files });
+              await runCommand(command);
+            }}
           />
         ) : null}
       </div>
@@ -454,6 +573,14 @@ export function Conversation({ channelId }: { channelId: string }) {
         </div>
       )}
 
+      <CreateWorkDialog
+        message={null}
+        prefillTitle={createTitle ?? ''}
+        defaultSpaceId={channel.spaceId}
+        spaces={creatable}
+        open={createTitle !== null}
+        onOpenChange={(o) => !o && setCreateTitle(null)}
+      />
       {actions.nodes}
       {lightbox && (
         <ImageLightbox

@@ -619,7 +619,7 @@ describe('permissions (can)', () => {
 describe('presence and status', () => {
   it('reports offline for people with no connection and applies do-not-disturb', async () => {
     const res = await api('ann', 'GET', `/presence?ids=${u.bob!.id},${crypto.randomUUID()}`);
-    expect(res.json().people).toEqual([{ id: u.bob!.id, state: 'offline', status: null }]);
+    expect(res.json().people).toEqual([{ id: u.bob!.id, state: 'offline', status: null, checkin: null }]);
     expect((await api('bob', 'PUT', '/me/dnd', { minutes: 30 })).json().until).toBeTruthy();
     expect((await api('bob', 'PUT', '/me/dnd', { minutes: null })).json().until).toBeNull();
   });

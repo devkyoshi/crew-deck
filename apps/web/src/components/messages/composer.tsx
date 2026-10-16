@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import {
   EditorContent,
   Extension,
@@ -33,7 +33,12 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { MAX_FILES_PER_MESSAGE, MAX_MESSAGE_CHARS, type AttachmentDTO } from '@crew-deck/shared';
+import {
+  MAX_FILES_PER_MESSAGE,
+  MAX_MESSAGE_CHARS,
+  type AttachmentDTO,
+  type SlashCommandDTO,
+} from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -71,6 +76,8 @@ export interface ComposerProps {
   placeholder?: string;
   autoFocus?: boolean;
   submitLabel?: string;
+  /** Slash commands offered when the text starts with `/`. Omit where commands do not apply. */
+  commands?: SlashCommandDTO[];
   /** Show "Also send to channel" (thread replies). */
   alsoInChannelOption?: boolean;
   /** Called with the document, its plain text and any files. May reject; the text stays so nothing is lost. */
@@ -81,6 +88,18 @@ export interface ComposerProps {
   onEditLast?: () => void;
   handleRef?: Ref<ComposerHandle>;
   className?: string;
+}
+
+/** Fills the box with `/name ` (a JSON text node keeps the trailing space that HTML would trim). */
+function completeSlash(editor: Editor, name: string) {
+  editor
+    .chain()
+    .setContent(
+      { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `/${name} ` }] }] },
+      { emitUpdate: true },
+    )
+    .focus('end')
+    .run();
 }
 
 // An editor that is empty has no text and is not inside a code block.
@@ -488,6 +507,7 @@ export function Composer({
   autoFocus,
   submitLabel = 'Send message',
   alsoInChannelOption,
+  commands,
   onSubmit,
   onCancel,
   onTyping,
@@ -496,6 +516,13 @@ export function Composer({
   className,
 }: ComposerProps) {
   const submitRef = useRef<() => void>(() => {});
+  // The slash menu: what is shown and which row is chosen, read by the key handlers below.
+  const slashRef = useRef<{ items: SlashCommandDTO[]; index: number; query: string }>({
+    items: [],
+    index: 0,
+    query: '',
+  });
+  const [slashIndex, setSlashIndex] = useState(0);
   const propsRef = useRef({ onTyping, onEditLast, onCancel });
   propsRef.current = { onTyping, onEditLast, onCancel };
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -594,6 +621,14 @@ export function Composer({
         addKeyboardShortcuts() {
           return {
             Enter: ({ editor }) => {
+              // With the slash menu open, Enter completes the command name (or runs it if already complete).
+              const slash = slashRef.current;
+              const pick = slash.items[slash.index];
+              if (pick && pick.name !== slash.query) {
+                completeSlash(editor, pick.name);
+                editor.commands.focus('end');
+                return true;
+              }
               // Code blocks and lists keep Enter for new lines; everything else sends.
               if (
                 editor.isActive('codeBlock') ||
@@ -608,14 +643,39 @@ export function Composer({
               submitRef.current();
               return true;
             },
+            Tab: ({ editor }) => {
+              const slash = slashRef.current;
+              const pick = slash.items[slash.index];
+              if (!pick) return false;
+              completeSlash(editor, pick.name);
+              editor.commands.focus('end');
+              return true;
+            },
+            ArrowDown: () => {
+              const slash = slashRef.current;
+              if (slash.items.length === 0) return false;
+              slash.index = (slash.index + 1) % slash.items.length;
+              setSlashIndex(slash.index);
+              return true;
+            },
             ArrowUp: ({ editor }) => {
+              const slash = slashRef.current;
+              if (slash.items.length > 0) {
+                slash.index = (slash.index - 1 + slash.items.length) % slash.items.length;
+                setSlashIndex(slash.index);
+                return true;
+              }
               if (propsRef.current.onEditLast && isEmpty(editor)) {
                 propsRef.current.onEditLast();
                 return true;
               }
               return false;
             },
-            Escape: () => {
+            Escape: ({ editor }) => {
+              if (slashRef.current.items.length > 0) {
+                editor.commands.clearContent(true);
+                return true;
+              }
               if (!propsRef.current.onCancel) return false;
               propsRef.current.onCancel();
               return true;
@@ -669,10 +729,22 @@ export function Composer({
             bullets: e.isActive('bulletList'),
             numbers: e.isActive('orderedList'),
             chars: e.getText().length,
+            slash: /^\/([a-z]*)$/i.exec(e.getText())?.[1] ?? null,
             empty: isEmpty(e) && !hasMention(e),
           }
         : null,
   });
+
+  const slashItems = useMemo(() => {
+    const q = state?.slash;
+    if (q === null || q === undefined || !commands) return [];
+    return commands.filter((c) => c.name.startsWith(q.toLowerCase()));
+  }, [state?.slash, commands]);
+  slashRef.current = {
+    items: slashItems,
+    index: Math.min(slashIndex, Math.max(slashItems.length - 1, 0)),
+    query: (state?.slash ?? '').toLowerCase(),
+  };
 
   const uploading = uploads.some((u) => u.status === 'uploading');
   const ready = uploads.filter((u) => u.status === 'done' && u.file).map((u) => u.file!);
@@ -712,6 +784,33 @@ export function Composer({
         className,
       )}
     >
+      {slashItems.length > 0 && (
+        <ul
+          role="listbox"
+          aria-label="Commands"
+          className="bg-popover absolute right-0 bottom-full left-0 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border p-1 shadow-md"
+        >
+          {slashItems.map((c, i) => (
+            <li
+              key={c.name}
+              role="option"
+              aria-selected={i === slashRef.current.index}
+              className={cn(
+                'cursor-pointer rounded-md px-2 py-1.5 text-sm',
+                i === slashRef.current.index && 'bg-accent',
+              )}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (editor) completeSlash(editor, c.name);
+              }}
+            >
+              <span className="font-medium">/{c.name}</span>
+              <span className="text-muted-foreground ml-2">{c.description}</span>
+              <span className="text-muted-foreground block text-xs">{c.usage}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {editor && (
         <div
           className="flex flex-wrap items-center gap-0.5 border-b px-1.5 py-1"

@@ -11,7 +11,7 @@
 | M1 | Real-time core | Review | Built and tested, awaiting owner sign-off. Not committed yet. Details below |
 | M2 | Rich messaging | Review | Built and tested, awaiting owner sign-off. Details below |
 | M3 | Search and notifications | Review | Built and tested, awaiting owner sign-off. Details below |
-| M4 | Platform integration | Not started | |
+| M4 | Platform integration | Review | Built and tested, awaiting owner sign-off. Details below |
 | M5 | Admin and extensibility | Not started | |
 | M6 | Hardening | Not started | |
 
@@ -22,6 +22,17 @@
 - **Gateway** (`apps/realtime`): Socket.IO, handshake by tenant host and session cookie, server-chosen rooms, `message:send` (acknowledged after storing), `message:edit`, `message:delete`, `read:update`, `typing:start`, `presence:update`, `sync`; revoke on logout, deactivation and role change; five-minute session re-check.
 - **Web** (`apps/web/src/components/messages`, `apps/web/src/app/(app)/messages`): conversation list, virtualized conversation, composer, message rows, pending and failed states, details panel, new message, create channel (four steps), channel browser, connection banner, typing indicator, skeletons and empty states, phone layout. Components are on the `/design` page.
 - **Tests:** `apps/api/test/messaging.test.ts` (34), `apps/api/test/realtime.test.ts` (19, runs the gateway with real socket clients, including the cross-workspace attack cases, reconnect sync, removed members and deactivation), `apps/web/src/lib/messaging-logic.test.ts` (16), `e2e/messaging.spec.ts` (browser, including an accessibility scan).
+
+## M4: what was built
+
+- **Space channels:** `apps/api/src/messaging/space-channels.ts` (create, sync, repair), `routes/space-sync-hook.ts` (the events), `GET /spaces/:id/channel` (by key or id), `readOnly` on channels, viewer rules in `access.ts`, nightly repair in `server.ts`.
+- **Cards and create from message:** `item-links.ts` (`message_links`, `GET /items/:ref/card`), `integration.ts` (`POST /messages/:id/create-work-item`, where an item came from), `bot.ts` (`postAsBot`).
+- **Activity bot:** `activity-bot.ts` (rules, event buffer, coalescing, BullMQ worker), hooks in `work/activity.ts` and `routes/sprints.ts`, `GET/PUT /channels/:id/activity-rules`.
+- **Slash commands:** `commands.ts`, `me.ts` (status and do not disturb), `GET /commands`, `POST /commands/execute`.
+- **Check-in badges and profile card:** `people.ts`, `checkin` in the presence lookup, `GET /people/:id/card`.
+- **Web:** item cards, create-from-message dialog, slash menu in the composer, docked chat on Board and Backlog, space channel details (rules, no leave), profile popover, check-in pills, read-only note. The new pieces are on the /design page.
+- Tests: `apps/api/test/messaging-m4.test.ts` (25), two more gateway tests (space membership and viewers over the socket), `e2e/messaging-m4.spec.ts` (6).
+- **Not done in M4 (and why):** the tenant setting to turn space channels off and the "on leave sets do not disturb" setting (both belong to the M5 settings screen); `/standup` and `/deal` (later phases); cards do not update the instant an item changes (they refetch when the tab regains focus once their data is 30 seconds old; live item events can drive this later); the profile card lists a count of open work, not a link to a filtered list.
 
 ## M3: what was built
 
@@ -61,6 +72,7 @@
 
 ## Log (newest first)
 
+- 2026-10-16: M4 built and verified (typecheck, lint, API, gateway, browser tests). Waiting for owner review.
 - 2026-10-16: M3 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M2 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M1 built and verified (typecheck, lint, API tests, gateway tests, web tests, browser tests). Waiting for owner review.

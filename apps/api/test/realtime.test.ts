@@ -656,3 +656,73 @@ describe('notifications over the socket', () => {
     expect(spy).toEqual([]);
   });
 });
+
+describe('space channels over the socket', () => {
+  it('adding someone to a space puts them in its channel at once, removing them takes it away', async () => {
+    const key = `RT${Date.now().toString(36).toUpperCase()}`.slice(0, 10);
+    const made = await rest('ann', 'POST', '/spaces', { key, name: `Space ${key}`, visibility: 'private' });
+    expect(made.statusCode, made.body).toBe(200);
+    const spaceId = made.json().id as string;
+    const channelId = (await rest('ann', 'GET', `/spaces/${spaceId}/channel`)).json().channel.id as string;
+
+    const a = await ready(client(slug, c.ann));
+    const b = await ready(client(slug, c.bob));
+    const heard = record(b, 'message:new');
+    // Bob is not in the private space: nothing reaches him and he cannot write there.
+    await send(a, channelId, 'before bob');
+    await quiet(300);
+    expect(heard).toEqual([]);
+    expect(await send(b, channelId, 'let me in')).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
+    const added = next(b, 'channel:membership');
+    const res = await rest('ann', 'POST', `/spaces/${spaceId}/members`, {
+      members: [{ type: 'user', id: u.bob!.id, role: 'member' }],
+    });
+    expect(res.statusCode, res.body).toBeLessThan(300);
+    expect(await added).toMatchObject({ channelId, change: 'added' });
+    await send(a, channelId, 'welcome to the space');
+    await quiet(300);
+    expect(heard.map((m) => m.bodyText)).toContain('welcome to the space');
+    expect(await send(b, channelId, 'thanks')).toMatchObject({ ok: true });
+
+    const row = (
+      (await rest('ann', 'GET', `/spaces/${spaceId}/members?pageSize=100`)).json().items as Json[]
+    ).find((m) => m.principalId === u.bob!.id)!;
+    const removed = next(b, 'channel:membership');
+    await rest('ann', 'DELETE', `/spaces/${spaceId}/members/${row.id}`);
+    expect(await removed).toMatchObject({ channelId, change: 'removed' });
+    heard.length = 0;
+    await send(a, channelId, 'bob is gone');
+    await quiet(400);
+    expect(heard.filter((m) => m.bodyText === 'bob is gone')).toEqual([]);
+    expect(await send(b, channelId, 'still here?')).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+  });
+
+  it('a space viewer receives messages but cannot post or reply over the socket', async () => {
+    const key = `RV${Date.now().toString(36).toUpperCase()}`.slice(0, 10);
+    const made = await rest('ann', 'POST', '/spaces', { key, name: `Space ${key}`, visibility: 'open' });
+    const spaceId = made.json().id as string;
+    const channelId = (await rest('ann', 'GET', `/spaces/${spaceId}/channel`)).json().channel.id as string;
+    const cy = await ready(client(slug, c.cy));
+    const a = await ready(client(slug, c.ann));
+    const added = next(cy, 'channel:membership');
+    await rest('ann', 'POST', `/spaces/${spaceId}/members`, {
+      members: [{ type: 'user', id: u.cy!.id, role: 'viewer' }],
+    });
+    await added;
+    const heard = record(cy, 'message:new');
+    const sent = await send(a, channelId, 'for the viewers too');
+    expect(sent).toMatchObject({ ok: true });
+    await quiet(300);
+    expect(heard.map((m) => m.bodyText)).toContain('for the viewers too');
+    expect(await send(cy, channelId, 'can I?')).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    const rootId = (sent as { ok: true; data: Json }).data.message.id as string;
+    const reply = await emit(cy, 'message:send', {
+      channelId,
+      clientMsgId: msgId(),
+      body: doc('reply?'),
+      threadRootId: rootId,
+    });
+    expect(reply).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+  });
+});

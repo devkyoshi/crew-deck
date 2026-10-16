@@ -10,6 +10,8 @@ import type {
 import type { TenantDb } from '../db/client.js';
 import type { ChannelDoc, MessageAttachmentDoc, MessageDoc } from '../db/types.js';
 
+const BOT_NAMES: Record<string, string> = { activity: 'Activity', tasks: 'Tasks' };
+
 /** People for a set of ids: only members of this workspace resolve, deactivated ones are marked. */
 export async function peopleOf(
   t: TenantDb,
@@ -72,14 +74,18 @@ export async function hydrate(t: TenantDb, rows: MessageDoc[]): Promise<MessageD
   if (rows.length === 0) return [];
   const live = rows.filter((m) => !m.deletedAt).map((m) => m.id);
   const ids = rows.map((m) => m.id);
-  const [reactions, attachments, pins, mentions] = await Promise.all([
+  const [reactions, attachments, pins, mentions, itemLinks] = await Promise.all([
     live.length ? t.messageReactions.find({ messageId: { $in: live } }) : [],
     live.length
       ? t.messageAttachments.find({ messageId: { $in: live } }, { sort: { createdAt: 1 } })
       : [],
     t.pins.find({ messageId: { $in: ids } }),
     live.length ? t.messageMentions.find({ messageId: { $in: live } }) : [],
+    live.length ? t.messageLinks.find({ messageId: { $in: live } }) : [],
   ]);
+  const itemsBy = new Map<string, { id: string; key: string }[]>();
+  for (const l of itemLinks)
+    itemsBy.set(l.messageId, [...(itemsBy.get(l.messageId) ?? []), { id: l.itemId, key: l.itemKey }]);
   const authors = rows.flatMap((m) => [m.authorId, ...(m.replyAuthors ?? []).slice(-3)]);
   const people = await peopleOf(t, authors);
 
@@ -124,6 +130,8 @@ export async function hydrate(t: TenantDb, rows: MessageDoc[]): Promise<MessageD
       mentions: deleted ? [] : (mentionsBy.get(m.id) ?? []),
       previews: deleted ? [] : (meta.previews ?? []),
       previewsPending: deleted ? false : meta.previewsPending === true,
+      workItems: deleted ? [] : (itemsBy.get(m.id) ?? []),
+      bot: m.kind === 'bot' && m.botId ? { id: m.botId, name: BOT_NAMES[m.botId] ?? 'Bot' } : null,
       editedAt: m.editedAt ? m.editedAt.toISOString() : null,
       deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
       createdAt: m.createdAt.toISOString(),

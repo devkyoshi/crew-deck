@@ -82,6 +82,9 @@ const TENANT = {
   messageMentions: 'message_mentions',
   pins: 'pins',
   savedMessages: 'saved_messages',
+  messageLinks: 'message_links',
+  activityRules: 'activity_rules',
+  chatActivityEvents: 'chat_activity_events',
   threadFollows: 'thread_follows',
   messageAttachments: 'message_attachments',
   linkPreviews: 'link_previews',
@@ -161,6 +164,9 @@ export interface TenantDocs {
   messageMentions: T.MessageMentionDoc;
   pins: T.PinDoc;
   savedMessages: T.SavedMessageDoc;
+  messageLinks: T.MessageLinkDoc;
+  activityRules: T.ActivityRuleDoc;
+  chatActivityEvents: T.ChatActivityEventDoc;
   threadFollows: T.ThreadFollowDoc;
   messageAttachments: T.MessageAttachmentDoc;
   linkPreviews: T.LinkPreviewDoc;
@@ -400,6 +406,9 @@ const DEFAULTS: Record<string, () => Document> = {
   messageReactions: () => ({ createdAt: now() }),
   pins: () => ({ pinnedAt: now() }),
   savedMessages: () => ({ savedAt: now() }),
+  messageLinks: () => ({ createdAt: now() }),
+  activityRules: () => ({ updatedAt: now() }),
+  chatActivityEvents: () => ({ at: now(), postedAt: null }),
   threadFollows: () => ({ lastReadSeq: 0, createdAt: now() }),
   messageAttachments: () => ({ messageId: null, image: null, createdAt: now() }),
   linkPreviews: () => ({
@@ -432,6 +441,8 @@ const NO_ID = new Set<string>([
   'messageMentions',
   'pins',
   'savedMessages',
+  'messageLinks',
+  'activityRules',
   'threadFollows',
 ]);
 
@@ -731,6 +742,9 @@ export class TenantDb {
   readonly messageMentions!: TenantRepos['messageMentions'];
   readonly pins!: TenantRepos['pins'];
   readonly savedMessages!: TenantRepos['savedMessages'];
+  readonly messageLinks!: TenantRepos['messageLinks'];
+  readonly activityRules!: TenantRepos['activityRules'];
+  readonly chatActivityEvents!: TenantRepos['chatActivityEvents'];
   readonly threadFollows!: TenantRepos['threadFollows'];
   readonly messageAttachments!: TenantRepos['messageAttachments'];
   readonly linkPreviews!: TenantRepos['linkPreviews'];

@@ -15,7 +15,8 @@ import type { ChannelDoc, ChannelMemberDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { escapeRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
-import { channelResource, loadChannel, requireChannel } from './access.js';
+import { channelResource, isReadOnlyInSpace, loadChannel, requireChannel } from './access.js';
+import { effectiveRoles } from '../spaces/access.js';
 import { runLater, type MessagingCtx } from './context.js';
 import { notifyAdded } from './notify.js';
 import { ownsSection } from './sections.js';
@@ -90,7 +91,7 @@ export async function ensureBootstrap(ctx: MessagingCtx, t: TenantDb, userId: st
 
 // ---- Reading -----------------------------------------------------------------------------------------
 
-async function memberCounts(t: TenantDb, channelIds: string[]) {
+export async function memberCounts(t: TenantDb, channelIds: string[]) {
   if (channelIds.length === 0) return new Map<string, number>();
   const rows = await t.channelMembers.aggregate<{ _id: string; n: number }>([
     { $match: { channelId: { $in: channelIds } } },
@@ -147,10 +148,19 @@ export async function listMyChannels(ctx: MessagingCtx, actor: Actor): Promise<M
     actor.userId,
     channels.map((c) => ({ id: c.id, lastSeq: c.lastSeq, lastReadSeq: cursorOf.get(c.id) ?? 0 })),
   );
+  const spaceIds = channels.flatMap((c) => (c.spaceId ? [c.spaceId] : []));
+  const spaceRoles = spaceIds.length
+    ? await effectiveRoles(t, actor.userId, spaceIds)
+    : new Map<string, string>();
+  const orgAdmin = actor.orgRole === 'owner' || actor.orgRole === 'admin';
   return channels.map((c) => {
     const m = memberOf.get(c.id)!;
+    const readOnly = c.spaceId
+      ? !orgAdmin && !['admin', 'member'].includes(spaceRoles.get(c.spaceId) ?? '')
+      : undefined;
     return {
       ...channelDTO(c, counts.get(c.id) ?? 0, people.get(c.id)),
+      ...(readOnly === undefined ? {} : { readOnly }),
       role: m.role,
       notificationLevel: m.notificationLevel,
       mutedUntil: m.mutedUntil ? m.mutedUntil.toISOString() : null,
@@ -231,6 +241,7 @@ export async function getChannel(
     dmPeople(t, [channel], actor.userId),
   ]);
   const dto = channelDTO(channel, counts.get(channel.id) ?? 0, people.get(channel.id));
+  if (channel.spaceId) dto.readOnly = await isReadOnlyInSpace(t, actor, channel.spaceId);
   if (!member) return dto;
   const cursor = await t.readCursors.findOne({ channelId, userId: actor.userId });
   const lastReadSeq = cursor?.lastReadSeq ?? 0;
@@ -301,7 +312,7 @@ async function activeMemberIds(t: TenantDb, ids: string[]) {
 }
 
 /** Publishes that a person is now (or no longer) in a channel: moves their sockets and tells their tabs. */
-function announceMembership(
+export function announceMembership(
   ctx: MessagingCtx,
   orgId: string,
   userId: string,
@@ -448,6 +459,8 @@ export async function updateChannel(
   if (access.channel.isArchived)
     throw new AppError(409, 'channel_archived', 'This channel is archived and read-only');
   const set: Partial<ChannelDoc> = {};
+  if (input.name !== undefined && access.channel.spaceId && input.name !== access.channel.name)
+    throw new AppError(409, 'space_channel', "A space's channel is named after the space");
   if (input.name !== undefined) {
     set.name = input.name;
     set.slug = input.name;
@@ -538,6 +551,9 @@ export async function deleteChannel(ctx: MessagingCtx, actor: Actor, channelId: 
     await Promise.all([
       tx.messageReactions.deleteMany({ channelId }),
       tx.messageMentions.deleteMany({ channelId }),
+      tx.messageLinks.deleteMany({ channelId }),
+      tx.activityRules.deleteMany({ channelId }),
+      tx.chatActivityEvents.deleteMany({ channelId }),
       tx.pins.deleteMany({ channelId }),
       tx.savedMessages.deleteMany({ channelId }),
       tx.threadFollows.deleteMany({ channelId }),
@@ -624,6 +640,8 @@ export async function addMembers(
   if (access.channel.type === 'dm' || access.channel.type === 'group_dm') {
     throw new AppError(409, 'dm_fixed', 'Start a new group message to include more people');
   }
+  if (access.channel.spaceId)
+    throw new AppError(409, 'space_channel', "A space's channel follows the people in the space");
   // A public channel is open anyway; for private channels the manage rule applies.
   if (access.channel.type === 'private' || access.channel.isArchived)
     requireChannel(actor, access, 'channel.manage');
