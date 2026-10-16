@@ -9,7 +9,7 @@
 | Phase | Title | Status | Notes |
 | --- | --- | --- | --- |
 | M1 | Real-time core | Review | Built and tested, awaiting owner sign-off. Not committed yet. Details below |
-| M2 | Rich messaging | Not started | Threads, reactions, mentions, pins, saved, files, link previews, browse polish, announcements UI |
+| M2 | Rich messaging | Review | Built and tested, awaiting owner sign-off. Details below |
 | M3 | Search and notifications | Not started | `$text` index behind a `SearchService`, notifications, Threads page, sections, quick switcher |
 | M4 | Platform integration | Not started | |
 | M5 | Admin and extensibility | Not started | |
@@ -22,6 +22,13 @@
 - **Gateway** (`apps/realtime`): Socket.IO, handshake by tenant host and session cookie, server-chosen rooms, `message:send` (acknowledged after storing), `message:edit`, `message:delete`, `read:update`, `typing:start`, `presence:update`, `sync`; revoke on logout, deactivation and role change; five-minute session re-check.
 - **Web** (`apps/web/src/components/messages`, `apps/web/src/app/(app)/messages`): conversation list, virtualized conversation, composer, message rows, pending and failed states, details panel, new message, create channel (four steps), channel browser, connection banner, typing indicator, skeletons and empty states, phone layout. Components are on the `/design` page.
 - **Tests:** `apps/api/test/messaging.test.ts` (34), `apps/api/test/realtime.test.ts` (19, runs the gateway with real socket clients, including the cross-workspace attack cases, reconnect sync, removed members and deactivation), `apps/web/src/lib/messaging-logic.test.ts` (16), `e2e/messaging.spec.ts` (browser, including an accessibility scan).
+
+## M2: what was built
+
+- **Threads** (reply panel, summary under the root, also-send-to-channel, follow/unfollow, `GET /threads`), **reactions** (emoji-mart picker, chips, who-reacted tooltip), **mentions** (people, groups, `@channel`, `@here`, autocomplete, highlight, channel mention counts, "add them?" prompt), **pins** and a Pins tab, **saved messages** and a Saved page, **files** (upload with progress and cancel, drag and drop, paste, lightbox, Files tab, access-checked downloads, plan limits), **link previews** (worker, SSRF guards, per-workspace cache), `:name:` shortcodes, message actions menu.
+- API: `apps/api/src/messaging/{threads,reactions,pins,files,link-preview,ssrf}.ts`; routes in `apps/api/src/routes/messaging.ts`. Web: `apps/web/src/components/messages/{thread-panel,message-parts,message-actions,emoji-picker,channel-tabs}.tsx` and `app/(app)/messages/saved`.
+- Tests: `apps/api/test/messaging-rich.test.ts` (31), `apps/api/test/link-preview.test.ts` (59, including the address table), two more gateway tests, `e2e/messaging-rich.spec.ts` (6, browser).
+- **Not done in M2 (and why):** `#channel` and work item key autocomplete (item keys belong with the unfurls in M4); generated thumbnails and PDF previews; a virus-scan hook; syntax highlighting in code blocks (copy button is there); the Threads page and the "Mentions and reactions" list (M3); direct-to-storage signed uploads (ADR-073).
 
 ## M1: "done when" check
 
@@ -46,4 +53,5 @@
 
 ## Log (newest first)
 
+- 2026-10-16: M2 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M1 built and verified (typecheck, lint, API tests, gateway tests, web tests, browser tests). Waiting for owner review.

@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
+  Bookmark,
   ChevronRight,
   Hash,
   Lock,
@@ -53,7 +55,9 @@ export function ConversationListItem({
   const name = conversationName(channel, selfId);
   const unread = channel.unread > 0 && !active;
   const muted = channel.notificationLevel === 'none';
-  const badge = isDm && unread ? channel.unread : 0;
+  // Direct messages show how many are unread; channels show how many mention me.
+  const mentions = !isDm && !active ? channel.mentionCount : 0;
+  const badge = isDm && unread ? channel.unread : mentions;
   return (
     <Link
       href={href ?? `/messages/${channel.id}`}
@@ -84,7 +88,7 @@ export function ConversationListItem({
       {badge > 0 && (
         <span
           className="bg-destructive text-destructive-foreground min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums"
-          aria-label={`${badge} unread`}
+          aria-label={isDm ? `${badge} unread` : `${badge} unread mentions`}
         >
           {badge > 99 ? '99+' : badge}
         </span>
@@ -146,7 +150,7 @@ function Section({
             aria-hidden
           />
           {title}
-          <span className="font-normal normal-case opacity-70">{count}</span>
+          <span className="font-normal normal-case">{count}</span>
         </CollapsibleTrigger>
         {action}
       </div>
@@ -165,6 +169,7 @@ export function ConversationList({
   onNavigate?: () => void;
 }) {
   const me = useMe().user.id;
+  const pathname = usePathname();
   const channels = useChannels();
   // The first client render must match the server's (which has no data yet), even if the cache is full.
   const hydrated = useHydrated();
@@ -262,6 +267,19 @@ export function ConversationList({
       </div>
 
       <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto p-1 pt-2">
+        <Link
+          href="/messages/saved"
+          onClick={onNavigate}
+          aria-current={pathname === '/messages/saved' ? 'page' : undefined}
+          className={cn(
+            'focus-visible:ring-ring/50 mx-1 mb-1 flex h-8 items-center gap-2 rounded-md px-2 text-[14px] outline-none focus-visible:ring-[3px]',
+            pathname === '/messages/saved'
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+              : 'text-muted-foreground hover:bg-muted/70',
+          )}
+        >
+          <Bookmark className="size-4" aria-hidden /> Saved
+        </Link>
         {channels.isLoading || !hydrated ? (
           <div className="space-y-2 p-2" aria-hidden>
             {[60, 44, 72, 52, 64, 40].map((w, i) => (

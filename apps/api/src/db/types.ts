@@ -826,6 +826,8 @@ export interface MessageDoc {
   alsoInChannel: boolean;
   replyCount: number;
   lastReplyAt: Date | null;
+  /** Distinct people who replied (capped), newest last. */
+  replyAuthors?: string[];
   clientMsgId: string | null;
   metadata: Record<string, unknown>;
   editedAt: Date | null;
@@ -855,4 +857,80 @@ export interface UserStatusDoc {
   emoji: string | null;
   text: string | null;
   expiresAt: Date | null;
+}
+
+export interface MessageReactionDoc {
+  orgId: string;
+  channelId: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: Date;
+}
+
+export interface MessageMentionDoc {
+  orgId: string;
+  channelId: string;
+  messageId: string;
+  /** The message's seq, so mention counts can be taken after a read cursor. */
+  seq: number;
+  targetType: 'user' | 'group' | 'channel' | 'here';
+  targetId: string;
+  /** False for thread replies that were not also sent to the channel: they do not raise the channel's mention count. */
+  inChannel: boolean;
+}
+
+export interface PinDoc {
+  orgId: string;
+  channelId: string;
+  messageId: string;
+  pinnedBy: string;
+  pinnedAt: Date;
+}
+
+export interface SavedMessageDoc {
+  orgId: string;
+  userId: string;
+  channelId: string;
+  messageId: string;
+  savedAt: Date;
+}
+
+export interface ThreadFollowDoc {
+  orgId: string;
+  channelId: string;
+  threadRootId: string;
+  userId: string;
+  /** Replies at or before this seq are read. */
+  lastReadSeq: number;
+  createdAt: Date;
+}
+
+export interface MessageAttachmentDoc {
+  id: string;
+  orgId: string;
+  channelId: string;
+  /** Null until the message that carries it is sent. Unattached files are cleaned up after a day. */
+  messageId: string | null;
+  uploaderId: string;
+  name: string;
+  mime: string;
+  image: string | null;
+  size: number;
+  storageKey: string;
+  createdAt: Date;
+}
+
+export interface LinkPreviewDoc {
+  id: string;
+  orgId: string;
+  urlHash: string;
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+  /** 'failed' is cached too, so a dead link is not fetched again and again. */
+  status: 'ok' | 'failed';
+  fetchedAt: Date;
 }

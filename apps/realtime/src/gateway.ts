@@ -12,6 +12,7 @@ import {
   sendMessage,
   sessionRoom,
   setRead,
+  toggleReaction,
   sha256,
   SESSION_COOKIE,
   syncChannels,
@@ -33,6 +34,7 @@ import {
   messageEditSchema,
   messageSendSchema,
   presenceUpdateSchema,
+  reactionToggleSchema,
   readUpdateSchema,
   syncSchema,
   typingSchema,
@@ -262,6 +264,12 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
     handle(C2S.readUpdate, readUpdateSchema, (p, a) => setRead(messaging, a, p.channelId, p.seq), {
       channelScoped: true,
     });
+    handle(
+      C2S.reactionToggle,
+      reactionToggleSchema,
+      async (p, a) => ({ reactions: await toggleReaction(messaging, a, p.messageId, p.emoji) }),
+      { write: true },
+    );
     handle(C2S.sync, syncSchema, (p, a) => syncChannels(messaging, a, p.channels));
     handle(C2S.presenceUpdate, presenceUpdateSchema, async (p) => {
       const change = await presence.beat(actor.orgId, actor.userId, socket.id, p.state);

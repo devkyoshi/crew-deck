@@ -9,6 +9,10 @@ import { createRedis } from './lib/redis.js';
 import { startTrialExpiry } from './plans/jobs.js';
 import { startRebalanceJobs } from './work/jobs.js';
 import { startNotificationJobs } from './work/notify-jobs.js';
+import { RedisEventSink } from './messaging/events.js';
+import { startLinkPreviewJobs } from './messaging/link-preview.js';
+import { sweepUnsentFiles } from './messaging/files.js';
+import { createStorage } from './storage/index.js';
 import { startSprintSnapshots } from './work/sprints.js';
 
 const config = loadConfig();
@@ -28,7 +32,17 @@ const rebalance = startRebalanceJobs(redis, db, {
   info: (m) => console.log(m),
   error: (m) => console.error(m),
 });
+const storage = createStorage(config);
+const linkPreviews = startLinkPreviewJobs(redis, db, new RedisEventSink(redis), {
+  error: (m) => console.error(m),
+});
+// Files uploaded to a channel but never sent are removed after a day.
+const sweep = setInterval(() => {
+  void sweepUnsentFiles(db, storage).catch((e: Error) => console.error(`file sweep failed: ${e.message}`));
+}, 60 * 60 * 1000);
 const app = buildApp({
+  storage,
+  enqueueLinkPreviews: linkPreviews.enqueue,
   db,
   redis,
   config,
@@ -58,6 +72,8 @@ const trials = startTrialExpiry(db, {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     await worker.close();
+    clearInterval(sweep);
+    await linkPreviews.close();
     await autoClose.close();
     await trials.close();
     await notifications.close();

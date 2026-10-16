@@ -63,8 +63,12 @@ export type Action =
   | 'channel.manage'
   | 'channel.archive'
   | 'channel.delete'
+  | 'channel.reply'
   | 'message.editOwn'
-  | 'message.deleteAny';
+  | 'message.deleteAny'
+  | 'message.react'
+  | 'message.pin'
+  | 'message.save';
 
 export type CrmRole = 'none' | 'viewer' | 'member' | 'admin';
 
@@ -228,6 +232,18 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'channel.delete':
       if (resource.channelType === 'dm' || resource.channelType === 'group_dm') return false;
       return adminLike;
+    // Replying in a thread and reacting stay open to members of announcement channels (brief section 4).
+    case 'channel.reply':
+    case 'message.react':
+      return !!resource.channelRole && !resource.isArchived && !resource.isSpaceViewer;
+    // Pinning: channel owners and org admins; in a direct message everyone in it.
+    case 'message.pin':
+      if (resource.isArchived || !(resource.channelRole || adminLike)) return false;
+      if (resource.channelType === 'dm' || resource.channelType === 'group_dm') return !!resource.channelRole;
+      return adminLike || resource.channelRole === 'owner';
+    // Saving is personal: anyone who can see the message.
+    case 'message.save':
+      return resource.channelType === 'public' || !!resource.channelRole;
     case 'message.editOwn':
       return resource.isAuthor === true && !!resource.channelRole && !resource.isArchived;
     case 'message.deleteAny':

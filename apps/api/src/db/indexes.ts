@@ -266,6 +266,7 @@ const INDEXES: Record<string, Ix[]> = {
     ['id', { id: 1 }, U],
     ['channel_seq', { orgId: 1, channelId: 1, seq: 1 }, U],
     // A retried send finds the message it already created.
+    ['thread', { orgId: 1, threadRootId: 1, seq: 1 }, { partialFilterExpression: { threadRootId: { $type: 'string' } } }],
     ['client_msg', { orgId: 1, channelId: 1, clientMsgId: 1 }, { unique: true, partialFilterExpression: { clientMsgId: { $type: 'string' } } }],
   ],
   message_edits: [
@@ -274,6 +275,36 @@ const INDEXES: Record<string, Ix[]> = {
   ],
   read_cursors: [['pk', { orgId: 1, channelId: 1, userId: 1 }, U]],
   user_statuses: [['pk', { orgId: 1, userId: 1 }, U]],
+  message_reactions: [
+    ['pk', { orgId: 1, messageId: 1, userId: 1, emoji: 1 }, U],
+    ['channel', { orgId: 1, channelId: 1, messageId: 1 }],
+  ],
+  message_mentions: [
+    ['message', { orgId: 1, messageId: 1 }],
+    ['target', { orgId: 1, channelId: 1, targetType: 1, targetId: 1, seq: 1 }],
+  ],
+  pins: [
+    ['pk', { orgId: 1, channelId: 1, messageId: 1 }, U],
+    ['recent', { orgId: 1, channelId: 1, pinnedAt: -1 }],
+  ],
+  saved_messages: [
+    ['pk', { orgId: 1, userId: 1, messageId: 1 }, U],
+    ['recent', { orgId: 1, userId: 1, savedAt: -1 }],
+  ],
+  thread_follows: [
+    ['pk', { orgId: 1, userId: 1, threadRootId: 1 }, U],
+    ['thread', { orgId: 1, threadRootId: 1 }],
+  ],
+  message_attachments: [
+    ['id', { id: 1 }, U],
+    ['message', { orgId: 1, messageId: 1 }],
+    ['channel', { orgId: 1, channelId: 1, createdAt: -1 }],
+    ['pending', { messageId: 1, createdAt: 1 }],
+  ],
+  link_previews: [
+    ['id', { id: 1 }, U],
+    ['url', { orgId: 1, urlHash: 1 }, U],
+  ],
 };
 
 export async function ensureIndexes(handle: MongoDb) {

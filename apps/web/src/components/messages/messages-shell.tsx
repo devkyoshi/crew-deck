@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChannelDetails } from './channel-details';
 import { ConversationList } from './conversation-list';
 import { PanelProvider, usePanel } from './panel';
+import { ThreadPanel } from './thread-panel';
 
 function useWide() {
   const [wide, setWide] = useState(false);
@@ -25,35 +26,60 @@ function DetailsPanel({ channelId }: { channelId: string }) {
   const panel = usePanel();
   const wide = useWide();
   const { channel } = useChannel(channelId);
-  if (!channel) return null;
-  const details = (docked: boolean) => (
-    <ChannelDetails
-      channel={channel}
-      onClose={docked ? () => panel.setOpen(false) : undefined}
-      onGone={() => panel.setOpen(false)}
-    />
-  );
+  const thread = panel.thread && panel.thread.channelId === channelId ? panel.thread : null;
+  const shown = !!thread || panel.open;
+
+  // Esc closes the panel (menus, dialogs and the composer handle their own Esc first).
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (document.querySelector('[role=dialog],[role=menu],[role=listbox]')) return;
+      if (thread) panel.closeThread();
+      else panel.setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shown, thread, panel]);
+
+  if (!channel && !thread) return null;
+  const close = () => (thread ? panel.closeThread() : panel.setOpen(false));
+  const body = (docked: boolean) =>
+    thread ? (
+      <ThreadPanel channelId={thread.channelId} rootId={thread.rootId} onClose={close} />
+    ) : channel ? (
+      <ChannelDetails
+        channel={channel}
+        onClose={docked ? close : undefined}
+        onGone={() => panel.setOpen(false)}
+      />
+    ) : null;
   // Wide screens get a docked panel; tablets and phones get it as a sheet over the conversation.
   if (wide) {
-    return panel.open ? (
-      <aside aria-label="Channel details" className="bg-background w-80 shrink-0 border-l">
-        {details(true)}
+    return shown ? (
+      <aside
+        aria-label={thread ? 'Thread' : 'Channel details'}
+        className="bg-background w-96 shrink-0 border-l"
+      >
+        {body(true)}
       </aside>
     ) : null;
   }
   return (
-    <Sheet open={panel.open} onOpenChange={panel.setOpen}>
+    <Sheet open={shown} onOpenChange={(o) => !o && close()}>
       <SheetContent
         side="right"
         className="w-full gap-0 p-0 sm:max-w-sm"
-        // Opening the panel should not drop the cursor into (and select) the topic field.
+        // Opening the panel should not drop the cursor into (and select) the first field.
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <SheetTitle className="sr-only">Channel details</SheetTitle>
+        <SheetTitle className="sr-only">{thread ? 'Thread' : 'Channel details'}</SheetTitle>
         <SheetDescription className="sr-only">
-          Members, topic and settings for this conversation
+          {thread
+            ? 'The replies to one message'
+            : 'Members, topic and settings for this conversation'}
         </SheetDescription>
-        {details(false)}
+        {body(false)}
       </SheetContent>
     </Sheet>
   );

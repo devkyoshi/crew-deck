@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import {
   Presence,
+  createLinkPreviewEnqueuer,
+  createStorage,
   RateLimiter,
   RedisEventSink,
   SessionStore,
@@ -14,6 +16,8 @@ const config = loadConfig();
 const port = Number(process.env.REALTIME_PORT ?? 4100);
 const { db, close } = createDb(config.MONGODB_URI, config.MONGODB_DB);
 const redis = createRedis(config.REDIS_URL);
+const previews = createLinkPreviewEnqueuer(redis);
+const limiter = new RateLimiter(redis);
 
 const http = createServer((req, res) => {
   if (req.url === '/realtime/health') {
@@ -29,15 +33,22 @@ const gateway = createGateway(http, {
   config,
   redis,
   sessions: new SessionStore(redis, config.SESSION_TTL_SECONDS),
-  messaging: { db, events: new RedisEventSink(redis) },
+  messaging: {
+    db,
+    events: new RedisEventSink(redis),
+    limiter,
+    storage: createStorage(config),
+    enqueueLinkPreviews: previews.enqueue,
+  },
   presence: new Presence(redis),
-  limiter: new RateLimiter(redis),
+  limiter,
   log: { info: (m) => console.log(m), error: (m, e) => console.error(m, e) },
 });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     await gateway.close();
+    await previews.close();
     http.close();
     redis.disconnect();
     await close();

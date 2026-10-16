@@ -174,7 +174,8 @@ export async function storageBytes(t: TenantDb) {
   const sum = [{ $group: { _id: null, total: { $sum: '$size' } } }];
   const [items] = await t.attachments.aggregate<{ total: number }>(sum);
   const [library] = await t.spaceFiles.aggregate<{ total: number }>(sum);
-  return (items?.total ?? 0) + (library?.total ?? 0);
+  const [chat] = await t.messageAttachments.aggregate<{ total: number }>(sum);
+  return (items?.total ?? 0) + (library?.total ?? 0) + (chat?.total ?? 0);
 }
 
 export type Usage = Partial<Record<LimitKey, number>>;

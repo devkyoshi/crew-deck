@@ -11,21 +11,13 @@ import {
   Lock,
   Megaphone,
   MessageSquarePlus,
+  Upload,
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { MessageDTO, PersonDTO } from '@crew-deck/shared';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
 import { useHydrated } from '@/components/checkin/use-hydrated';
@@ -37,24 +29,24 @@ import {
   fetchView,
   keys,
   loadOlder,
-  mergeMessages,
   personName,
-  useDeleteMessage,
-  useEditMessage,
+  useChannel,
   useJoinChannel,
-  useMarkUnread,
   useMembers,
   useMessages,
   type ChannelView,
 } from '@/lib/messaging-api';
-import { Composer } from './composer';
+import { FilesView, PinsView } from './channel-tabs';
+import { Composer, type ComposerHandle } from './composer';
+import { useMessageActions } from './message-actions';
 import { MessageList } from './message-list';
+import { MessageRow } from './message-row';
+import { ImageLightbox } from './message-parts';
+import { usePanel } from './panel';
 import { PersonAvatar } from './person-avatar';
 import { useRealtime } from './realtime';
-import { useMessaging, usePendingFor } from './store';
 import { ConnectionBanner, MessageSkeletons, TypingIndicator } from './status-bits';
-import { useChannel } from '@/lib/messaging-api';
-import { usePanel } from './panel';
+import { useMessaging, usePendingFor } from './store';
 
 function Intro({
   name,
@@ -107,6 +99,8 @@ function LiveAnnouncer({ messages, selfId }: { messages: MessageDTO[]; selfId: s
   );
 }
 
+type Tab = 'messages' | 'pins' | 'files';
+
 export function Conversation({ channelId }: { channelId: string }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -120,12 +114,12 @@ export function Conversation({ channelId }: { channelId: string }) {
   const messages = useMessages(channelId);
   const pending = usePendingFor(channelId);
   const members = useMembers(channelId, !!channel);
-  const edit = useEditMessage();
-  const del = useDeleteMessage();
-  const markUnread = useMarkUnread();
   const join = useJoinChannel();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<MessageDTO | null>(null);
+  const composer = useRef<ComposerHandle>(null);
+  const [tab, setTab] = useState<Tab>('messages');
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const [lightbox, setLightbox] = useState<{ images: AttachmentDTO[]; index: number } | null>(null);
 
   const focusSeq = Number(search.get('m')) || null;
 
@@ -146,6 +140,7 @@ export function Conversation({ channelId }: { channelId: string }) {
   // A message link loads the window around it.
   useEffect(() => {
     if (!focusSeq) return;
+    setTab('messages');
     void fetchView(channelId, { around: focusSeq }).then((v) =>
       qc.setQueryData(keys.messages(channelId), v),
     );
@@ -164,6 +159,18 @@ export function Conversation({ channelId }: { channelId: string }) {
     email: meUser.email,
     avatarUrl: meUser.avatarUrl,
   };
+
+  const perms = channelPerms(
+    channel
+      ? { ...channel, role: channel.role }
+      : { type: 'public', isArchived: false, isAnnouncement: false },
+    isAdmin,
+  );
+  const actions = useMessageActions({
+    channelId,
+    perms: channel ? perms : { ...perms, member: false },
+    people,
+  });
 
   const onLoadOlder = useCallback(() => loadOlder(qc, channelId), [qc, channelId]);
   const jumpLatest = useCallback(async () => {
@@ -192,7 +199,6 @@ export function Conversation({ channelId }: { channelId: string }) {
     );
   }
 
-  const perms = channelPerms({ ...channel, role: channel.role }, isAdmin);
   const name = conversationName(channel, meUser.id);
   const kind = perms.isDm ? 'dm' : channel.type === 'private' ? 'private' : 'channel';
   const view: ChannelView | undefined = messages.data;
@@ -203,11 +209,36 @@ export function Conversation({ channelId }: { channelId: string }) {
     : channel.isArchived
       ? 'This channel is archived. You can read it, but not post.'
       : !perms.canPost
-        ? 'Only owners and admins can post here. You can still read everything.'
+        ? 'Only owners and admins can post here. You can still react and reply in threads.'
         : null;
 
+  const canDrop = perms.canPost && tab === 'messages';
+  const dropHandlers = canDrop
+    ? {
+        onDragEnter: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          dragDepth.current++;
+          setDragging(true);
+        },
+        onDragOver: (e: React.DragEvent) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+        },
+        onDragLeave: () => {
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDragging(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          dragDepth.current = 0;
+          setDragging(false);
+          composer.current?.addFiles([...e.dataTransfer.files]);
+        },
+      }
+    : {};
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col" {...dropHandlers}>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
         <Button
           variant="ghost"
@@ -275,6 +306,33 @@ export function Conversation({ channelId }: { channelId: string }) {
         </Button>
       </header>
 
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as Tab)}
+        className="shrink-0 border-b px-3 sm:px-4"
+      >
+        <TabsList aria-label="Conversation views" className="h-9 bg-transparent p-0">
+          <TabsTrigger
+            value="messages"
+            className="data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            Messages
+          </TabsTrigger>
+          <TabsTrigger
+            value="pins"
+            className="data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            Pins
+          </TabsTrigger>
+          <TabsTrigger
+            value="files"
+            className="data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            Files
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <ConnectionBanner />
 
       {!isMember && !perms.isDm && (
@@ -297,7 +355,14 @@ export function Conversation({ channelId }: { channelId: string }) {
         </div>
       )}
 
-      {messages.isError && !view ? (
+      {tab === 'pins' ? (
+        <PinsView channelId={channelId} canPin={perms.canPin} rowProps={actions.rowProps} />
+      ) : tab === 'files' ? (
+        <FilesView
+          channelId={channelId}
+          onOpenImage={(images, index) => setLightbox({ images, index })}
+        />
+      ) : messages.isError && !view ? (
         <div className="p-6">
           <LoadError what="the messages" onRetry={() => void messages.refetch()} />
         </div>
@@ -324,10 +389,6 @@ export function Conversation({ channelId }: { channelId: string }) {
           pending={pending}
           initialLastReadSeq={initialLastReadSeq}
           focusSeq={focusSeq}
-          canModerate={perms.canModerate}
-          canEdit={perms.member && !channel.isArchived}
-          editingId={editingId}
-          setEditingId={setEditingId}
           intro={
             <Intro
               name={perms.isDm ? name : (channel.name ?? '')}
@@ -335,40 +396,18 @@ export function Conversation({ channelId }: { channelId: string }) {
               topic={channel.topic}
             />
           }
+          renderMessage={(m, grouped, highlighted) => (
+            <MessageRow {...actions.rowProps(m, { grouped, highlighted })} />
+          )}
           onLoadOlder={onLoadOlder}
           onJumpLatest={() => void jumpLatest()}
           onMarkRead={(seq) => isMember && rt.markRead(channelId, seq)}
           onRetry={(id) => void rt.retry(id)}
           onDiscard={rt.discard}
-          onSaveEdit={async (id, doc) => {
-            try {
-              const { message } = await edit.mutateAsync({ id, body: doc });
-              qc.setQueryData<ChannelView>(keys.messages(channelId), (cur) =>
-                cur ? mergeMessages(cur, [message]) : cur,
-              );
-            } catch (e) {
-              toast.error(e instanceof ApiError ? e.message : 'Could not save your change');
-              throw e;
-            }
-          }}
-          onDelete={setToDelete}
-          onMarkUnread={(m) =>
-            markUnread.mutate(m.id, {
-              onSuccess: () => toast.success('Marked as unread from this message'),
-              onError: () => toast.error('Could not mark as unread'),
-            })
-          }
-          onCopyLink={(m) => {
-            const url = `${window.location.origin}/messages/${channelId}?m=${m.seq}`;
-            void navigator.clipboard
-              ?.writeText(url)
-              .then(() => toast.success('Link copied'))
-              .catch(() => toast.error('Could not copy the link'));
-          }}
         />
       )}
 
-      {view && <LiveAnnouncer messages={view.messages} selfId={meUser.id} />}
+      {view && tab === 'messages' && <LiveAnnouncer messages={view.messages} selfId={meUser.id} />}
       <TypingIndicator channelId={channelId} selfId={meUser.id} people={people} />
 
       <div className="px-3 pb-3 sm:px-4 sm:pb-4">
@@ -379,7 +418,9 @@ export function Conversation({ channelId }: { channelId: string }) {
         ) : isMember ? (
           <Composer
             key={channelId}
+            handleRef={composer}
             draftKey={channelId}
+            channelId={channelId}
             autoFocus
             placeholder={perms.isDm ? `Message ${name}` : `Message #${channel.name}`}
             onTyping={() => rt.typing(channelId)}
@@ -387,48 +428,34 @@ export function Conversation({ channelId }: { channelId: string }) {
               const last = [...(view?.messages ?? [])]
                 .reverse()
                 .find((m) => m.authorId === meUser.id && m.kind === 'user' && !m.deletedAt);
-              if (last) setEditingId(last.id);
+              if (last) actions.setEditingId(last.id);
             }}
-            onSubmit={(doc, text) => rt.send(channelId, doc, text)}
+            onSubmit={(doc, text, extra) => rt.send(channelId, doc, text, { files: extra.files })}
           />
         ) : null}
       </div>
 
-      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this message?</AlertDialogTitle>
-            <AlertDialogDescription>
-              It is removed for everyone. A note that a message was deleted stays in its place.
-              {toDelete?.bodyText && (
-                <span className="bg-muted mt-3 block rounded-md p-2 text-left text-foreground italic line-clamp-3">
-                  “{toDelete.bodyText}”
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90 text-white"
-              onClick={() => {
-                const m = toDelete;
-                if (!m) return;
-                del.mutate(m.id, {
-                  onSuccess: ({ message }) =>
-                    qc.setQueryData<ChannelView>(keys.messages(channelId), (cur) =>
-                      cur ? mergeMessages(cur, [message]) : cur,
-                    ),
-                  onError: (e) =>
-                    toast.error(e instanceof ApiError ? e.message : 'Could not delete the message'),
-                });
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {dragging && (
+        <div
+          className="bg-primary/10 border-primary text-primary pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed backdrop-blur-[1px]"
+          role="status"
+        >
+          <Upload className="size-8" aria-hidden />
+          <p className="font-medium">
+            Drop files to share in {perms.isDm ? name : `#${channel.name}`}
+          </p>
+        </div>
+      )}
+
+      {actions.nodes}
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          index={lightbox.index}
+          onIndex={(index) => setLightbox({ ...lightbox, index })}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

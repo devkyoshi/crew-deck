@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import type { PresenceState } from '@crew-deck/shared';
+import type { AttachmentDTO } from '@crew-deck/shared';
 import type { MessageDoc } from '@/lib/messaging-api';
 
 /**
@@ -16,6 +18,12 @@ export interface PendingMessage {
   channelId: string;
   body: MessageDoc;
   text: string;
+  /** Set for replies: the pending message belongs to this thread, not the channel timeline. */
+  threadRootId?: string;
+  alsoInChannel?: boolean;
+  attachmentIds?: string[];
+  /** The files being sent, for showing them while the message is on its way. */
+  files?: AttachmentDTO[];
   status: 'sending' | 'failed';
   error?: string;
   createdAt: number;
@@ -86,5 +94,12 @@ export const useMessaging = create<MessagingState>((set) => ({
 }));
 
 const EMPTY: PendingMessage[] = [];
-export const usePendingFor = (channelId: string) =>
-  useMessaging((s) => s.pending[channelId] ?? EMPTY);
+/** Pending messages of a channel's timeline (thread replies are shown in their thread instead). */
+export const usePendingFor = (channelId: string) => {
+  const all = useMessaging((s) => s.pending[channelId]) ?? EMPTY;
+  return useMemo(() => all.filter((p) => !p.threadRootId || p.alsoInChannel), [all]);
+};
+export const usePendingInThread = (channelId: string, rootId: string) => {
+  const all = useMessaging((s) => s.pending[channelId]) ?? EMPTY;
+  return useMemo(() => all.filter((p) => p.threadRootId === rootId), [all, rootId]);
+};

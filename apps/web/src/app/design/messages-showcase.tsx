@@ -45,6 +45,14 @@ const msg = (over: Partial<MessageDTO>): MessageDTO => ({
   threadRootId: null,
   alsoInChannel: false,
   replyCount: 0,
+  lastReplyAt: null,
+  replyAuthors: [],
+  reactions: [],
+  attachments: [],
+  pinned: false,
+  mentions: [],
+  previews: [],
+  previewsPending: false,
   editedAt: null,
   deletedAt: null,
   createdAt: new Date(now - 5 * 60_000).toISOString(),
@@ -70,12 +78,21 @@ const channel = (over: Partial<MyChannelDTO>): MyChannelDTO => ({
   isStarred: false,
   lastReadSeq: 10,
   unread: 0,
+  mentionCount: 0,
   ...over,
 });
 
 const noop = () => {};
 const rowProps = {
   selfId: ALICE.id,
+  people: new Map([
+    [ALICE.id, ALICE],
+    [BEN.id, BEN],
+  ]),
+  canReact: true,
+  canReply: true,
+  canPin: true,
+  saved: false,
   canModerate: false,
   canEdit: true,
   editing: false,
@@ -86,6 +103,11 @@ const rowProps = {
   onDelete: noop,
   onMarkUnread: noop,
   onCopyLink: noop,
+  onReact: noop,
+  onOpenThread: noop,
+  onTogglePin: noop,
+  onToggleSave: noop,
+  onOpenImage: noop,
 };
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
@@ -117,6 +139,13 @@ export function MessagesShowcase() {
           <li>
             <ConversationListItem
               channel={channel({ name: 'design-review', unread: 3 })}
+              selfId={ALICE.id}
+              href="#"
+            />
+          </li>
+          <li>
+            <ConversationListItem
+              channel={channel({ name: 'releases', unread: 5, mentionCount: 2 })}
               selfId={ALICE.id}
               href="#"
             />
@@ -256,6 +285,91 @@ export function MessagesShowcase() {
               author: GONE,
               authorId: GONE.id,
               body: doc(p(t('A message from someone who has left the company.'))),
+            })}
+            grouped={false}
+          />
+        </div>
+      </Block>
+
+      <Block title="Reactions, threads, pins, files and link cards">
+        <div className="bg-background overflow-hidden rounded-lg border py-2">
+          <MessageRow
+            {...rowProps}
+            message={msg({
+              pinned: true,
+              body: doc(
+                p(t('Release train leaves Friday at 4. Please have your changes merged by lunch.')),
+              ),
+              reactions: [
+                { emoji: '👍', count: 4, userIds: [ALICE.id, BEN.id, 'a', 'b'] },
+                { emoji: '🎉', count: 2, userIds: [BEN.id, 'c'] },
+                { emoji: '👀', count: 1, userIds: ['d'] },
+              ],
+              replyCount: 3,
+              lastReplyAt: new Date(now - 12 * 60_000).toISOString(),
+              replyAuthors: [BEN, ALICE],
+            })}
+            grouped={false}
+          />
+          <MessageRow
+            {...rowProps}
+            message={msg({
+              author: BEN,
+              authorId: BEN.id,
+              mentions: [{ type: 'user', id: ALICE.id }],
+              body: doc(
+                p(
+                  t('Hey '),
+                  { type: 'mention', attrs: { id: ALICE.id, label: 'Alice Acme', kind: 'user' } },
+                  t(', can you review the rollout notes?'),
+                ),
+              ),
+            })}
+            grouped={false}
+          />
+          <MessageRow
+            {...rowProps}
+            message={msg({
+              author: BEN,
+              authorId: BEN.id,
+              body: doc(p(t('Screenshots and the spec are attached.'))),
+              attachments: [
+                {
+                  id: 'f1',
+                  name: 'dashboard.png',
+                  mime: 'image/png',
+                  size: 182_000,
+                  isImage: true,
+                  url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='176'><rect width='256' height='176' fill='%23cbd5e1'/><circle cx='128' cy='88' r='40' fill='%2394a3b8'/></svg>",
+                },
+                {
+                  id: 'f2',
+                  name: 'rollout-spec.pdf',
+                  mime: 'application/pdf',
+                  size: 1_240_000,
+                  isImage: false,
+                  url: '#',
+                },
+              ],
+              previews: [
+                {
+                  url: 'https://example.com/release-notes',
+                  title: 'Release notes: October',
+                  description: 'Everything that shipped this month, with links to the work items.',
+                  imageUrl: null,
+                  siteName: 'Example',
+                },
+              ],
+            })}
+            grouped={false}
+          />
+          <MessageRow
+            {...rowProps}
+            message={msg({
+              body: doc(
+                p(t('A link is being looked up: the space for its card is already reserved.')),
+              ),
+              previewsPending: true,
             })}
             grouped={false}
           />

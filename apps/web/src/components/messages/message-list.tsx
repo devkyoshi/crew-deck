@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import type { ChannelView } from '@/lib/messaging-api';
 import { buildRows, type Row } from '@/lib/messaging-logic';
 import { cn } from '@/lib/utils';
-import { MessageRow, PendingRow, type MessageRowProps } from './message-row';
+import { PendingRow } from './message-row';
 import type { PendingMessage } from './store';
 
 const estimate = (r: Row | undefined) =>
@@ -32,10 +32,10 @@ const estimate = (r: Row | undefined) =>
             ? 26
             : 52;
 
-export interface MessageListProps extends Pick<
-  MessageRowProps,
-  'selfId' | 'canModerate' | 'canEdit' | 'onSaveEdit' | 'onDelete' | 'onMarkUnread' | 'onCopyLink'
-> {
+export interface MessageListProps {
+  selfId: string;
+  /** Renders one message row (the caller owns the actions, so every list behaves alike). */
+  renderMessage: (m: MessageDTO, grouped: boolean, highlighted: boolean) => ReactNode;
   channelId: string;
   view: ChannelView;
   self: PersonDTO;
@@ -43,8 +43,6 @@ export interface MessageListProps extends Pick<
   /** The read cursor when the conversation was opened: drives the "New messages" divider. */
   initialLastReadSeq: number;
   focusSeq: number | null;
-  editingId: string | null;
-  setEditingId: (id: string | null) => void;
   /** Shown at the very top once the whole history is loaded. */
   intro: ReactNode;
   onLoadOlder: () => Promise<void>;
@@ -205,25 +203,6 @@ export function MessageList(props: MessageListProps) {
   const jumpToUnread = () =>
     dividerIndex >= 0 && virt.scrollToIndex(dividerIndex, { align: 'start', behavior: 'smooth' });
 
-  const rowProps = (m: MessageDTO, grouped: boolean) => ({
-    message: m,
-    grouped,
-    selfId,
-    canModerate: props.canModerate,
-    canEdit: props.canEdit,
-    editing: props.editingId === m.id,
-    highlighted: highlight === m.seq,
-    onEdit: props.setEditingId,
-    onCancelEdit: () => props.setEditingId(null),
-    onSaveEdit: async (id: string, doc: Parameters<MessageRowProps['onSaveEdit']>[1]) => {
-      await props.onSaveEdit(id, doc);
-      props.setEditingId(null);
-    },
-    onDelete: props.onDelete,
-    onMarkUnread: props.onMarkUnread,
-    onCopyLink: props.onCopyLink,
-  });
-
   return (
     <div className="relative min-h-0 flex-1">
       <div
@@ -286,7 +265,7 @@ export function MessageList(props: MessageListProps) {
                     <span className="bg-destructive/40 h-px flex-1" />
                   </div>
                 ) : r.kind === 'msg' ? (
-                  <MessageRow {...rowProps(r.m, r.grouped)} />
+                  props.renderMessage(r.m, r.grouped, highlight === r.m.seq)
                 ) : (
                   <PendingRow
                     pending={r.p}

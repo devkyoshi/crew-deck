@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M2: rich messaging
+
+- **Threads:** reply to any message in a side panel; the root shows the reply count, who replied and when. Replies stay out of the channel unless you tick "Also send to channel". People who reply or are mentioned follow the thread; follow or unfollow by hand. Members can reply in announcement channels. Threads do not nest.
+- **Reactions:** an emoji picker with search, recents and skin tones, chips with counts and a "who reacted" tooltip, up to 50 different emoji per message.
+- **Mentions:** `@person`, `@group`, `@channel` and `@here` with autocomplete. Mentioned messages are highlighted for the person and channels show a mention count. In channels with more than 50 people only admins can use `@channel` and `@here`. If someone mentioned is not in the channel you are offered to add them.
+- **Files:** attach with the button, drag onto the conversation or paste images. Progress and cancel, up to 10 files, plan size and storage limits, programs and scripts refused. Images show inline and open in a lightbox with arrow keys; other files are download cards. A Files tab lists everything shared. Every download checks access to the channel.
+- **Link previews:** cards for the links in a message, fetched by a background worker with protection against requests to internal addresses, cached per workspace for a day. Space is reserved while they load.
+- **Pins** (channel owners and admins; everyone in a direct message) with a Pins tab, **saved messages** (private to you) with a Saved page, `:name:` emoji shortcodes, copy link, mark unread.
+- ADR-072 to ADR-075. 31 + 59 + 2 new API and gateway tests, 6 new browser tests (including an accessibility scan with the thread panel open).
+
 ## 2026-10-16 - Messaging, phase M1: real-time core
 
 - **Messages** (sidebar): channels (public and private), direct messages and group messages (up to 8 people), with live delivery, an unread count that follows you across tabs, typing indicators and presence (online, away, do not disturb).

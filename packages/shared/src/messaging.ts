@@ -30,6 +30,41 @@ export type PresenceState = (typeof PRESENCE_STATES)[number];
 
 export type MessageKind = 'user' | 'system' | 'bot';
 
+/** Most distinct emoji one message can carry, and files one message can carry. */
+export const MAX_REACTION_EMOJI = 50;
+export const MAX_FILES_PER_MESSAGE = 10;
+/** In channels with more members than this, only admins may use @channel and @here (default). */
+export const BROADCAST_MENTION_LIMIT = 50;
+
+export interface ReactionDTO {
+  emoji: string;
+  count: number;
+  /** Who reacted (the first 100), so a client can tell whether it did. */
+  userIds: string[];
+}
+
+export interface AttachmentDTO {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  /** A real PNG, JPEG, GIF or WebP: shown inline. Everything else downloads. */
+  isImage: boolean;
+  /** Same-origin address. Every download is checked against the person's access to the channel. */
+  url: string;
+}
+
+export interface LinkPreviewDTO {
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+}
+
+export type MentionTarget =
+  { type: 'user' | 'group'; id: string } | { type: 'channel' | 'here'; id: 'channel' | 'here' };
+
 export interface PersonDTO {
   id: string;
   name: string | null;
@@ -53,6 +88,16 @@ export interface MessageDTO {
   threadRootId: string | null;
   alsoInChannel: boolean;
   replyCount: number;
+  lastReplyAt: string | null;
+  /** Up to three people who replied, for the avatars under the root message. */
+  replyAuthors: PersonDTO[];
+  reactions: ReactionDTO[];
+  attachments: AttachmentDTO[];
+  pinned: boolean;
+  mentions: MentionTarget[];
+  previews: LinkPreviewDTO[];
+  /** Links are being looked up: the client reserves room for the cards. */
+  previewsPending: boolean;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -83,6 +128,8 @@ export interface MyChannelDTO extends ChannelDTO {
   isStarred: boolean;
   lastReadSeq: number;
   unread: number;
+  /** Unread messages that mention me, @channel or @here. */
+  mentionCount: number;
 }
 
 // ---- Socket events ----------------------------------------------------------------------------------
@@ -96,6 +143,7 @@ export const C2S = {
   messageDelete: 'message:delete',
   typingStart: 'typing:start',
   readUpdate: 'read:update',
+  reactionToggle: 'reaction:toggle',
   presenceUpdate: 'presence:update',
   sync: 'sync',
 } as const;
@@ -105,6 +153,8 @@ export const S2C = {
   messageNew: 'message:new',
   messageUpdated: 'message:updated',
   messageDeleted: 'message:deleted',
+  reactionUpdated: 'reaction:updated',
+  threadUpdated: 'thread:updated',
   typing: 'typing',
   presenceChanged: 'presence:changed',
   channelUpdated: 'channel:updated',
@@ -131,7 +181,12 @@ export const messageSendSchema = z.object({
   channelId: uuid,
   clientMsgId: z.string().min(8).max(64),
   body: z.unknown(),
+  attachmentIds: z.array(uuid).max(MAX_FILES_PER_MESSAGE).optional(),
+  /** Set to reply in a thread. Threads do not nest: this must be a top-level message. */
+  threadRootId: uuid.optional(),
+  alsoInChannel: z.boolean().optional(),
 });
+export const reactionToggleSchema = z.object({ messageId: uuid, emoji: z.string().min(1).max(32) });
 export const messageEditSchema = z.object({ messageId: uuid, body: z.unknown() });
 export const messageDeleteSchema = z.object({ messageId: uuid });
 export const typingSchema = z.object({ channelId: uuid });
@@ -166,4 +221,24 @@ export interface MembershipEvent {
   channelId: string;
   /** 'added' means the user is now in the room; 'removed' means they were taken out. */
   change: 'added' | 'removed';
+}
+
+export interface ReactionEvent {
+  channelId: string;
+  messageId: string;
+  reactions: ReactionDTO[];
+}
+export interface ThreadEvent {
+  channelId: string;
+  rootId: string;
+  replyCount: number;
+  lastReplyAt: string | null;
+  replyAuthors: PersonDTO[];
+}
+
+/** What a send returns: the stored message, and mentioned people who are not in the channel. */
+export interface SendResult {
+  message: MessageDTO;
+  duplicate: boolean;
+  notInChannel: PersonDTO[];
 }

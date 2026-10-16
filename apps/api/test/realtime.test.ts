@@ -523,3 +523,53 @@ describe('typing, read state and presence', () => {
     expect(mine().at(-1)).toEqual({ userId: pat.id, state: 'offline' });
   });
 });
+
+describe('threads and reactions over the socket', () => {
+  it('delivers a thread reply and the updated thread summary to the channel', async () => {
+    const a = await ready(client(slug, c.ann));
+    const b = await ready(client(slug, c.bob));
+    const root = await send(a, general, 'Thread starter');
+    if (!root.ok) throw new Error('send failed');
+    await quiet(300); // let the root message's own push arrive first
+    const newMsg = next(b, 'message:new');
+    const summary = next(b, 'thread:updated');
+    const ack = await emit(a, 'message:send', {
+      channelId: general,
+      clientMsgId: msgId(),
+      body: doc('First reply'),
+      threadRootId: root.data.message.id,
+    });
+    expect(ack.ok).toBe(true);
+    expect(await newMsg).toMatchObject({ bodyText: 'First reply', threadRootId: root.data.message.id });
+    expect(await summary).toMatchObject({ rootId: root.data.message.id, replyCount: 1 });
+    // Threads do not nest, over the socket either.
+    const reply = ack.ok ? (ack.data as Json).message : null;
+    expect(
+      await emit(a, 'message:send', { channelId: general, clientMsgId: msgId(), body: doc('nested'), threadRootId: reply.id }),
+    ).toMatchObject({ ok: false, code: 'VALIDATION' });
+  });
+
+  it('broadcasts reactions to the channel, and refuses people who are not in it', async () => {
+    const a = await ready(client(slug, c.ann));
+    const b = await ready(client(slug, c.bob));
+    const m = await send(a, general, 'React to this');
+    if (!m.ok) throw new Error('send failed');
+    const heard = next(a, 'reaction:updated');
+    const ack = await emit(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: '🎉' });
+    expect(ack).toMatchObject({ ok: true });
+    expect(await heard).toMatchObject({ messageId: m.data.message.id, reactions: [{ emoji: '🎉', count: 1 }] });
+    // Toggling again removes it.
+    const off = await emit<Json>(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: '🎉' });
+    expect(off.ok && off.data.reactions).toEqual([]);
+    expect(await emit(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: 'nope' })).toMatchObject({ ok: false, code: 'VALIDATION' });
+
+    // Another workspace cannot react to this message, and never hears about reactions here.
+    const other = await createOrg('rtr');
+    const intruder = await ready(client(other.slug, await signInAs(t.app, other.slug, other.owner)));
+    const spy = record(intruder, 'reaction:updated');
+    expect(await emit(intruder, 'reaction:toggle', { messageId: m.data.message.id, emoji: '👍' })).toMatchObject({ ok: false });
+    await emit(a, 'reaction:toggle', { messageId: m.data.message.id, emoji: '👀' });
+    await quiet(400);
+    expect(spy).toEqual([]);
+  });
+});

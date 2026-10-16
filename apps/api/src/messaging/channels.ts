@@ -140,6 +140,11 @@ export async function listMyChannels(ctx: MessagingCtx, actor: Actor): Promise<M
     actor.userId,
     channels.map((c) => ({ id: c.id, lastSeq: c.lastSeq, lastReadSeq: cursorOf.get(c.id) ?? 0 })),
   );
+  const mentions = await mentionCounts(
+    t,
+    actor.userId,
+    channels.map((c) => ({ id: c.id, lastSeq: c.lastSeq, lastReadSeq: cursorOf.get(c.id) ?? 0 })),
+  );
   return channels.map((c) => {
     const m = memberOf.get(c.id)!;
     return {
@@ -150,8 +155,41 @@ export async function listMyChannels(ctx: MessagingCtx, actor: Actor): Promise<M
       isStarred: m.isStarred,
       lastReadSeq: cursorOf.get(c.id) ?? 0,
       unread: unread.get(c.id) ?? 0,
+      mentionCount: mentions.get(c.id) ?? 0,
     };
   });
+}
+
+/** Unread messages that mention me by name, through one of my groups, or with @channel or @here. */
+export async function mentionCounts(
+  t: TenantDb,
+  userId: string,
+  channels: { id: string; lastSeq: number; lastReadSeq: number }[],
+) {
+  const out = new Map<string, number>();
+  const pending = channels.filter((c) => c.lastSeq > c.lastReadSeq);
+  if (pending.length === 0) return out;
+  const myGroups = (await t.groupMembers.find({ userId }, { projection: { groupId: 1 } })).map(
+    (g) => g.groupId,
+  );
+  await Promise.all(
+    pending.map(async (c) => {
+      const n = await t.messageMentions.count({
+        channelId: c.id,
+        inChannel: true,
+        seq: { $gt: c.lastReadSeq },
+        $or: [
+          { targetType: 'user', targetId: userId },
+          { targetType: { $in: ['channel', 'here'] } },
+          ...(myGroups.length
+            ? [{ targetType: 'group' as const, targetId: { $in: myGroups } }]
+            : []),
+        ],
+      });
+      out.set(c.id, n);
+    }),
+  );
+  return out;
 }
 
 /** Unread = messages after the cursor that someone else wrote, not counting deleted ones or thread replies. */
@@ -196,6 +234,9 @@ export async function getChannel(
   const unread = await unreadCounts(t, actor.userId, [
     { id: channel.id, lastSeq: channel.lastSeq, lastReadSeq },
   ]);
+  const mentions = await mentionCounts(t, actor.userId, [
+    { id: channel.id, lastSeq: channel.lastSeq, lastReadSeq },
+  ]);
   return {
     ...dto,
     role: member.role,
@@ -204,6 +245,7 @@ export async function getChannel(
     isStarred: member.isStarred,
     lastReadSeq,
     unread: unread.get(channel.id) ?? 0,
+    mentionCount: mentions.get(channel.id) ?? 0,
   };
 }
 
@@ -477,10 +519,20 @@ export async function deleteChannel(ctx: MessagingCtx, actor: Actor, channelId: 
   const access = await loadChannel(t, actor, channelId);
   requireChannel(actor, access, 'channel.delete');
   const members = await t.channelMembers.find({ channelId });
+  const files = await t.messageAttachments.find({ channelId });
   await ctx.db.tx(actor.orgId, async (tx) => {
     const ids = (await tx.messages.find({ channelId }, { projection: { id: 1 } })).map((m) => m.id);
     if (ids.length) await tx.messageEdits.deleteMany({ messageId: { $in: ids } });
     await tx.messages.deleteMany({ channelId });
+    // Everything that hangs off the channel's messages goes with them.
+    await Promise.all([
+      tx.messageReactions.deleteMany({ channelId }),
+      tx.messageMentions.deleteMany({ channelId }),
+      tx.pins.deleteMany({ channelId }),
+      tx.savedMessages.deleteMany({ channelId }),
+      tx.threadFollows.deleteMany({ channelId }),
+      tx.messageAttachments.deleteMany({ channelId }),
+    ]);
     await tx.readCursors.deleteMany({ channelId });
     await tx.channelMembers.deleteMany({ channelId });
     await tx.channels.deleteOne({ id: channelId });
@@ -493,6 +545,8 @@ export async function deleteChannel(ctx: MessagingCtx, actor: Actor, channelId: 
       before: { name: access.channel.name, type: access.channel.type },
     });
   });
+  // The records are gone; the bytes follow once the transaction has committed.
+  await Promise.all(files.map((f) => ctx.storage?.delete(f.storageKey).catch(() => undefined)));
   for (const m of members) announceMembership(ctx, actor.orgId, m.userId, channelId, 'removed');
 }
 
@@ -521,6 +575,8 @@ async function joinOne(
   userId: string,
   role: 'owner' | 'member' = 'member',
 ) {
+  // Checked first: a duplicate insert inside the transaction below would abort it.
+  if (await t.channelMembers.exists({ channelId: channel.id, userId })) return false;
   const stored = await ctx.db.tx(t.orgId, async (tx) => {
     const added = await tx.channelMembers.insertIgnore({ channelId: channel.id, userId, role });
     if (!added) return null;
@@ -612,6 +668,7 @@ export async function removeMember(
   const stored = await ctx.db.tx(actor.orgId, async (tx) => {
     await tx.channelMembers.deleteOne({ channelId, userId });
     await tx.readCursors.deleteOne({ channelId, userId });
+    await tx.threadFollows.deleteMany({ channelId, userId });
     if (!self) {
       await writeAudit(tx, {
         orgId: actor.orgId,
@@ -692,6 +749,7 @@ export async function onMemberDeactivated(ctx: MessagingCtx, orgId: string, user
   const t = ctx.db.tenant(orgId);
   await t.channelMembers.deleteMany({ userId });
   await t.readCursors.deleteMany({ userId });
+  await t.threadFollows.deleteMany({ userId });
   // Reactivating them later puts them back in the default channels.
   await t.memberships.updateOne({ userId }, { messagingInitAt: null });
   ctx.events.disconnectUser(orgId, userId);

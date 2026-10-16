@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  AttachmentDTO,
   ChannelDTO,
   MessageDTO,
   MyChannelDTO,
@@ -9,7 +10,7 @@ import type {
   PersonDTO,
   PresenceState,
 } from '@crew-deck/shared';
-import { api, qs, type Member, type Page } from '@/lib/api';
+import { api, ApiError, qs, type Member, type Page } from '@/lib/api';
 import { mergeMessages, type ChannelView } from '@/lib/messaging-logic';
 import { useHydrated } from '@/components/checkin/use-hydrated';
 
@@ -51,7 +52,40 @@ export const keys = {
   browse: (search: string) => ['messaging', 'browse', search] as const,
   people: (search: string) => ['messaging', 'people', search] as const,
   presence: (ids: string) => ['messaging', 'presence', ids] as const,
+  thread: (rootId: string) => ['messaging', 'thread', rootId] as const,
+  pins: (channelId: string) => ['messaging', 'pins', channelId] as const,
+  files: (channelId: string) => ['messaging', 'files', channelId] as const,
+  saved: ['messaging', 'saved'] as const,
+  threads: ['messaging', 'threads'] as const,
 };
+
+/** A thread: its root message and replies (oldest first). */
+export interface ThreadView {
+  root: MessageDTO;
+  replies: MessageDTO[];
+  hasMore: boolean;
+  following: boolean;
+  lastReadSeq: number;
+}
+
+export interface SavedItem {
+  message: MessageDTO;
+  channel: { id: string; type: ChannelDTO['type']; name: string | null };
+  savedAt: string;
+}
+
+export interface ChannelFile extends AttachmentDTO {
+  messageId: string;
+  seq: number | null;
+  uploader: PersonDTO | null;
+  createdAt: string;
+}
+
+export interface ThreadSummary {
+  root: MessageDTO;
+  unread: number;
+  latestReply: MessageDTO | null;
+}
 
 // ---- Pure helpers on the cached view ----------------------------------------------------------------
 
@@ -313,11 +347,16 @@ export function channelPerms(
     isDm,
     member,
     owner,
+    isArchived: channel.isArchived,
     canPost: member && !channel.isArchived && (!channel.isAnnouncement || owner || isAdmin),
     canManage: !isDm && (isAdmin || owner),
     canDeleteChannel: !isDm && isAdmin,
     canModerate: !isDm && (owner || (isAdmin && (channel.type === 'public' || member))),
     canLeave: member && channel.type !== 'dm',
+    /** Reacting and replying in a thread stay open to members of announcement channels. */
+    canReact: member && !channel.isArchived,
+    canReply: member && !channel.isArchived,
+    canPin: member && !channel.isArchived && (isDm || owner || isAdmin),
   };
 }
 
@@ -330,9 +369,217 @@ export function useUnreadSummary() {
   let dms = 0;
   let channels = 0;
   for (const c of list ?? []) {
-    if (c.unread <= 0 || c.notificationLevel === 'none') continue;
+    if (c.notificationLevel === 'none') continue;
+    // Mentions count like direct messages: they are addressed to me.
+    dms += c.mentionCount;
+    if (c.unread <= 0) continue;
     if (c.type === 'dm' || c.type === 'group_dm') dms += c.unread;
     else channels += 1;
   }
   return { dms, channels };
+}
+
+// ---- Threads, pins, saved and files --------------------------------------------------------------------
+
+export const useThread = (rootId: string | null) =>
+  useQuery({
+    queryKey: keys.thread(rootId ?? ''),
+    queryFn: () => api<ThreadView>(`/messages/${rootId}/replies`),
+    enabled: !!rootId,
+    staleTime: Infinity,
+  });
+
+export const usePins = (channelId: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.pins(channelId),
+    queryFn: async () => (await api<{ pins: MessageDTO[] }>(`/channels/${channelId}/pins`)).pins,
+    enabled,
+  });
+
+export const useSaved = () =>
+  useQuery({
+    queryKey: keys.saved,
+    queryFn: async () => (await api<{ saved: SavedItem[] }>('/me/saved')).saved,
+    staleTime: 60_000,
+  });
+
+export const useChannelFiles = (channelId: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.files(channelId),
+    queryFn: async () =>
+      (await api<{ files: ChannelFile[] }>(`/channels/${channelId}/files`)).files,
+    enabled,
+  });
+
+export const useThreadsList = () =>
+  useQuery({
+    queryKey: keys.threads,
+    queryFn: async () => (await api<{ threads: ThreadSummary[] }>('/threads')).threads,
+    staleTime: 30_000,
+  });
+
+/**
+ * Applies a change to one message wherever it is cached: the channel timeline, an open thread (as root or
+ * reply), the pin list and the saved list. Used for reactions, pins and edits arriving live.
+ */
+export function patchMessageEverywhere(
+  qc: QueryClient,
+  messageId: string,
+  fn: (m: MessageDTO) => MessageDTO,
+) {
+  const touch = (m: MessageDTO) => (m.id === messageId ? fn(m) : m);
+  qc.setQueriesData<ChannelView>({ queryKey: ['messaging', 'messages'] }, (v) =>
+    v && v.messages.some((m) => m.id === messageId) ? { ...v, messages: v.messages.map(touch) } : v,
+  );
+  qc.setQueriesData<ThreadView>({ queryKey: ['messaging', 'thread'] }, (v) =>
+    v && (v.root.id === messageId || v.replies.some((m) => m.id === messageId))
+      ? { ...v, root: touch(v.root), replies: v.replies.map(touch) }
+      : v,
+  );
+  qc.setQueriesData<MessageDTO[]>({ queryKey: ['messaging', 'pins'] }, (v) =>
+    v?.some((m) => m.id === messageId) ? v.map(touch) : v,
+  );
+  qc.setQueriesData<SavedItem[]>({ queryKey: keys.saved }, (v) =>
+    v?.some((s) => s.message.id === messageId)
+      ? v.map((s) => ({ ...s, message: touch(s.message) }))
+      : v,
+  );
+}
+
+export function useSetPinned(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { messageId: string; pinned: boolean }) =>
+      v.pinned
+        ? api<{ message: MessageDTO }>(`/channels/${channelId}/pins`, {
+            method: 'POST',
+            body: { messageId: v.messageId },
+          })
+        : api<{ message: MessageDTO }>(`/channels/${channelId}/pins/${v.messageId}`, {
+            method: 'DELETE',
+          }),
+    onSuccess: ({ message }) => {
+      patchMessageEverywhere(qc, message.id, () => message);
+      void qc.invalidateQueries({ queryKey: keys.pins(channelId) });
+    },
+  });
+}
+
+export function useSetSaved() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { messageId: string; saved: boolean }) =>
+      api<{ saved: boolean }>(`/me/saved/${v.messageId}`, { method: v.saved ? 'PUT' : 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.saved }),
+  });
+}
+
+/** The ids of the messages I saved, for the star on each message. */
+export function useSavedIds() {
+  const hydrated = useHydrated();
+  const saved = useSaved().data;
+  return new Set(hydrated ? (saved ?? []).map((s) => s.message.id) : []);
+}
+
+export function useSetFollow(rootId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (follow: boolean) =>
+      api<{ following: boolean }>(`/messages/${rootId}/follow`, {
+        method: follow ? 'PUT' : 'DELETE',
+      }),
+    onSuccess: ({ following }) => {
+      qc.setQueryData<ThreadView>(keys.thread(rootId), (v) => (v ? { ...v, following } : v));
+      void qc.invalidateQueries({ queryKey: keys.threads });
+    },
+  });
+}
+
+/** Uploads one file for a channel. Reports progress and can be cancelled. Resolves with the unsent file. */
+export function uploadChannelFile(
+  channelId: string,
+  file: File,
+  opts: { onProgress?: (pct: number) => void; signal?: AbortSignal } = {},
+): Promise<AttachmentDTO> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/v1/channels/${channelId}/uploads`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) =>
+      e.lengthComputable && opts.onProgress?.(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () => {
+      let data: { file?: AttachmentDTO; message?: string; code?: string } | null = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        /* not JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data?.file) return resolve(data.file);
+      if (xhr.status === 401) window.location.assign('/sign-in');
+      reject(
+        new ApiError(
+          xhr.status,
+          data?.code ?? 'error',
+          data?.message ?? 'Could not upload that file',
+        ),
+      );
+    };
+    xhr.onerror = () =>
+      reject(new ApiError(0, 'network', 'Could not upload. Check your connection and try again.'));
+    xhr.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
+    opts.signal?.addEventListener('abort', () => xhr.abort());
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
+}
+
+export const discardUpload = (fileId: string) =>
+  api<void>(`/uploads/${fileId}`, { method: 'DELETE' }).catch(() => undefined);
+
+// ---- Mention suggestions -------------------------------------------------------------------------------------
+
+export interface Mentionable {
+  kind: 'user' | 'group' | 'channel' | 'here';
+  id: string;
+  label: string;
+  sub?: string;
+  avatarUrl?: string | null;
+}
+
+/** People, groups, and @channel / @here matching what was typed after the @. */
+export async function searchMentionables(query: string): Promise<Mentionable[]> {
+  const q = query.trim();
+  const [people, groups] = await Promise.all([
+    api<Page<Member>>(`/members${qs({ q: q || undefined, status: 'active', pageSize: 6 })}`).catch(
+      () => null,
+    ),
+    api<{ items: { id: string; name: string; memberCount: number }[] }>(
+      `/groups${qs({ q: q || undefined, pageSize: 3 })}`,
+    ).catch(() => null),
+  ]);
+  // Names that start with what was typed (first or last name) come before names that merely contain it.
+  const starts = (m: Member) =>
+    q === '' ||
+    (m.name ?? m.email)
+      .toLowerCase()
+      .split(/\s+/)
+      .some((w) => w.startsWith(q.toLowerCase()));
+  const ranked = [...(people?.items ?? [])].sort((a, b) => Number(starts(b)) - Number(starts(a)));
+  const out: Mentionable[] = ranked.map((m) => ({
+    kind: 'user',
+    id: m.id,
+    label: m.name ?? m.email,
+    sub: m.jobTitle ?? m.email,
+    avatarUrl: m.avatarUrl,
+  }));
+  for (const g of groups?.items ?? []) {
+    out.push({ kind: 'group', id: g.id, label: g.name, sub: `Group · ${g.memberCount} people` });
+  }
+  const special: Mentionable[] = [
+    { kind: 'channel', id: 'channel', label: 'channel', sub: 'Notify everyone in this channel' },
+    { kind: 'here', id: 'here', label: 'here', sub: 'Notify people who are online' },
+  ];
+  out.push(...special.filter((s) => !q || s.label.startsWith(q.toLowerCase())));
+  return out.slice(0, 10);
 }

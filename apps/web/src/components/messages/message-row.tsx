@@ -2,18 +2,23 @@
 
 import { memo } from 'react';
 import {
+  Bookmark,
+  BookmarkCheck,
   Bot,
   CornerDownRight,
   Link2,
   MailOpen,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   RotateCw,
   Trash2,
   TriangleAlert,
   X,
 } from 'lucide-react';
-import type { MessageDTO } from '@crew-deck/shared';
+import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,13 +28,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { personName } from '@/lib/messaging-api';
+import { personName, type MessageDoc } from '@/lib/messaging-api';
 import { cn } from '@/lib/utils';
 import { Composer } from './composer';
+import { EmojiPickerButton } from './emoji-picker';
+import { AttachmentList, PreviewCards, ReactionBar, ThreadSummaryLink } from './message-parts';
 import { PersonAvatar } from './person-avatar';
 import { RichContent } from './rich-content';
 import type { PendingMessage } from './store';
-import type { PersonDTO } from '@crew-deck/shared';
 
 export const timeOf = (iso: string | number) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -47,43 +53,68 @@ export interface MessageRowProps {
   /** Same author as the message above within five minutes: no avatar or name. */
   grouped: boolean;
   selfId: string;
+  /** Everyone we know by id, for naming who reacted. */
+  people: Map<string, PersonDTO>;
   /** Channel owner or org admin: may delete anyone's message. */
   canModerate: boolean;
   /** The conversation accepts changes (not archived, and I am in it). */
   canEdit: boolean;
+  canReact: boolean;
+  /** Replying in a thread is open to members even in announcement channels. */
+  canReply: boolean;
+  canPin: boolean;
+  saved: boolean;
+  /** Shown inside a thread panel: no thread summary or "reply in thread". */
+  inThread?: boolean;
   editing: boolean;
   highlighted: boolean;
   onEdit: (id: string) => void;
   onCancelEdit: () => void;
-  onSaveEdit: (
-    id: string,
-    doc: Parameters<React.ComponentProps<typeof Composer>['onSubmit']>[0],
-  ) => Promise<void>;
+  onSaveEdit: (id: string, doc: MessageDoc) => Promise<void>;
   onDelete: (m: MessageDTO) => void;
   onMarkUnread: (m: MessageDTO) => void;
   onCopyLink: (m: MessageDTO) => void;
+  onReact: (m: MessageDTO, emoji: string) => void;
+  onOpenThread: (m: MessageDTO) => void;
+  onTogglePin: (m: MessageDTO) => void;
+  onToggleSave: (m: MessageDTO) => void;
+  onOpenImage: (images: AttachmentDTO[], index: number) => void;
 }
 
 function HoverToolbar({
   m,
   own,
-  canEdit,
   canDelete,
   p,
 }: {
   m: MessageDTO;
   own: boolean;
-  canEdit: boolean;
   canDelete: boolean;
   p: MessageRowProps;
 }) {
   return (
     <div
-      className="bg-background absolute -top-3.5 right-4 z-10 flex items-center rounded-md border p-0.5 opacity-0 shadow-sm transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 has-[[data-state=open]]:opacity-100"
+      className="bg-background absolute -top-3.5 right-4 z-10 flex items-center rounded-md border p-0.5 opacity-0 shadow-sm transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 has-[[data-state=open]]:opacity-100 pointer-coarse:opacity-100"
       role="toolbar"
       aria-label="Message actions"
     >
-      {own && canEdit && (
+      {p.canReact && <EmojiPickerButton onPick={(e) => p.onReact(m, e)} />}
+      {p.canReply && !p.inThread && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Reply in thread"
+              onClick={() => p.onOpenThread(m)}
+            >
+              <MessageSquare />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Reply in thread</TooltipContent>
+        </Tooltip>
+      )}
+      {own && p.canEdit && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -109,15 +140,29 @@ function HoverToolbar({
           </TooltipTrigger>
           <TooltipContent>More</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuContent align="end" className="min-w-52">
+          {p.canReply && !p.inThread && (
+            <DropdownMenuItem onSelect={() => p.onOpenThread(m)}>
+              <MessageSquare /> Reply in thread
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => p.onToggleSave(m)}>
+            {p.saved ? <BookmarkCheck /> : <Bookmark />}{' '}
+            {p.saved ? 'Remove from saved' : 'Save for later'}
+          </DropdownMenuItem>
+          {p.canPin && (
+            <DropdownMenuItem onSelect={() => p.onTogglePin(m)}>
+              {m.pinned ? <PinOff /> : <Pin />} {m.pinned ? 'Unpin from channel' : 'Pin to channel'}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => p.onMarkUnread(m)}>
             <MailOpen /> Mark unread
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => p.onCopyLink(m)}>
             <Link2 /> Copy link
           </DropdownMenuItem>
-          {(own && canEdit) || canDelete ? <DropdownMenuSeparator /> : null}
-          {own && canEdit && (
+          {(own && p.canEdit) || canDelete ? <DropdownMenuSeparator /> : null}
+          {own && p.canEdit && (
             <DropdownMenuItem onSelect={() => p.onEdit(m.id)}>
               <Pencil /> Edit message
             </DropdownMenuItem>
@@ -158,6 +203,14 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
 
   const deleted = !!m.deletedAt;
   const canDelete = !deleted && p.canEdit && (own || p.canModerate);
+  const mentionsMe =
+    !own &&
+    !deleted &&
+    m.mentions.some(
+      (x) => (x.type === 'user' && x.id === p.selfId) || x.type === 'channel' || x.type === 'here',
+    );
+  // A thread reply that was also sent to the channel says where it came from.
+  const alsoFromThread = !p.inThread && m.threadRootId && m.alsoInChannel;
 
   return (
     <article
@@ -166,6 +219,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
       className={cn(
         'group/row relative flex gap-3 px-4 transition-colors hover:bg-muted/50 focus-within:bg-muted/50',
         p.grouped ? 'py-px' : 'pt-2 pb-px',
+        mentionsMe && 'border-l-2 border-amber-400 bg-amber-50/70 pl-3.5 dark:bg-amber-500/10',
         p.highlighted && 'bg-primary/10 hover:bg-primary/10',
       )}
     >
@@ -183,6 +237,11 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
         )}
       </div>
       <div className="min-w-0 flex-1 pb-0.5">
+        {m.pinned && !deleted && (
+          <p className="text-muted-foreground mb-0.5 flex items-center gap-1 text-xs">
+            <Pin className="size-3" aria-hidden /> Pinned
+          </p>
+        )}
         {!p.grouped && (
           <header className="flex items-baseline gap-2">
             <span
@@ -208,6 +267,15 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
             >
               {timeOf(m.createdAt)}
             </time>
+            {alsoFromThread && (
+              <button
+                type="button"
+                onClick={() => p.onOpenThread(m)}
+                className="text-muted-foreground hover:text-primary text-xs hover:underline"
+              >
+                replied to a thread
+              </button>
+            )}
           </header>
         )}
         {p.editing && !deleted ? (
@@ -222,22 +290,34 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
         ) : deleted ? (
           <p className="text-muted-foreground text-[13px] italic">This message was deleted</p>
         ) : (
-          <div className="flex items-end gap-1.5">
-            <RichContent doc={m.body} />
-            {m.editedAt && (
-              <span
-                className="text-muted-foreground shrink-0 text-[11px]"
-                title={`Edited ${fullTime(m.editedAt)}`}
-              >
-                (edited)
-              </span>
+          <>
+            {(m.bodyText || m.attachments.length === 0) && (
+              <div className="flex items-end gap-1.5">
+                <RichContent doc={m.body} />
+                {m.editedAt && (
+                  <span
+                    className="text-muted-foreground shrink-0 text-[11px]"
+                    title={`Edited ${fullTime(m.editedAt)}`}
+                  >
+                    (edited)
+                  </span>
+                )}
+              </div>
             )}
-          </div>
+            <AttachmentList attachments={m.attachments} onOpenImage={p.onOpenImage} />
+            <PreviewCards previews={m.previews} pending={m.previewsPending} />
+            <ReactionBar
+              message={m}
+              selfId={p.selfId}
+              people={p.people}
+              canReact={p.canReact}
+              onToggle={(emoji) => p.onReact(m, emoji)}
+            />
+            {!p.inThread && <ThreadSummaryLink message={m} onOpen={() => p.onOpenThread(m)} />}
+          </>
         )}
       </div>
-      {!p.editing && !deleted && (
-        <HoverToolbar m={m} own={own} canEdit={p.canEdit} canDelete={canDelete} p={p} />
-      )}
+      {!p.editing && !deleted && <HoverToolbar m={m} own={own} canDelete={canDelete} p={p} />}
     </article>
   );
 });
@@ -273,7 +353,16 @@ export function PendingRow({
           </header>
         )}
         <div className={cn(!failed && 'opacity-60')}>
-          <RichContent doc={pending.body} />
+          {pending.text && <RichContent doc={pending.body} />}
+          {pending.files?.length ? (
+            <ul className="mt-1 flex flex-wrap gap-1.5 text-[13px]">
+              {pending.files.map((f) => (
+                <li key={f.id} className="bg-muted rounded-md px-2 py-1">
+                  {f.name}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         {failed && (
           <div

@@ -31,6 +31,18 @@ import {
 import { announcePresence, Presence } from '../messaging/presence.js';
 import { markAllRead, markUnread, myUnreads, setRead } from '../messaging/read-state.js';
 import type { Redis } from 'ioredis';
+import { MAX_FILES_PER_MESSAGE } from '@crew-deck/shared';
+import { notFound } from '../lib/errors.js';
+import { toggleReaction } from '../messaging/reactions.js';
+import { listPins, listSaved, setPinned, setSaved } from '../messaging/pins.js';
+import { listReplies, listThreads, markThreadRead, setFollow } from '../messaging/threads.js';
+import {
+  discardChannelFile,
+  listChannelFiles,
+  receiveChannelFile,
+  serveMessageFile,
+} from '../messaging/files.js';
+import type { StorageDriver } from '../storage/index.js';
 
 const id = z.object({ id: z.string().uuid() });
 const uuids = z.array(z.string().uuid()).min(1).max(200);
@@ -45,6 +57,7 @@ const text = (max: number) =>
 export interface MessagingDeps extends AuthDeps {
   messaging: MessagingCtx;
   redis: Redis;
+  storage: StorageDriver;
 }
 
 /** Channels, direct messages, messages, read state and presence. Thin: the services hold the rules. */
@@ -220,7 +233,11 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
       ...pre,
       schema: {
         params: id,
-        body: z.object({ clientMsgId: z.string().min(8).max(64), body: z.unknown() }),
+        body: z.object({
+          clientMsgId: z.string().min(8).max(64),
+          body: z.unknown(),
+          attachmentIds: z.array(z.string().uuid()).max(MAX_FILES_PER_MESSAGE).optional(),
+        }),
       },
     },
     async (req, reply) => {
@@ -228,6 +245,7 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
         channelId: req.params.id,
         clientMsgId: req.body.clientMsgId,
         body: req.body.body,
+        attachmentIds: req.body.attachmentIds,
       });
       reply.status(out.duplicate ? 200 : 201);
       return out;
@@ -260,6 +278,155 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
   );
   r.post('/me/read-all', pre, async (req) => markAllRead(ctx, actorOf(req)));
   r.get('/me/unreads', pre, async (req) => ({ unreads: await myUnreads(ctx, actorOf(req)) }));
+
+  // ---- Threads -------------------------------------------------------------------------------------
+
+  r.get(
+    '/messages/:id/replies',
+    {
+      ...pre,
+      schema: {
+        params: id,
+        querystring: z.object({
+          after_seq: z.coerce.number().int().min(0).optional(),
+          limit: z.coerce.number().int().min(1).max(200).optional(),
+        }),
+      },
+    },
+    async (req) =>
+      listReplies(ctx, actorOf(req), req.params.id, {
+        afterSeq: req.query.after_seq,
+        limit: req.query.limit,
+      }),
+  );
+
+  r.post(
+    '/messages/:id/replies',
+    {
+      ...pre,
+      schema: {
+        params: id,
+        body: z.object({
+          clientMsgId: z.string().min(8).max(64),
+          body: z.unknown(),
+          alsoInChannel: z.boolean().optional(),
+          attachmentIds: z.array(z.string().uuid()).max(MAX_FILES_PER_MESSAGE).optional(),
+        }),
+      },
+    },
+    async (req, reply) => {
+      const actor = actorOf(req);
+      const root = await deps.db.tenant(actor.orgId).messages.get(req.params.id);
+      if (!root) throw notFound('Message');
+      const out = await sendMessage(ctx, actor, {
+        channelId: root.channelId,
+        clientMsgId: req.body.clientMsgId,
+        body: req.body.body,
+        attachmentIds: req.body.attachmentIds,
+        threadRootId: root.id,
+        alsoInChannel: req.body.alsoInChannel,
+      });
+      reply.status(out.duplicate ? 200 : 201);
+      return out;
+    },
+  );
+
+  r.put('/messages/:id/follow', { ...pre, schema: { params: id } }, async (req) =>
+    setFollow(ctx, actorOf(req), req.params.id, true),
+  );
+  r.delete('/messages/:id/follow', { ...pre, schema: { params: id } }, async (req) =>
+    setFollow(ctx, actorOf(req), req.params.id, false),
+  );
+  r.put(
+    '/messages/:id/follow/read',
+    { ...pre, schema: { params: id, body: z.object({ seq: z.number().int().min(0) }) } },
+    async (req) => markThreadRead(ctx, actorOf(req), req.params.id, req.body.seq),
+  );
+  r.get('/threads', pre, async (req) => ({ threads: await listThreads(ctx, actorOf(req)) }));
+
+  // ---- Reactions, pins and saved messages --------------------------------------------------------------
+
+  const emojiParam = id.extend({ emoji: z.string().min(1).max(64) });
+  r.put(
+    '/messages/:id/reactions/:emoji',
+    { ...pre, schema: { params: emojiParam } },
+    async (req) => ({
+      reactions: await toggleReaction(ctx, actorOf(req), req.params.id, req.params.emoji, true),
+    }),
+  );
+  r.delete(
+    '/messages/:id/reactions/:emoji',
+    { ...pre, schema: { params: emojiParam } },
+    async (req) => ({
+      reactions: await toggleReaction(ctx, actorOf(req), req.params.id, req.params.emoji, false),
+    }),
+  );
+
+  r.get('/channels/:id/pins', { ...pre, schema: { params: id } }, async (req) => ({
+    pins: await listPins(ctx, actorOf(req), req.params.id),
+  }));
+  r.post(
+    '/channels/:id/pins',
+    { ...pre, schema: { params: id, body: z.object({ messageId: z.string().uuid() }) } },
+    async (req, reply) => {
+      const message = await setPinned(ctx, actorOf(req), req.body.messageId, true);
+      if (message.channelId !== req.params.id) throw notFound('Message');
+      reply.status(201);
+      return { message };
+    },
+  );
+  r.delete(
+    '/channels/:id/pins/:messageId',
+    { ...pre, schema: { params: id.extend({ messageId: z.string().uuid() }) } },
+    async (req) => ({ message: await setPinned(ctx, actorOf(req), req.params.messageId, false) }),
+  );
+
+  r.get('/me/saved', pre, async (req) => ({ saved: await listSaved(ctx, actorOf(req)) }));
+  const savedParam = z.object({ messageId: z.string().uuid() });
+  r.put('/me/saved/:messageId', { ...pre, schema: { params: savedParam } }, async (req) =>
+    setSaved(ctx, actorOf(req), req.params.messageId, true),
+  );
+  r.delete('/me/saved/:messageId', { ...pre, schema: { params: savedParam } }, async (req) =>
+    setSaved(ctx, actorOf(req), req.params.messageId, false),
+  );
+
+  // ---- Files -------------------------------------------------------------------------------------------
+
+  const uploadLimit = { rateLimit: { max: 60, timeWindow: '1 minute' } };
+  r.post(
+    '/channels/:id/uploads',
+    { ...pre, config: uploadLimit, schema: { params: id } },
+    async (req, reply) => {
+      const file = await receiveChannelFile(
+        req,
+        { db: deps.db, storage: deps.storage },
+        actorOf(req),
+        req.params.id,
+      );
+      reply.status(201);
+      return { file };
+    },
+  );
+  r.delete('/uploads/:id', { ...pre, schema: { params: id } }, async (req, reply) => {
+    await discardChannelFile({ db: deps.db, storage: deps.storage }, actorOf(req), req.params.id);
+    return reply.status(204).send();
+  });
+  r.get('/message-files/:id', { ...pre, schema: { params: id } }, async (req, reply) =>
+    serveMessageFile({ db: deps.db, storage: deps.storage }, actorOf(req), req.params.id, reply),
+  );
+  r.get(
+    '/channels/:id/files',
+    {
+      ...pre,
+      schema: {
+        params: id,
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }),
+      },
+    },
+    async (req) => ({
+      files: await listChannelFiles(deps, actorOf(req), req.params.id, req.query.limit),
+    }),
+  );
 
   // ---- Presence and status ------------------------------------------------------------------------
 

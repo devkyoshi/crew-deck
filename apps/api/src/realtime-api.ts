@@ -22,5 +22,8 @@ export { Presence, announcePresence } from './messaging/presence.js';
 export type { MessagingCtx } from './messaging/context.js';
 export { sendMessage, editMessage, deleteMessage, syncChannels } from './messaging/messages.js';
 export { setRead } from './messaging/read-state.js';
+export { toggleReaction } from './messaging/reactions.js';
+export { createLinkPreviewEnqueuer } from './messaging/link-preview.js';
+export { createStorage } from './storage/index.js';
 export { ensureBootstrap } from './messaging/channels.js';
 export type { Actor } from './permissions/can.js';

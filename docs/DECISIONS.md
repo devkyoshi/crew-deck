@@ -348,6 +348,29 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-075: Reactions, mentions, pins and saved messages
+
+- Reactions are one row per person and emoji (`message_reactions`, unique), validated as real emoji (skin tones, flags and joined sequences, never free text). The DTO carries the first 100 people per emoji so a client can tell whether it reacted; changes go out as `reaction:updated` to the channel room. Members can react in announcement channels; archived channels and non-members cannot.
+- Mentions are nodes in the message body (`kind` is user, group, channel or here) and rows in `message_mentions` with the message's `seq` and whether it sits on the channel timeline. Mentions of people who are not in the workspace or groups that do not exist are dropped. `@channel` and `@here` are limited to admins above 50 members (a constant for now; the admin setting arrives in M5). A mentioned person who is not in the channel is returned as `notInChannel` so the author can be offered to add them. The channel mention count (people, my groups, `@channel`, `@here`, only on the timeline) is derived from `message_mentions` after the read cursor.
+- Pins are channel-wide (`pins`); saved messages are personal (`saved_messages`) and silently disappear from the list when access to the channel is lost, but can always be removed. Group, `@channel` and `@here` mentions are refused in work item text (`sanitizeDoc` only allows them for messages).
+
+## ADR-074: Link previews are fetched by a worker with SSRF guards, and cached per workspace
+
+- A message with links is stored first with `previewsPending` (so the client reserves the card's space); a BullMQ job fetches each link (at most three) and the message is updated and re-sent as `message:updated`. Results, including failures, are cached in `link_previews` (workspace-scoped) for a day.
+- Fetching only speaks http and https on ports 80 and 443, refuses credentials in the address, literal and resolved internal addresses (loopback, private, link-local, carrier-grade NAT, multicast, documentation ranges and the IPv6 equivalents including mapped, 6to4, Teredo and NAT64), checks the addresses the connection actually uses (so DNS rebinding does not help) and re-checks every redirect hop (three at most). It reads at most 512 KB of `text/html` within five seconds and parses Open Graph tags with no HTML engine. Preview images are shown with no referrer and a broken one simply disappears.
+
+## ADR-073: Message files stream through the API and are checked on every download
+
+- The brief asks for direct uploads by signed URL. The storage drivers (local disk and S3) already stream through the API for work items, with the plan limits and the executable checks, so messages reuse them: `POST /channels/:id/uploads` takes one multipart file and creates an unsent `message_attachments` row; the message that carries it claims it. Unsent files are visible to their uploader only and are swept after a day. Chat files count toward the workspace's storage.
+- Downloads are `GET /message-files/:id` with the session: the person must be able to see the channel (member, or anyone for a public channel). That is stricter than a short-lived signed link and never expires under a cached page. Only sniffed PNG, JPEG, GIF and WebP show inline; everything else downloads. Deleting a message, a channel or (via the sweep) leaving a file unsent removes the bytes.
+- No generated thumbnails or PDF previews yet (images are scaled by the browser in a fixed box); a virus-scan hook is not wired. Both belong with the retention work in M5.
+
+## ADR-072: Threads live in the channel's seq space and the root carries the summary
+
+- A reply is a message with `threadRootId` set, numbered from the same per-channel counter (so ordering, idempotency and `sync` work unchanged). The timeline query shows replies only when `alsoInChannel` is set, and unread counts exclude the others. Threads do not nest.
+- The root keeps `replyCount`, `lastReplyAt` and `replyAuthors`, updated in the reply's transaction, and the channel is told through `thread:updated`. Followers are rows in `thread_follows` with a per-person read position; the Threads list endpoint (`GET /threads`, the Threads page is M3) computes unread replies from it. Replying to a deleted root is allowed; the tombstone keeps the thread.
+- Inside a transaction a failed insert aborts everything, so the follow, join and similar writes there are upserts or are checked first.
+
 ## ADR-071: Messaging has no row-level security: the repository layer is the boundary, rooms are server-decided
 
 - The brief assumed Postgres row-level security; the platform is on MongoDB (ADR-051), so every messaging collection (`channels`, `channel_members`, `messages`, `message_edits`, `read_cursors`, `user_statuses`) is a tenant collection in `TenantDb`: `orgId` is added to every filter and stamped on every insert.

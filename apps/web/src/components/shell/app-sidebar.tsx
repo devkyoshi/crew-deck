@@ -84,9 +84,16 @@ function TenantSwitcher() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" aria-label="Switch workspace" className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:size-9!">
+            <SidebarMenuButton
+              size="lg"
+              aria-label="Switch workspace"
+              className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:size-9!"
+            >
               {label}
-              <ChevronsUpDown className="size-3.5 opacity-60 group-data-[collapsible=icon]:hidden" aria-hidden />
+              <ChevronsUpDown
+                className="size-3.5 opacity-60 group-data-[collapsible=icon]:hidden"
+                aria-hidden
+              />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56">
@@ -156,13 +163,15 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                         </Link>
                       </SidebarMenuButton>
                       {item.href === '/messages' && unread.dms > 0 && (
-                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground rounded-full" aria-label={`${unread.dms} unread direct messages`}>
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground rounded-full">
                           {unread.dms > 99 ? '99+' : unread.dms}
+                          <span className="sr-only"> unread direct messages and mentions</span>
                         </SidebarMenuBadge>
                       )}
                       {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
-                        <SidebarMenuBadge aria-label="Unread channels">
-                          <span className="bg-primary size-2 rounded-full" />
+                        <SidebarMenuBadge>
+                          <span className="bg-primary size-2 rounded-full" aria-hidden />
+                          <span className="sr-only">Unread channels</span>
                         </SidebarMenuBadge>
                       )}
                     </SidebarMenuItem>

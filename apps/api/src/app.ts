@@ -45,6 +45,7 @@ import { liveRoutes } from './routes/live.js';
 import { LiveHub, registerLive } from './lib/live.js';
 import { messagingRoutes } from './routes/messaging.js';
 import { RedisEventSink, type EventSink } from './messaging/events.js';
+import type { EnqueueLinkPreviews } from './messaging/link-preview.js';
 import { RateLimiter, type RateLimits } from './messaging/rate-limit.js';
 import { workDepthRoutes } from './routes/work-depth.js';
 import { attachmentRoutes, MAX_UPLOAD_BYTES } from './routes/attachments.js';
@@ -83,6 +84,8 @@ export interface AppDeps {
   events?: EventSink;
   /** Message rate limits (tests tighten them). */
   messageLimits?: RateLimits;
+  /** Queues link lookups for new messages (BullMQ in the server, a fake in tests). */
+  enqueueLinkPreviews?: EnqueueLinkPreviews;
 }
 
 export function buildApp({
@@ -97,6 +100,7 @@ export function buildApp({
   liveTiming = {},
   events = new RedisEventSink(redis),
   messageLimits,
+  enqueueLinkPreviews,
 }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
@@ -153,7 +157,8 @@ export function buildApp({
     prefix: '/api/v1',
     ...authDeps,
     redis,
-    messaging: { db, events, limiter: new RateLimiter(redis, messageLimits) },
+    storage,
+    messaging: { db, events, limiter: new RateLimiter(redis, messageLimits), storage, enqueueLinkPreviews },
   });
   app.register(invitationRoutes, {
     prefix: '/api/v1',

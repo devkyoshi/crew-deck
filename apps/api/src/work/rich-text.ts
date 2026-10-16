@@ -30,6 +30,7 @@ const NODES: Record<string, (attrs: Json) => Json | undefined> = {
   mention: (a) => ({
     id: typeof a.id === 'string' ? a.id : '',
     label: typeof a.label === 'string' ? a.label.slice(0, 100) : null,
+    kind: MENTION_KINDS.includes(a.kind as string) ? (a.kind as string) : 'user',
   }),
 };
 
@@ -43,6 +44,7 @@ const MARKS: Record<string, (attrs: Json) => Json | undefined | null> = {
   link: (a) => (typeof a.href === 'string' && SAFE_HREF.test(a.href) ? { href: a.href.slice(0, 2000) } : null),
 };
 
+const MENTION_KINDS = ['user', 'group', 'channel', 'here'];
 const SAFE_HREF = /^(https?:\/\/|mailto:)[^\s]+$/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BYTES = 200_000;
@@ -59,17 +61,25 @@ const invalid = (field: string, message = 'That text could not be saved. Try rem
 export interface CleanDoc {
   /** The rebuilt document, or null when it holds nothing. */
   doc: RichDoc | null;
-  /** Ids of everyone mentioned, once each, in order. */
+  /** Ids of everyone mentioned by name, once each, in order. */
   mentions: string[];
+  /** Everything mentioned: people, groups, @channel and @here (messages only). */
+  targets: { type: 'user' | 'group' | 'channel' | 'here'; id: string }[];
   /** Plain text, for search, previews and the activity log. */
   text: string;
 }
 
 /** Validates and rebuilds a rich text document. `field` names the input in error messages. */
-export function sanitizeDoc(input: unknown, field = 'body'): CleanDoc {
-  if (input === null || input === undefined) return { doc: null, mentions: [], text: '' };
+export function sanitizeDoc(
+  input: unknown,
+  field = 'body',
+  /** Messages may mention groups, @channel and @here; work item text may not. */
+  opts: { broadcastMentions?: boolean } = {},
+): CleanDoc {
+  if (input === null || input === undefined) return { doc: null, mentions: [], targets: [], text: '' };
   if (JSON.stringify(input).length > MAX_BYTES) throw invalid(field, 'That text is too long');
   const mentions: string[] = [];
+  const targets: CleanDoc['targets'] = [];
 
   const walk = (node: unknown, depth: number): Json => {
     if (depth > MAX_DEPTH || !node || typeof node !== 'object' || Array.isArray(node)) throw invalid(field);
@@ -81,9 +91,13 @@ export function sanitizeDoc(input: unknown, field = 'body'): CleanDoc {
     const attrs = NODES[type]!((n.attrs as Json | undefined) ?? {});
     if (attrs) out.attrs = attrs;
     if (type === 'mention') {
-      const id = (attrs as { id: string }).id;
-      if (!UUID.test(id)) throw invalid(field);
-      if (!mentions.includes(id)) mentions.push(id);
+      const { id, kind } = attrs as { id: string; kind: CleanDoc['targets'][number]['type'] };
+      if (kind !== 'user' && !opts.broadcastMentions) throw invalid(field);
+      if (kind === 'channel' || kind === 'here') {
+        if (id !== kind) throw invalid(field);
+      } else if (!UUID.test(id)) throw invalid(field);
+      if (!targets.some((x) => x.type === kind && x.id === id)) targets.push({ type: kind, id });
+      if (kind === 'user' && !mentions.includes(id)) mentions.push(id);
     }
     if (type === 'text') {
       if (typeof n.text !== 'string' || n.text.length === 0) throw invalid(field);
@@ -113,8 +127,8 @@ export function sanitizeDoc(input: unknown, field = 'body'): CleanDoc {
   const doc = { type: 'doc', content: (root.content as Json[] | undefined) ?? [] } as RichDoc;
   const text = docToText(doc).trim();
   if (text.length > MAX_TEXT) throw invalid(field, 'That text is too long');
-  if (!text && mentions.length === 0) return { doc: null, mentions: [], text: '' };
-  return { doc, mentions, text };
+  if (!text && targets.length === 0) return { doc: null, mentions: [], targets: [], text: '' };
+  return { doc, mentions, targets, text };
 }
 
 /** Mentions inside a stored document (used when a description is edited). */

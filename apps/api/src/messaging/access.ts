@@ -39,7 +39,14 @@ export async function loadChannel(
 /** Throws unless the caller may do `action` here. Archived channels answer with their own message. */
 export function requireChannel(actor: Actor, access: ChannelAccess, action: Action) {
   if (can(actor, action, access.resource)) return;
-  if (access.channel.isArchived && (action === 'channel.post' || action === 'message.editOwn')) {
+  const writes: Action[] = [
+    'channel.post',
+    'channel.reply',
+    'message.editOwn',
+    'message.react',
+    'message.pin',
+  ];
+  if (access.channel.isArchived && writes.includes(action)) {
     throw new AppError(409, 'channel_archived', 'This channel is archived and read-only');
   }
   throw forbidden();

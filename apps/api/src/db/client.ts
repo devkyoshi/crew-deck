@@ -78,6 +78,13 @@ const TENANT = {
   messageEdits: 'message_edits',
   readCursors: 'read_cursors',
   userStatuses: 'user_statuses',
+  messageReactions: 'message_reactions',
+  messageMentions: 'message_mentions',
+  pins: 'pins',
+  savedMessages: 'saved_messages',
+  threadFollows: 'thread_follows',
+  messageAttachments: 'message_attachments',
+  linkPreviews: 'link_previews',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -149,6 +156,13 @@ export interface TenantDocs {
   messageEdits: T.MessageEditDoc;
   readCursors: T.ReadCursorDoc;
   userStatuses: T.UserStatusDoc;
+  messageReactions: T.MessageReactionDoc;
+  messageMentions: T.MessageMentionDoc;
+  pins: T.PinDoc;
+  savedMessages: T.SavedMessageDoc;
+  threadFollows: T.ThreadFollowDoc;
+  messageAttachments: T.MessageAttachmentDoc;
+  linkPreviews: T.LinkPreviewDoc;
 }
 
 export interface GlobalDocs {
@@ -370,6 +384,7 @@ const DEFAULTS: Record<string, () => Document> = {
     alsoInChannel: false,
     replyCount: 0,
     lastReplyAt: null,
+    replyAuthors: [],
     clientMsgId: null,
     metadata: {},
     editedAt: null,
@@ -379,6 +394,19 @@ const DEFAULTS: Record<string, () => Document> = {
   messageEdits: () => ({ editedAt: now() }),
   readCursors: () => ({ lastReadSeq: 0, lastReadAt: now() }),
   userStatuses: () => ({ emoji: null, text: null, expiresAt: null }),
+  messageReactions: () => ({ createdAt: now() }),
+  pins: () => ({ pinnedAt: now() }),
+  savedMessages: () => ({ savedAt: now() }),
+  threadFollows: () => ({ lastReadSeq: 0, createdAt: now() }),
+  messageAttachments: () => ({ messageId: null, image: null, createdAt: now() }),
+  linkPreviews: () => ({
+    title: null,
+    description: null,
+    imageUrl: null,
+    siteName: null,
+    status: 'ok',
+    fetchedAt: now(),
+  }),
 };
 
 /** Collections with no `id` field (their identity is a composite of other fields). */
@@ -397,6 +425,11 @@ const NO_ID = new Set<string>([
   'channelMembers',
   'readCursors',
   'userStatuses',
+  'messageReactions',
+  'messageMentions',
+  'pins',
+  'savedMessages',
+  'threadFollows',
 ]);
 
 // ---- Repository -------------------------------------------------------------------------------------
@@ -691,6 +724,13 @@ export class TenantDb {
   readonly messageEdits!: TenantRepos['messageEdits'];
   readonly readCursors!: TenantRepos['readCursors'];
   readonly userStatuses!: TenantRepos['userStatuses'];
+  readonly messageReactions!: TenantRepos['messageReactions'];
+  readonly messageMentions!: TenantRepos['messageMentions'];
+  readonly pins!: TenantRepos['pins'];
+  readonly savedMessages!: TenantRepos['savedMessages'];
+  readonly threadFollows!: TenantRepos['threadFollows'];
+  readonly messageAttachments!: TenantRepos['messageAttachments'];
+  readonly linkPreviews!: TenantRepos['linkPreviews'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

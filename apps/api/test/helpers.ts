@@ -73,6 +73,7 @@ export function makeApp(
     liveTiming?: { heartbeatMs?: number; recheckMs?: number };
     events?: EventSink;
     messageLimits?: RateLimits;
+    enqueueLinkPreviews?: (job: { orgId: string; messageId: string; urls: string[] }) => void | Promise<void>;
   } = {},
 ) {
   const config = loadConfig({
@@ -102,6 +103,7 @@ export function makeApp(
     liveTiming: opts.liveTiming,
     events: opts.events,
     messageLimits: opts.messageLimits,
+    enqueueLinkPreviews: opts.enqueueLinkPreviews,
   });
   return {
     app,

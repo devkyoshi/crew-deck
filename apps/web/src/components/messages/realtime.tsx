@@ -11,19 +11,24 @@ import {
 } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
+import { toast } from 'sonner';
 import {
   C2S,
   S2C,
   SEND_TIMEOUT_MS,
   SOCKET_PATH,
   type Ack,
+  type AttachmentDTO,
   type ChannelDTO,
   type MembershipEvent,
   type MessageDTO,
   type MyChannelDTO,
   type PresenceEvent,
+  type ReactionEvent,
   type ReadSyncedEvent,
+  type SendResult,
   type SyncResult,
+  type ThreadEvent,
   type TypingEvent,
 } from '@crew-deck/shared';
 import { api, ApiError } from '@/lib/api';
@@ -32,8 +37,11 @@ import {
   hasGap,
   keys,
   mergeMessages,
+  patchMessageEverywhere,
+  personName,
   type ChannelView,
   type MessageDoc,
+  type ThreadView,
 } from '@/lib/messaging-api';
 import { useMe } from '@/components/shell/me-context';
 import { useMessaging } from './store';
@@ -44,12 +52,23 @@ import { useMessaging } from './store';
  * acknowledges them, failed after 10 seconds, retried with the same client id so a retry can never
  * duplicate), and resyncs after a reconnect.
  */
+export interface SendOptions {
+  /** Reply in this message's thread. */
+  threadRootId?: string;
+  /** For replies: also show the reply in the channel. */
+  alsoInChannel?: boolean;
+  /** Files already uploaded for this message. */
+  files?: AttachmentDTO[];
+}
+
 export interface RealtimeApi {
-  send: (channelId: string, body: MessageDoc, text: string) => Promise<void>;
+  send: (channelId: string, body: MessageDoc, text: string, opts?: SendOptions) => Promise<void>;
   retry: (clientMsgId: string) => Promise<void>;
   discard: (clientMsgId: string) => void;
   typing: (channelId: string) => void;
   markRead: (channelId: string, seq: number) => void;
+  /** Adds my reaction, or removes it if I already reacted with this emoji. */
+  react: (message: MessageDTO, emoji: string) => Promise<void>;
 }
 
 const Ctx = createContext<RealtimeApi | null>(null);
@@ -78,6 +97,9 @@ function patchChannel(qc: QueryClient, channelId: string, fn: (c: MyChannelDTO) 
   );
 }
 
+/** A reply that belongs only to its thread (it was not also sent to the channel). */
+const threadOnly = (m: MessageDTO) => !!m.threadRootId && !m.alsoInChannel;
+
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const meId = useMe().user.id;
@@ -85,13 +107,32 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const typingSentAt = useRef(new Map<string, number>());
   const readSent = useRef(new Map<string, number>());
 
-  /** Puts a stored message in the open view of its channel, backfilling if a push was missed. */
+  /** Adds a reply to its open thread, once. */
+  const addToThread = useCallback(
+    (msg: MessageDTO) => {
+      if (!msg.threadRootId) return;
+      qc.setQueryData<ThreadView>(keys.thread(msg.threadRootId), (v) =>
+        v && !v.replies.some((r) => r.id === msg.id)
+          ? { ...v, replies: [...v.replies, msg].sort((a, b) => a.seq - b.seq) }
+          : v,
+      );
+    },
+    [qc],
+  );
+
+  /** Puts a stored message where it belongs: the channel timeline, and/or its thread. Backfills a missed push. */
   const receive = useCallback(
     (msg: MessageDTO) => {
       const key = keys.messages(msg.channelId);
       const view = qc.getQueryData<ChannelView>(key);
+      if (msg.threadRootId) addToThread(msg);
       if (view) {
-        if (hasGap(view, msg.seq)) {
+        if (threadOnly(msg)) {
+          // It has a channel seq but is not on the timeline: keep gap detection honest.
+          qc.setQueryData<ChannelView>(key, (cur) =>
+            cur ? { ...cur, lastSeq: Math.max(cur.lastSeq, msg.seq) } : cur,
+          );
+        } else if (hasGap(view, msg.seq)) {
           void fetchView(msg.channelId, { after_seq: view.lastSeq, limit: 100 })
             .then((more) =>
               qc.setQueryData<ChannelView>(key, (cur) =>
@@ -109,6 +150,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       if (msg.clientMsgId) st.removePending(msg.clientMsgId);
       if (msg.authorId) st.clearTyping(msg.channelId, msg.authorId);
     },
+    [qc, addToThread],
+  );
+
+  /** A message changed (edit, delete, pin, link preview): update it wherever it is cached. */
+  const changed = useCallback(
+    (msg: MessageDTO) => patchMessageEverywhere(qc, msg.id, () => msg),
     [qc],
   );
 
@@ -119,13 +166,21 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         .getQueryData<MyChannelDTO[]>(keys.channels)
         ?.some((c) => c.id === msg.channelId);
       if (!known) return void qc.invalidateQueries({ queryKey: keys.channels });
+      if (msg.threadRootId) void qc.invalidateQueries({ queryKey: keys.threads });
       const looking =
         useMessaging.getState().activeChannelId === msg.channelId && document.hasFocus();
+      const mine = msg.authorId === meId;
+      const onTimeline = !threadOnly(msg);
+      const mentionsMe = msg.mentions.some(
+        (x) => (x.type === 'user' && x.id === meId) || x.type === 'channel' || x.type === 'here',
+      );
       patchChannel(qc, msg.channelId, (c) => ({
         ...c,
         lastSeq: Math.max(c.lastSeq, msg.seq),
         lastMessageAt: msg.createdAt,
-        unread: msg.authorId === meId || looking ? c.unread : c.unread + 1,
+        unread: !onTimeline || mine || looking ? c.unread : c.unread + 1,
+        mentionCount:
+          onTimeline && !mine && !looking && mentionsMe ? c.mentionCount + 1 : c.mentionCount,
       }));
     },
     [qc, receive, meId],
@@ -138,6 +193,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         .getQueriesData<ChannelView>({ queryKey: ['messaging', 'messages'] })
         .flatMap(([key, v]) => (v ? [{ channelId: key[2] as string, lastSeq: v.lastSeq }] : []));
       void qc.invalidateQueries({ queryKey: keys.channels });
+      void qc.invalidateQueries({ queryKey: ['messaging', 'thread'] });
+      void qc.invalidateQueries({ queryKey: keys.threads });
       if (open.length === 0) return;
       socket.emit(C2S.sync, { channels: open }, (ack: Ack<SyncResult>) => {
         if (!ack.ok) return void qc.invalidateQueries({ queryKey: ['messaging', 'messages'] });
@@ -213,8 +270,19 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       });
 
       socket.on(S2C.messageNew, onNew);
-      socket.on(S2C.messageUpdated, receive);
-      socket.on(S2C.messageDeleted, receive);
+      socket.on(S2C.messageUpdated, changed);
+      socket.on(S2C.messageDeleted, changed);
+      socket.on(S2C.reactionUpdated, (e: ReactionEvent) =>
+        patchMessageEverywhere(qc, e.messageId, (m) => ({ ...m, reactions: e.reactions })),
+      );
+      socket.on(S2C.threadUpdated, (e: ThreadEvent) =>
+        patchMessageEverywhere(qc, e.rootId, (m) => ({
+          ...m,
+          replyCount: e.replyCount,
+          lastReplyAt: e.lastReplyAt,
+          replyAuthors: e.replyAuthors,
+        })),
+      );
       socket.on(S2C.typing, (e: TypingEvent) =>
         useMessaging.getState().setTyping(e.channelId, e.userId),
       );
@@ -235,6 +303,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           ...c,
           lastReadSeq: e.seq,
           unread: e.seq >= c.lastSeq ? 0 : c.unread,
+          mentionCount: e.seq >= c.lastSeq ? 0 : c.mentionCount,
         }));
         // Moving back (mark as unread) or partial reads change the count: let the server recount.
         const ch = qc
@@ -255,7 +324,37 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         socketRef.current = null;
       };
     }
-  }, [qc, onNew, receive, resync]);
+  }, [qc, onNew, receive, changed, resync]);
+
+  /** Offers to add mentioned people who are not in the channel. */
+  const offerToAdd = useCallback(
+    (channelId: string, people: SendResult['notInChannel']) => {
+      if (people.length === 0) return;
+      const ch = qc.getQueryData<MyChannelDTO[]>(keys.channels)?.find((c) => c.id === channelId);
+      const names = people.map((p) => personName(p).split(' ')[0]).join(', ');
+      const canAdd = ch?.type === 'public' || ch?.role === 'owner';
+      if (!canAdd) {
+        toast.info(`${names} ${people.length === 1 ? 'is' : 'are'} not in this private channel`, {
+          description: 'Ask a channel owner to add them so they can see your message.',
+        });
+        return;
+      }
+      toast(`${names} ${people.length === 1 ? 'is' : 'are'} not in this channel`, {
+        description: 'They will not see your message unless you add them.',
+        action: {
+          label: 'Add',
+          onClick: () =>
+            void api(`/channels/${channelId}/members`, {
+              method: 'POST',
+              body: { userIds: people.map((p) => p.id) },
+            })
+              .then(() => toast.success('Added'))
+              .catch((e) => toast.error(e instanceof ApiError ? e.message : 'Could not add them')),
+        },
+      });
+    },
+    [qc],
+  );
 
   const deliver = useCallback(
     async (clientMsgId: string) => {
@@ -265,32 +364,54 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         .find((x) => x.clientMsgId === clientMsgId);
       if (!p) return;
       store.updatePending(clientMsgId, { status: 'sending', error: undefined });
-      const payload = { channelId: p.channelId, clientMsgId, body: p.body };
+      const payload = {
+        channelId: p.channelId,
+        clientMsgId,
+        body: p.body,
+        ...(p.attachmentIds?.length ? { attachmentIds: p.attachmentIds } : {}),
+        ...(p.threadRootId
+          ? { threadRootId: p.threadRootId, alsoInChannel: !!p.alsoInChannel }
+          : {}),
+      };
       try {
         const socket = socketRef.current;
-        let message: MessageDTO;
+        let result: SendResult;
         if (socket?.connected) {
           const ack = (await socket
             .timeout(SEND_TIMEOUT_MS)
-            .emitWithAck(C2S.messageSend, payload)) as Ack<{ message: MessageDTO }>;
+            .emitWithAck(C2S.messageSend, payload)) as Ack<SendResult>;
           if (!ack.ok) throw new SendError(ack.message);
-          message = ack.data.message;
+          result = ack.data;
         } else {
           // Not connected: the REST endpoint is idempotent on the same client id, so this cannot duplicate.
-          const res = await api<{ message: MessageDTO }>(`/channels/${p.channelId}/messages`, {
-            method: 'POST',
-            body: { clientMsgId, body: p.body },
-          });
-          message = res.message;
+          result = await api<SendResult>(
+            p.threadRootId
+              ? `/messages/${p.threadRootId}/replies`
+              : `/channels/${p.channelId}/messages`,
+            {
+              method: 'POST',
+              body: {
+                clientMsgId,
+                body: p.body,
+                attachmentIds: p.attachmentIds,
+                alsoInChannel: p.alsoInChannel,
+              },
+            },
+          );
         }
+        const message = result.message;
         receive(message);
-        patchChannel(qc, message.channelId, (c) => ({
-          ...c,
-          lastSeq: Math.max(c.lastSeq, message.seq),
-          lastReadSeq: Math.max(c.lastReadSeq, message.seq),
-          lastMessageAt: message.createdAt,
-          unread: 0,
-        }));
+        if (!threadOnly(message)) {
+          patchChannel(qc, message.channelId, (c) => ({
+            ...c,
+            lastSeq: Math.max(c.lastSeq, message.seq),
+            lastReadSeq: Math.max(c.lastReadSeq, message.seq),
+            lastMessageAt: message.createdAt,
+            unread: 0,
+            mentionCount: 0,
+          }));
+        }
+        offerToAdd(message.channelId, result.notInChannel ?? []);
       } catch (e) {
         // The server said no (archived, no permission, too long): show its words. Otherwise it timed out.
         const reason =
@@ -300,18 +421,22 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         useMessaging.getState().updatePending(clientMsgId, { status: 'failed', error: reason });
       }
     },
-    [qc, receive],
+    [qc, receive, offerToAdd],
   );
 
   const api2 = useMemo<RealtimeApi>(
     () => ({
-      send: async (channelId, body, text) => {
+      send: async (channelId, body, text, opts = {}) => {
         const clientMsgId = crypto.randomUUID();
         useMessaging.getState().addPending({
           clientMsgId,
           channelId,
           body,
           text,
+          threadRootId: opts.threadRootId,
+          alsoInChannel: opts.alsoInChannel,
+          attachmentIds: opts.files?.map((f) => f.id),
+          files: opts.files,
           status: 'sending',
           createdAt: Date.now(),
         });
@@ -332,6 +457,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           ...c,
           lastReadSeq: Math.max(c.lastReadSeq, seq),
           unread: seq >= c.lastSeq ? 0 : c.unread,
+          mentionCount: seq >= c.lastSeq ? 0 : c.mentionCount,
         }));
         const socket = socketRef.current;
         if (socket?.connected) socket.emit(C2S.readUpdate, { channelId, seq });
@@ -340,8 +466,53 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             () => undefined,
           );
       },
+      react: async (message, emoji) => {
+        const has = message.reactions.find((r) => r.emoji === emoji)?.userIds.includes(meId);
+        // Optimistic: the chip moves at once, and the server's answer (or a refetch on failure) settles it.
+        patchMessageEverywhere(qc, message.id, (m) => {
+          const rest = m.reactions.filter((r) => r.emoji !== emoji);
+          const cur = m.reactions.find((r) => r.emoji === emoji);
+          if (has) {
+            const next =
+              cur && cur.count > 1
+                ? [
+                    {
+                      ...cur,
+                      count: cur.count - 1,
+                      userIds: cur.userIds.filter((id) => id !== meId),
+                    },
+                  ]
+                : [];
+            return {
+              ...m,
+              reactions: cur ? m.reactions.flatMap((r) => (r.emoji === emoji ? next : [r])) : rest,
+            };
+          }
+          const added = {
+            emoji,
+            count: (cur?.count ?? 0) + 1,
+            userIds: [...(cur?.userIds ?? []), meId],
+          };
+          return {
+            ...m,
+            reactions: cur
+              ? m.reactions.map((r) => (r.emoji === emoji ? added : r))
+              : [...m.reactions, added],
+          };
+        });
+        try {
+          const res = await api<{ reactions: MessageDTO['reactions'] }>(
+            `/messages/${message.id}/reactions/${encodeURIComponent(emoji)}`,
+            { method: has ? 'DELETE' : 'PUT' },
+          );
+          patchMessageEverywhere(qc, message.id, (m) => ({ ...m, reactions: res.reactions }));
+        } catch (e) {
+          patchMessageEverywhere(qc, message.id, (m) => ({ ...m, reactions: message.reactions }));
+          toast.error(e instanceof ApiError ? e.message : 'Could not add the reaction');
+        }
+      },
     }),
-    [qc, deliver],
+    [qc, deliver, meId],
   );
 
   return <Ctx.Provider value={api2}>{children}</Ctx.Provider>;
