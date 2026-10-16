@@ -334,17 +334,18 @@ export function DocumentsView() {
             </table>
           </div>
         )}
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
           {dragging ? (
             <div
               aria-hidden
-              className="bg-card text-muted-foreground flex size-9 items-center justify-center rounded-lg border shadow-lg"
+              className="bg-card animate-in zoom-in-90 fade-in flex max-w-64 rotate-2 cursor-grabbing items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-medium shadow-xl ring-1 ring-black/5 duration-150 motion-reduce:rotate-0 motion-reduce:animate-none"
             >
               {dragging.kind === 'folder' ? (
-                <Folder className="size-5 text-amber-600" />
+                <Folder className="size-5 shrink-0 text-amber-600" />
               ) : (
-                <FileIcon className="size-5" />
+                <FileIcon className="text-muted-foreground size-5 shrink-0" />
               )}
+              <span className="truncate">{dragging.item.name}</span>
             </div>
           ) : null}
         </DragOverlay>
@@ -661,7 +662,7 @@ function Crumb({
       aria-current={current ? 'page' : undefined}
       onClick={onOpen}
       className={cn(
-        'rounded px-1 hover:underline',
+        'rounded px-1 transition-colors duration-150 hover:underline',
         current ? 'font-semibold' : 'text-muted-foreground',
         canDrop && 'outline-primary/40 outline-dashed',
         isOver && 'bg-primary/10 outline-primary outline-solid',
@@ -721,7 +722,7 @@ function FolderRow({
     <tr
       ref={setNodeRef}
       className={cn(
-        'hover:bg-muted/40',
+        'hover:bg-muted/40 transition-colors duration-150',
         (isOver || filesOver) && 'bg-primary/10 outline-primary outline outline-offset-[-2px]',
       )}
       onDragOver={(e) => {
@@ -750,7 +751,13 @@ function FolderRow({
             onClick={onOpen}
             className="flex min-w-0 flex-1 items-center gap-2 text-left font-medium hover:underline"
           >
-            <Folder className="size-4 shrink-0 text-amber-600" aria-hidden />
+            <Folder
+              className={cn(
+                'size-4 shrink-0 text-amber-600 transition-transform duration-150 motion-reduce:transition-none',
+                (isOver || filesOver) && 'scale-125',
+              )}
+              aria-hidden
+            />
             <span className="truncate">{folder.name}</span>
           </button>
         </div>
@@ -788,7 +795,7 @@ function FileRow({
   onDelete: () => void;
 }) {
   return (
-    <tr className="hover:bg-muted/40">
+    <tr className="hover:bg-muted/40 animate-in fade-in duration-200 motion-reduce:animate-none">
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
           <DragHandle target={{ kind: 'file', item: file }} disabled={!file.permissions.delete} />
