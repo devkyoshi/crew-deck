@@ -40,6 +40,7 @@ export const PLANS: PlanDoc[] = [
       'branding_name',
       'scrum_sprints',
       'shared_filters',
+      'releases',
     ],
   },
   {
@@ -59,6 +60,7 @@ export const PLANS: PlanDoc[] = [
       'scrum_sprints',
       'shared_filters',
       'burndown_reports',
+      'releases',
     ],
   },
   {
@@ -78,6 +80,7 @@ export const PLANS: PlanDoc[] = [
       'scrum_sprints',
       'shared_filters',
       'burndown_reports',
+      'releases',
     ],
   },
 ];

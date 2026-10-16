@@ -86,6 +86,15 @@ export interface WorkItem {
   /** Open items that block this one / that this one blocks. */
   blockedBy?: number;
   blocks?: number;
+  fixVersions?: VersionRef[];
+  affectsVersions?: VersionRef[];
+  components?: { id: string; name: string }[];
+}
+
+export interface VersionRef {
+  id: string;
+  name: string;
+  state: 'unreleased' | 'released' | 'archived';
 }
 
 export type Resolution = 'done' | 'wont_do' | 'duplicate' | 'cannot_reproduce';

@@ -313,6 +313,10 @@ export interface WorkItemDoc {
   searchText?: string;
   /** Which sources `searchText` was built from (see work/search-text.ts). */
   searchVersion?: number;
+  /** Releases this item is planned for / was found in, and the parts of the product it touches. */
+  fixVersionIds?: string[];
+  affectsVersionIds?: string[];
+  componentIds?: string[];
   /** Why the item was finished (set with a Done status). */
   resolution?: 'done' | 'wont_do' | 'duplicate' | 'cannot_reproduce' | null;
   /** A short to-do list inside the item. */
@@ -327,6 +331,34 @@ export interface WorkItemDoc {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+}
+
+/** A release of the product, with an optional planned window. */
+export interface VersionDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  name: string;
+  nameLower: string;
+  description: string;
+  startDate: string | null;
+  releaseDate: string | null;
+  state: 'unreleased' | 'released' | 'archived';
+  releasedAt: Date | null;
+  createdAt: Date;
+}
+
+/** A part of the product. New work in it can go to its default assignee. */
+export interface ComponentDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  name: string;
+  nameLower: string;
+  description: string;
+  leadId: string | null;
+  defaultAssigneeId: string | null;
+  createdAt: Date;
 }
 
 /** A reusable checklist a space offers when someone adds a checklist to an item. */

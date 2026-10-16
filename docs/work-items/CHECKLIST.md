@@ -192,10 +192,11 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ## W10: Versions and components
 
-- [ ] Versions with release flow and release notes; fix and affected versions on items
-- [ ] Components with lead and default assignee
-- [ ] Filters, pickers, Releases page, plan gate `releases`
-- [ ] Tests, docs, owner review
+- [x] Versions with release flow and release notes; fix and affected versions on items
+- [x] Components with lead and default assignee
+- [x] Filters, pickers, Releases page, plan gate `releases`
+- [x] Tests, docs
+- [ ] Owner review and sign-off
 
 ## W11: Flow and reports
 

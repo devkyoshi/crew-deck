@@ -26,6 +26,7 @@ export const FEATURE_KEYS = [
   'scrum_sprints',
   'shared_filters',
   'burndown_reports',
+  'releases',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 

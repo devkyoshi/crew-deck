@@ -61,6 +61,9 @@ export interface ItemRow extends WorkItemDoc {
   /** Open items that block this one, and open items this one blocks. */
   blockedBy: number;
   blocks: number;
+  fixVersions: { id: string; name: string; state: string }[];
+  affectsVersions: { id: string; name: string; state: string }[];
+  components: { id: string; name: string }[];
 }
 
 /** Joins statuses, people, parents, labels and subtask counts onto a batch of item documents. */
@@ -87,6 +90,19 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
     ),
   ]);
   const { blockedBy, blocks } = await openBlockCounts(t, ids, links);
+  const versionIds = [...new Set(docs.flatMap((d) => [...(d.fixVersionIds ?? []), ...(d.affectsVersionIds ?? [])]))];
+  const componentIds = [...new Set(docs.flatMap((d) => d.componentIds ?? []))];
+  const [versionDocs, componentDocs] = await Promise.all([
+    versionIds.length ? t.versions.find({ id: { $in: versionIds } }) : Promise.resolve([]),
+    componentIds.length ? t.components.find({ id: { $in: componentIds } }) : Promise.resolve([]),
+  ]);
+  const versionById = new Map(versionDocs.map((v) => [v.id, v]));
+  const componentById = new Map(componentDocs.map((c) => [c.id, c]));
+  const versionsOf = (ids: string[] | undefined) =>
+    (ids ?? []).flatMap((id) => {
+      const v = versionById.get(id);
+      return v ? [{ id: v.id, name: v.name, state: v.state }] : [];
+    });
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const parentById = new Map(parents.map((p) => [p.id, p]));
   const labelById = new Map(labels.map((l) => [l.id, l]));
@@ -140,6 +156,12 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
       childDone: childDone.get(d.id) ?? 0,
       blockedBy: blockedBy.get(d.id) ?? 0,
       blocks: blocks.get(d.id) ?? 0,
+      fixVersions: versionsOf(d.fixVersionIds),
+      affectsVersions: versionsOf(d.affectsVersionIds),
+      components: (d.componentIds ?? []).flatMap((id) => {
+        const c = componentById.get(id);
+        return c ? [{ id: c.id, name: c.name }] : [];
+      }),
     };
   });
 }
@@ -235,6 +257,9 @@ export function presentItem(row: ItemRow, spaceKey: string) {
     },
     blockedBy: row.blockedBy,
     blocks: row.blocks,
+    fixVersions: row.fixVersions,
+    affectsVersions: row.affectsVersions,
+    components: row.components,
     labels: row.labels,
   };
 }
@@ -493,6 +518,29 @@ export async function lockSpace(t: TenantDb, spaceId: string) {
 }
 
 /** Labels may only come from the item's own space, and an item holds at most 20. */
+/** Checks that every id is a version (or component) of this space; returns them without repeats. */
+export async function spaceRefs(
+  t: TenantDb,
+  space: { id: string },
+  kind: 'versions' | 'components',
+  ids: string[],
+  field: string,
+) {
+  const unique = [...new Set(ids)];
+  if (unique.length > 20) {
+    throw new AppError(422, 'too_many', `Use 20 ${kind} or fewer`, { [field]: `Use 20 ${kind} or fewer` });
+  }
+  if (unique.length) {
+    const found = await t[kind].count({ spaceId: space.id, id: { $in: unique } });
+    if (found !== unique.length) {
+      throw new AppError(422, 'invalid_reference', `One of those ${kind} does not exist in this space`, {
+        [field]: `Choose ${kind} from this space`,
+      });
+    }
+  }
+  return unique;
+}
+
 export async function setItemLabels(
   t: TenantDb,
   _orgId: string,

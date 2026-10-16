@@ -30,6 +30,8 @@ import {
 } from '@/lib/work';
 import { cn } from '@/lib/utils';
 import { LabelPicker } from './label-bits';
+import { ComponentPicker, VersionPicker } from './version-bits';
+import { useComponents, useVersions } from '@/lib/versions-api';
 import { TypeIcon } from './work-bits';
 import { AssigneePicker, ItemPicker, PrioritySelect, StatusSelect, STORY_POINTS } from './work-pickers';
 import { useVocabulary } from './use-vocabulary';
@@ -74,6 +76,10 @@ export function CreateItemDialog({
   const [dueDate, setDueDate] = useState('');
   const [parent, setParent] = useState<Parent>(null);
   const [chosenLabels, setChosenLabels] = useState<WorkLabel[]>([]);
+  const [versionIds, setVersionIds] = useState<string[]>([]);
+  const [componentIds, setComponentIds] = useState<string[]>([]);
+  const versionList = useVersions(spaceKey);
+  const componentList = useComponents(spaceKey);
   const [another, setAnother] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [titleError, setTitleError] = useState('');
@@ -91,6 +97,8 @@ export function CreateItemDialog({
     setDueDate('');
     setParent(defaults?.parent ?? null);
     setChosenLabels(defaults?.labels ?? []);
+    setVersionIds([]);
+    setComponentIds([]);
     setError(null);
     setTitleError('');
   }, [open]);
@@ -128,6 +136,8 @@ export function CreateItemDialog({
         dueDate: dueDate || null,
         parentId: type === 'epic' ? null : (parent?.id ?? null),
         labelIds: chosenLabels.map((l) => l.id),
+        ...(versionIds.length ? { fixVersionIds: versionIds } : {}),
+        ...(componentIds.length ? { componentIds } : {}),
       });
       onCreated?.(item);
       toast.success(`${item.key} created`, {
@@ -242,6 +252,29 @@ export function CreateItemDialog({
                 <Label htmlFor="create-labels">Labels</Label>
                 <LabelPicker id="create-labels" space={spaceKey} value={chosenLabels} onChange={setChosenLabels} />
               </div>
+              {(versionList.data?.items.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-version">Fix version</Label>
+                  <VersionPicker
+                    id="create-version"
+                    space={spaceKey}
+                    label="Fix version"
+                    value={(versionList.data?.items ?? []).filter((v) => versionIds.includes(v.id))}
+                    onChange={setVersionIds}
+                  />
+                </div>
+              )}
+              {(componentList.data?.items.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-components">Components</Label>
+                  <ComponentPicker
+                    id="create-components"
+                    space={spaceKey}
+                    value={(componentList.data?.items ?? []).filter((c) => componentIds.includes(c.id))}
+                    onChange={setComponentIds}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="create-estimate">Estimate (story points)</Label>
                 <div className="flex flex-wrap items-center gap-1.5">

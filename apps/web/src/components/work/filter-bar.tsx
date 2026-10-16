@@ -7,6 +7,8 @@ import {
   Check,
   Flag,
   Layers,
+  Package,
+  Puzzle,
   ListFilter,
   Search,
   Shapes,
@@ -27,6 +29,7 @@ import {
   type Priority,
 } from '@/lib/work';
 import { cn } from '@/lib/utils';
+import { useComponents, useVersions } from '@/lib/versions-api';
 import { LabelChip } from './label-bits';
 import { PriorityIcon, TypeIcon, UserAvatar } from './work-bits';
 import { useVocabulary } from './use-vocabulary';
@@ -156,6 +159,8 @@ export function FilterBar({
     staleTime: 60_000,
   });
   const labels = useLabels(space);
+  const versions = useVersions(space);
+  const components = useComponents(space);
   const epics = useQuery({
     queryKey: ['item-picker', space.toUpperCase(), 'epic', ''],
     queryFn: () => searchItems(space, { type: 'epic' }),
@@ -205,6 +210,18 @@ export function FilterBar({
       key: `e-${e}`,
       label: e === 'none' ? 'No epic' : <>Epic: {epicById.get(e)?.title ?? 'epic'}</>,
       remove: () => set({ epic: filters.epic.filter((x) => x !== e) }),
+    });
+  for (const v of filters.version)
+    chips.push({
+      key: `v-${v}`,
+      label: v === 'none' ? 'No version' : <>Version: {versions.data?.items.find((x) => x.id === v)?.name ?? 'version'}</>,
+      remove: () => set({ version: filters.version.filter((x) => x !== v) }),
+    });
+  for (const c of filters.component)
+    chips.push({
+      key: `c-${c}`,
+      label: c === 'none' ? 'No component' : <>Component: {components.data?.items.find((x) => x.id === c)?.name ?? 'component'}</>,
+      remove: () => set({ component: filters.component.filter((x) => x !== c) }),
     });
   if (filters.due)
     chips.push({ key: 'due', label: DUE_LABEL[filters.due], remove: () => set({ due: '' }) });
@@ -306,6 +323,34 @@ export function FilterBar({
             </Option>
           ))}
         </FilterPopover>
+
+        {(versions.data?.items.length ?? 0) > 0 && (
+          <FilterPopover icon={Package} label="Version" count={filters.version.length}>
+            <Option checked={filters.version.includes('none')} onToggle={() => set({ version: toggle(filters.version, 'none') })}>
+              No version
+            </Option>
+            {versions.data!.items
+              .filter((v) => v.state !== 'archived' || filters.version.includes(v.id))
+              .map((v) => (
+                <Option key={v.id} checked={filters.version.includes(v.id)} onToggle={() => set({ version: toggle(filters.version, v.id) })}>
+                  <span className="truncate">{v.name}</span>
+                </Option>
+              ))}
+          </FilterPopover>
+        )}
+
+        {(components.data?.items.length ?? 0) > 0 && (
+          <FilterPopover icon={Puzzle} label="Component" count={filters.component.length}>
+            <Option checked={filters.component.includes('none')} onToggle={() => set({ component: toggle(filters.component, 'none') })}>
+              No component
+            </Option>
+            {components.data!.items.map((c) => (
+              <Option key={c.id} checked={filters.component.includes(c.id)} onToggle={() => set({ component: toggle(filters.component, c.id) })}>
+                <span className="truncate">{c.name}</span>
+              </Option>
+            ))}
+          </FilterPopover>
+        )}
 
         <FilterPopover icon={Calendar} label="Due" count={filters.due ? 1 : 0} width="w-44">
           {(Object.keys(DUE_LABEL) as (keyof typeof DUE_LABEL)[]).map((d) => (

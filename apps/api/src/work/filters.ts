@@ -29,6 +29,8 @@ export const filterQuery = z.object({
   recent: z.enum(['1']).optional(),
   /** Only items that something open still blocks. */
   blocked: z.enum(['1']).optional(),
+  version: list(z.union([UUID, z.literal('none')])).optional(),
+  component: list(z.union([UUID, z.literal('none')])).optional(),
 });
 export type FilterQuery = z.infer<typeof filterQuery>;
 
@@ -81,6 +83,20 @@ export function filterConditions(f: FilterQuery, userId: string): Record<string,
       conds.push({ dueDate: { $ne: null, $lt: day(now) }, resolvedAt: null });
     } else if (f.due === 'today') conds.push({ dueDate: day(now) });
     else conds.push({ dueDate: { $gte: day(now), $lte: day(new Date(now.getTime() + 7 * 86_400_000)) } });
+  }
+  if (f.version?.length) {
+    const ids = f.version.filter((v: string) => v !== 'none');
+    const parts: Record<string, unknown>[] = [];
+    if (ids.length) parts.push({ fixVersionIds: { $in: ids } });
+    if (f.version.includes('none')) parts.push({ fixVersionIds: { $in: [null, []] } });
+    conds.push({ $or: parts });
+  }
+  if (f.component?.length) {
+    const ids = f.component.filter((v: string) => v !== 'none');
+    const parts: Record<string, unknown>[] = [];
+    if (ids.length) parts.push({ componentIds: { $in: ids } });
+    if (f.component.includes('none')) parts.push({ componentIds: { $in: [null, []] } });
+    conds.push({ $or: parts });
   }
   if (f.recent === '1') conds.push({ updatedAt: { $gt: new Date(Date.now() - 7 * 86_400_000) } });
   return conds;

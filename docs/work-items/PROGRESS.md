@@ -24,7 +24,7 @@
 | W7 | Live updates and hardening | Review | 2026-10-15 | | | Server-sent events over Redis pub/sub, route protection test, rate limits, demo Scrum space, browser tests for live updates and cross-workspace attempts |
 | W8 | Leftovers: keys, order, search, digest, S3, pricing | Review | 2026-10-15 | | | Old-key redirects, backlog order, virtualised list, search in comments and file names, daily summary, S3 driver, file cleanup on delete, upgrade notice, pricing rows |
 | W9 | Workflow rules and dependencies | Review | 2026-10-15 | | | Transition rules, resolution, blocked badges, filter and warning, checklists and templates |
-| W10 | Versions and components | Not started | | | | Releases, release notes, components with default assignee |
+| W10 | Versions and components | Review | 2026-10-16 | | | Versions with release flow and notes, components with default assignee, pickers, filters, Releases tab |
 | W11 | Flow and reports | Not started | | | | Velocity, cumulative flow, control chart, created vs resolved |
 | W12 | Roadmap, time tracking, calendar | Not started | | | | Timeline of epics, worklogs, due-date calendar |
 | W13 | Dashboards, parity sweep, hardening | Not started | | | | Gadget dashboards, JIRA-PARITY.md, a11y, e2e |
@@ -56,6 +56,8 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 - The brief mentions SendGrid; the platform uses Brevo through `apps/api/src/email/`. Use the existing sender.
 
 ## Log (newest first)
+
+- 2026-10-16: W10 built and set to Review. **API:** collections `versions` and `components`, `routes/versions.ts` (list with progress, create, edit, archive, delete, release with move-or-drop of unfinished work, release notes; components CRUD), item fields `fixVersionIds`, `affectsVersionIds`, `componentIds` (create, edit, duplicate; cleared on transfer), `version` and `component` filters on board, list and CSV, default assignee on create, plan feature `releases` (Team and up; `can()` actions `version.manage`, `version.release`, `component.manage`). **Web:** Releases tab (`releases-view.tsx`), `version-bits.tsx` pickers in the item panel and create dialog, filter-bar Version and Component filters, pricing comparison row. Tests: `versions.test.ts` (8). Changes from the plan: the "Releases side panel on the board" was not built (the tab and the filters cover it). Review list: create a version, put work in it from the item panel, release it with open work, read the notes, add a component with a default assignee and create an unassigned item in it, try versions on a Free workspace.
 
 - 2026-10-16: API test suite sped up from about 250 s to about 65 s. Measured first: a read request costs about 10 ms, a transaction write about 45 ms (many round trips to Mongo in Docker), and the single-file run was dominated by that, not by disk flushes (a test-only write concern changed nothing, so it was not kept). Fix: files now run in parallel, each worker with its own database copy (`<db>_test_w1` to `_w4`, made by `test/global-setup.ts`, chosen by `test/setup-db.ts`); `TEST_WORKERS=1` runs one at a time; test URIs use 127.0.0.1; password hashes use a cheap cost under vitest only (`VITEST` is set; production cost unchanged). Note: a 'Timeout waiting for worker' error after the laptop sleeps is not a failure; re-run.
 

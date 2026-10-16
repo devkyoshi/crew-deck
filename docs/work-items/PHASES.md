@@ -396,7 +396,7 @@ Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised 
 - Dependency awareness: "blocked by N" and "blocks N" on cards (open blockers only), a warning (never a block) when moving a blocked item forward, a "Blocked" filter.
 - Checklists on items with progress on cards, and reusable checklist templates per space.
 
-### W10: Versions and components
+### W10: Versions and components (built)
 
 - Collections `versions` (name, description, start and release dates, state unreleased, released, archived) and `components` (name, lead, default assignee); item fields `fixVersionIds`, `affectsVersionIds`, `componentIds`.
 - Release action lists open items and moves them to another version or none; release notes grouped by type; filters on board, list, search and CSV; default assignee on create. Plan gate `releases`.

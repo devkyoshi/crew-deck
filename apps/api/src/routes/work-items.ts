@@ -34,6 +34,7 @@ import {
   resolveItem,
   resolvedAtFor,
   setItemLabels,
+  spaceRefs,
   stale,
   statusIn,
   statusLabel,
@@ -60,6 +61,9 @@ const createBody = z.object({
   estimate: estimateSchema.nullable().optional(),
   dueDate: dateSchema.nullable().optional(),
   labelIds: z.array(z.string().uuid()).max(20).optional(),
+  fixVersionIds: z.array(z.string().uuid()).max(20).optional(),
+  affectsVersionIds: z.array(z.string().uuid()).max(20).optional(),
+  componentIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 const patchBody = z
@@ -75,6 +79,9 @@ const patchBody = z
     estimate: estimateSchema.nullable(),
     dueDate: dateSchema.nullable(),
     labelIds: z.array(z.string().uuid()).max(20),
+    fixVersionIds: z.array(z.string().uuid()).max(20),
+    affectsVersionIds: z.array(z.string().uuid()).max(20),
+    componentIds: z.array(z.string().uuid()).max(20),
     resolution: resolutionSchema,
     checklist: z
       .array(z.object({ id: z.string().min(1).max(64), text: z.string().trim().min(1).max(200), done: z.boolean() }))
@@ -233,6 +240,21 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
           statusId = first!.id;
         }
         const status = await statusIn(tx, space, statusId);
+        const fixVersionIds = await spaceRefs(tx, space, 'versions', b.fixVersionIds ?? [], 'fixVersionIds');
+        const affectsVersionIds = await spaceRefs(tx, space, 'versions', b.affectsVersionIds ?? [], 'affectsVersionIds');
+        const componentIds = await spaceRefs(tx, space, 'components', b.componentIds ?? [], 'componentIds');
+        // Work with no assignee goes to the default assignee of its first component that has one.
+        let assigneeId = b.assigneeId ?? null;
+        if (!assigneeId && componentIds.length) {
+          const comps = await tx.components.find({ id: { $in: componentIds } });
+          const first = componentIds.map((id) => comps.find((c) => c.id === id)).find((c) => c?.defaultAssigneeId);
+          if (first?.defaultAssigneeId) {
+            assigneeId = await assertAssignable(tx, actor.orgId, space, first.defaultAssigneeId).then(
+              () => first.defaultAssigneeId,
+              () => null,
+            );
+          }
+        }
         if (b.assigneeId) await assertAssignable(tx, actor.orgId, space, b.assigneeId);
         const rich = b.descriptionDoc !== undefined ? sanitizeDoc(b.descriptionDoc, 'descriptionDoc') : null;
         if (rich) await assertMentionable(tx, space, rich.mentions, 'descriptionDoc');
@@ -253,8 +275,11 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
           searchVersion: SEARCH_TEXT_VERSION,
           statusId,
           priority: b.priority,
-          assigneeId: b.assigneeId ?? null,
+          assigneeId,
           reporterId: actor.userId,
+          fixVersionIds,
+          affectsVersionIds,
+          componentIds,
           estimate: b.estimate ?? null,
           dueDate: b.dueDate ?? null,
           rank,
@@ -264,9 +289,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         });
         if (b.labelIds?.length) await setItemLabels(tx, actor.orgId, space, created.id, b.labelIds);
         await recordActivity(tx, { item: created, actorId: actor.userId, kind: 'created' });
-        await addWatchers(tx, created.id, [actor.userId, b.assigneeId, ...(rich?.mentions ?? [])]);
+        await addWatchers(tx, created.id, [actor.userId, assigneeId, ...(rich?.mentions ?? [])]);
         const base = { orgId: actor.orgId, actorId: actor.userId, itemId: created.id };
-        if (b.assigneeId) events.push({ type: 'assigned', ...base, userId: b.assigneeId });
+        if (assigneeId) events.push({ type: 'assigned', ...base, userId: assigneeId });
         if (rich?.mentions.length) events.push({ type: 'mentioned', ...base, userIds: rich.mentions, excerpt: rich.text.slice(0, 200) });
         return fresh(tx, actor, space, created.id);
       });
@@ -356,6 +381,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         if (b.assigneeId !== undefined) set.assigneeId = b.assigneeId;
         if (b.estimate !== undefined) set.estimate = b.estimate;
         if (b.dueDate !== undefined) set.dueDate = b.dueDate;
+        if (b.fixVersionIds !== undefined) set.fixVersionIds = await spaceRefs(tx, space, 'versions', b.fixVersionIds, 'fixVersionIds');
+        if (b.affectsVersionIds !== undefined) set.affectsVersionIds = await spaceRefs(tx, space, 'versions', b.affectsVersionIds, 'affectsVersionIds');
+        if (b.componentIds !== undefined) set.componentIds = await spaceRefs(tx, space, 'components', b.componentIds, 'componentIds');
         if (b.statusId !== undefined && b.statusId !== row.statusId) {
           const target = await statusIn(tx, space, b.statusId);
           assertTransition(await loadWorkflow(tx, space.id), await statusLabel(tx, row.statusId), await statusLabel(tx, target.id));

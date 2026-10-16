@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-16 - Versions and components (W10)
+
+- **Releases tab:** versions with dates and progress, release them (unfinished work moves to another version or leaves), release notes by type with copy as text. From the Team plan.
+- **Fix version, affects version (bugs) and components** on every item and in the create dialog; filters for version and component on the board, list and saved filters.
+- **Components** with a lead and a default assignee that new work is handed to.
+- ADR-063.
+
 ## 2026-10-15 - Workflow rules, dependencies and checklists (W9)
 
 - **Workflow rules:** a space admin can limit which status work may move to from each status (Board settings, Workflow rules). Off by default.

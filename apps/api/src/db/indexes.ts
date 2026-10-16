@@ -109,6 +109,14 @@ const INDEXES: Record<string, Ix[]> = {
     ['id', { id: 1 }, U],
     ['space', { spaceId: 1, nameLower: 1 }, U],
   ],
+  versions: [
+    ['id', { id: 1 }, U],
+    ['space_name', { spaceId: 1, nameLower: 1 }, U],
+  ],
+  components: [
+    ['id', { id: 1 }, U],
+    ['space_name', { spaceId: 1, nameLower: 1 }, U],
+  ],
   work_items: [
     ['id', { id: 1 }, U],
     ['space_number', { spaceId: 1, number: 1 }, U],
@@ -125,6 +133,8 @@ const INDEXES: Record<string, Ix[]> = {
     ['org_reporter', { orgId: 1, reporterId: 1 }],
     ['sprint', { sprintId: 1 }],
     ['key_history', { keyHistory: 1 }, { sparse: true }],
+    ['fix_versions', { fixVersionIds: 1 }, { sparse: true }],
+    ['components', { componentIds: 1 }, { sparse: true }],
   ],
   labels: [
     ['id', { id: 1 }, U],

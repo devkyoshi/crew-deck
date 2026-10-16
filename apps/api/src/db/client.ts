@@ -66,6 +66,8 @@ const TENANT = {
   sprintItemsHistory: 'sprint_items_history',
   sprintSnapshots: 'sprint_snapshots',
   checklistTemplates: 'checklist_templates',
+  versions: 'versions',
+  components: 'components',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -125,6 +127,8 @@ export interface TenantDocs {
   sprintItemsHistory: T.SprintItemHistoryDoc;
   sprintSnapshots: T.SprintSnapshotDoc;
   checklistTemplates: T.ChecklistTemplateDoc;
+  versions: T.VersionDoc;
+  components: T.ComponentDoc;
 }
 
 export interface GlobalDocs {
@@ -608,6 +612,8 @@ export class TenantDb {
   readonly sprintItemsHistory!: TenantRepos['sprintItemsHistory'];
   readonly sprintSnapshots!: TenantRepos['sprintSnapshots'];
   readonly checklistTemplates!: TenantRepos['checklistTemplates'];
+  readonly versions!: TenantRepos['versions'];
+  readonly components!: TenantRepos['components'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

@@ -127,6 +127,9 @@ export type ItemPatch = Partial<{
   labelIds: string[];
   resolution: Resolution;
   checklist: ChecklistEntry[];
+  fixVersionIds: string[];
+  affectsVersionIds: string[];
+  componentIds: string[];
 }>;
 
 /**
@@ -193,6 +196,8 @@ export interface NewItem {
   estimate?: number | null;
   dueDate?: string | null;
   labelIds?: string[];
+  fixVersionIds?: string[];
+  componentIds?: string[];
 }
 
 export function useCreateItem(space: string) {

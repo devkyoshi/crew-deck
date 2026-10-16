@@ -12,6 +12,8 @@ export interface Filters {
   mine: boolean;
   recent: boolean;
   blocked: boolean;
+  version: string[];
+  component: string[];
 }
 
 export const NO_FILTERS: Filters = {
@@ -25,6 +27,8 @@ export const NO_FILTERS: Filters = {
   mine: false,
   recent: false,
   blocked: false,
+  version: [],
+  component: [],
 };
 
 const list = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -43,6 +47,8 @@ export function parseFilters(params: URLSearchParams): Filters {
     mine: params.get('mine') === '1',
     recent: params.get('recent') === '1',
     blocked: params.get('blocked') === '1',
+    version: list(params.get('version')),
+    component: list(params.get('component')),
   };
 }
 
@@ -59,10 +65,12 @@ export function filterString(f: Filters): string {
   if (f.mine) p.set('mine', '1');
   if (f.recent) p.set('recent', '1');
   if (f.blocked) p.set('blocked', '1');
+  if (f.version.length) p.set('version', f.version.join(','));
+  if (f.component.length) p.set('component', f.component.join(','));
   return p.toString();
 }
 
-export const FILTER_KEYS = ['q', 'assignee', 'type', 'priority', 'label', 'epic', 'due', 'mine', 'recent', 'blocked'];
+export const FILTER_KEYS = ['q', 'assignee', 'type', 'priority', 'label', 'epic', 'due', 'mine', 'recent', 'blocked', 'version', 'component'];
 
 export const hasActiveFilters = (f: Filters) => filterString(f) !== '';
 
@@ -76,4 +84,6 @@ export const countFilters = (f: Filters) =>
   (f.due ? 1 : 0) +
   (f.mine ? 1 : 0) +
   (f.recent ? 1 : 0) +
-  (f.blocked ? 1 : 0);
+  (f.blocked ? 1 : 0) +
+  (f.version.length ? 1 : 0) +
+  (f.component.length ? 1 : 0);

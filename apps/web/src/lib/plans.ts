@@ -10,7 +10,8 @@ export type FeatureKey =
   | 'branding_full'
   | 'scrum_sprints'
   | 'shared_filters'
-  | 'burndown_reports';
+  | 'burndown_reports'
+  | 'releases';
 
 export type LimitKey =
   | 'seats'
@@ -95,6 +96,10 @@ export const COMPARISON: { label: string; value: (p: PlanInfo) => string }[] = [
   {
     label: 'Burndown and sprint reports',
     value: (p) => (p.features.includes('burndown_reports') ? 'Included' : 'Not included'),
+  },
+  {
+    label: 'Releases: versions, release notes and components',
+    value: (p) => (p.features.includes('releases') ? 'Included' : 'Components only'),
   },
   {
     label: 'Saved filters shared with the team',

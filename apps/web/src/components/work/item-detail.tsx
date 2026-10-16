@@ -52,6 +52,7 @@ import {
   useUpdateItem,
   type ItemPatch,
 } from '@/lib/work-api';
+import { ComponentPicker, VersionPicker } from './version-bits';
 import { BlockedMoveDialog, BlockedNotice, ChecklistSection, movesBlockedForward, ResolutionField } from './item-extras';
 import { TYPE_META, type ItemType, type Person, type WorkItem } from '@/lib/work';
 import { cn } from '@/lib/utils';
@@ -544,6 +545,40 @@ export function ItemDetail({
               onChange={(next) =>
                 save({ labelIds: next.map((l) => l.id) }, { labels: next })
               }
+            />
+          </Field>
+
+          <Field label="Fix version" htmlFor="f-fixversion">
+            <VersionPicker
+              id="f-fixversion"
+              space={item.spaceKey}
+              label="Fix version"
+              value={item.fixVersions ?? []}
+              disabled={!canEdit}
+              onChange={(ids) => save({ fixVersionIds: ids })}
+            />
+          </Field>
+
+          {item.type === 'bug' && (
+            <Field label="Affects version" htmlFor="f-affects">
+              <VersionPicker
+                id="f-affects"
+                space={item.spaceKey}
+                label="Affects version"
+                value={item.affectsVersions ?? []}
+                disabled={!canEdit}
+                onChange={(ids) => save({ affectsVersionIds: ids })}
+              />
+            </Field>
+          )}
+
+          <Field label="Components" htmlFor="f-components">
+            <ComponentPicker
+              id="f-components"
+              space={item.spaceKey}
+              value={item.components ?? []}
+              disabled={!canEdit}
+              onChange={(ids) => save({ componentIds: ids })}
             />
           </Field>
 

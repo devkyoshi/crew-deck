@@ -43,6 +43,7 @@ Proposed for the work items module; details, behaviour and wiring are in [work-i
 | **Max attachment size** (`max_attachment_mb`)          | 5 MB  | 25 MB     | 100 MB    |
 | Scrum backlog and sprints (`scrum_sprints`)            | No    | Yes       | Yes       |
 | Filters shared with the space (`shared_filters`)       | No    | Yes       | Yes       |
+| Releases: versions and release notes (`releases`)        | No    | Yes       | Yes       |
 | Burndown and sprint report (`burndown_reports`)        | No    | No        | Yes       |
 
 Kanban boards, statuses, comments, links and search are included in every plan. Storage (`storage_mb`) is enforced since W3, and deleting an item frees its files. The pricing page and plan comparison list all of these since W8.

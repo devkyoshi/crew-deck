@@ -86,6 +86,9 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
             rank: await rankAtEnd(t, space.id, src.statusId),
             labelIds: src.labelIds ?? [],
             resolution: src.resolution ?? null,
+            fixVersionIds: src.fixVersionIds ?? [],
+            affectsVersionIds: src.affectsVersionIds ?? [],
+            componentIds: src.componentIds ?? [],
             checklist: (src.checklist ?? []).map((c) => ({ ...c, id: randomUUID() })),
             resolvedAt: src.resolvedAt ? now : null,
             createdAt: now,
@@ -182,6 +185,10 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
               resolvedAt: resolvedAtFor(status.category, item.resolvedAt, now),
               resolution: resolutionFor(status.category, item.resolution),
               labelIds: mapLabels(item.labelIds ?? []),
+              // Versions and components belong to a space, so they stay behind.
+              fixVersionIds: [],
+              affectsVersionIds: [],
+              componentIds: [],
               assigneeId,
               // The parent (an epic) lives in the old space, so a moved story loses it.
               parentId: item.id === row.id ? null : item.parentId,

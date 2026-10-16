@@ -348,6 +348,13 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-063: Versions and components are per space; releasing never loses work (W10)
+
+- A version (release) and a component belong to one space. Items carry ids (`fixVersionIds`, `affectsVersionIds`, `componentIds`); names are joined when an item is read, so a rename shows everywhere at once. Deleting a version or component takes it off its items and leaves the items. Moving an item to another space leaves its versions and components behind; duplicating copies them.
+- Versions are a plan feature (`releases`, from Team); reading them and components are open on every plan, so work that carries a version does not become unreadable after a downgrade. Members create and edit versions, only space admins release them and manage components.
+- Releasing a version moves its unfinished items to another unreleased version or takes them out, in one transaction, and cannot be undone (a released version cannot be reopened, only archived). Release notes list finished work by type; work finished as Won't do or Duplicate is listed as not shipped.
+- New work in a component with no assignee goes to the default assignee of the first of its components that has one, if that person can open the space.
+
 ## ADR-062: Workflow rules are a list of allowed moves, off by default (W9)
 
 - A space's rules live in its board settings: `restricted` plus, per source status, the statuses it may move to. A source status with no entry is unrestricted, so a new status works straight away and turning the switch on changes nothing until a row is edited. Every way of changing a status (edit, move, bulk move, the sprint-free paths) checks the rules; a bulk move reports each refused item and moves the rest. Transfers and "delete a status with a replacement" are admin or cross-space actions and are not restricted.

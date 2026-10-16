@@ -104,6 +104,7 @@ export default function SpaceLayout({
     { href: `${base}/board`, label: 'Board' },
     { href: `${base}/list`, label: 'List' },
     { href: `${base}/epics`, label: 'Epics' },
+    { href: `${base}/releases`, label: 'Releases' },
     ...(space.boardType === 'scrum' ? [{ href: `${base}/reports`, label: 'Reports' }] : []),
     { href: `${base}/members`, label: 'Members' },
     ...(space.permissions.edit ? [{ href: `${base}/settings`, label: 'Settings' }] : []),

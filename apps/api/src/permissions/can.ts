@@ -39,6 +39,9 @@ export type Action =
   | 'board.manage'
   | 'label.create'
   | 'label.manage'
+  | 'version.manage'
+  | 'version.release'
+  | 'component.manage'
   | 'settings.manage'
   | 'attendance.viewAll'
   | 'attendance.export'
@@ -139,6 +142,8 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'status.manage':
     case 'board.manage':
     case 'label.manage':
+    case 'version.release':
+    case 'component.manage':
       return adminLike || spaceAdmin;
 
     case 'item.create':
@@ -150,6 +155,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'attachment.add':
     case 'filter.share':
     case 'sprint.create':
+    case 'version.manage':
       return adminLike || spaceAdmin || resource.spaceRole === 'member';
 
     // People edit only their own comments, and only while they can still comment.
