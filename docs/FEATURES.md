@@ -76,6 +76,7 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Notifications: in-app, batched email, preferences, due reminders (W5) | Built  |                    |
 | Backlog and sprints (Scrum) (W6)                                     | Built   | `scrum_sprints`    |
 | Burndown and sprint report (W6)                                      | Built   | `burndown_reports` |
+| Service desk: ticket queue with response and resolve targets          | Built   | `service_desk`     |
 | Live updates on boards, lists, backlogs and items (W7)               | Built   |                    |
 | Personal dashboards with tiles (W13) | Built | |
 | Time tracking, roadmap timeline, due-date calendar (W12) | Built | `roadmap` (timeline) |

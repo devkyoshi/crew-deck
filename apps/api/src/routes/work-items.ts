@@ -18,6 +18,7 @@ import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
 import { assertTransition, loadWorkflow, resolutionFor, resolutionSchema } from '../work/workflow.js';
 import { refreshSearchText, SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
+import { boardTypeOf, loadSlaPolicy, markFirstResponse, slaDueDates, workCalendar } from '../work/sla.js';
 import {
   assertAssignable,
   assertMentionable,
@@ -231,7 +232,23 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
       const out = await withTenantTx(deps.db, actor.orgId, async (tx) => {
         events.length = 0;
         const space = await resolveSpace(tx, actor, req.params.id);
-        if (!can(actor, 'item.create', spaceCtx(space))) throw forbidden();
+        // Anyone who can see a service desk may raise a ticket in it; everything else needs member rights.
+        const boardType = await boardTypeOf(tx, space.id);
+        if (b.type === 'ticket' && boardType !== 'service') {
+          throw new AppError(422, 'validation_error', 'Tickets belong in a service desk', {
+            type: 'Tickets can only be raised in a service desk',
+          });
+        }
+        if (boardType === 'service' && b.type === 'epic') {
+          throw new AppError(422, 'validation_error', 'A service desk holds tickets', {
+            type: 'Use a ticket in a service desk',
+          });
+        }
+        const allowed =
+          b.type === 'ticket'
+            ? can(actor, 'ticket.submit', spaceCtx(space))
+            : can(actor, 'item.create', spaceCtx(space));
+        if (!allowed) throw forbidden();
         assertWritable(space);
         assertWithinLimit(
           await loadPlan(tx, actor.orgId),
@@ -272,6 +289,10 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         const number = await nextNumber(tx, space.id);
         const rank = await rankAtEnd(tx, space.id, statusId);
         const now = new Date();
+        const sla =
+          b.type === 'ticket'
+            ? slaDueDates(await loadSlaPolicy(tx, space.id), b.priority, now, await workCalendar(tx))
+            : null;
         const created = await tx.workItems.insert({
           spaceId: space.id,
           number,
@@ -294,6 +315,9 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
           originalMinutes: b.originalMinutes ?? null,
           remainingMinutes: b.remainingMinutes ?? b.originalMinutes ?? null,
           rank,
+          ...(sla
+            ? { slaResponseDueAt: sla.response, slaResolveDueAt: sla.resolve, firstResponseAt: null }
+            : {}),
           resolvedAt: resolvedAtFor(status.category, null, now),
           createdAt: now,
           updatedAt: now,
@@ -304,6 +328,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         const base = { orgId: actor.orgId, actorId: actor.userId, itemId: created.id };
         if (assigneeId) events.push({ type: 'assigned', ...base, userId: assigneeId });
         if (rich?.mentions.length) events.push({ type: 'mentioned', ...base, userIds: rich.mentions, excerpt: rich.text.slice(0, 200) });
+        if (b.type === 'ticket') events.push({ type: 'ticket_received', ...base });
         return fresh(tx, actor, space, created.id);
       });
       await deliverSafely(deps.db, events, req.log);
@@ -360,6 +385,11 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         assertWritable(space);
 
         const type: ItemType = b.type ?? row.type;
+        if (b.type !== undefined && (b.type === 'ticket') !== (row.type === 'ticket')) {
+          throw new AppError(422, 'validation_error', 'A ticket cannot become another type', {
+            type: 'Tickets keep their type',
+          });
+        }
         const parentId = b.parentId === undefined ? row.parentId : b.parentId;
         if (b.type !== undefined || b.parentId !== undefined) {
           const parent = parentId ? await liveParent(tx, space, parentId) : null;
@@ -388,7 +418,15 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         if (rich) set.description = rich.doc;
         if (b.type !== undefined) set.type = b.type;
         if (b.parentId !== undefined) set.parentId = b.parentId;
-        if (b.priority !== undefined) set.priority = b.priority;
+        if (b.priority !== undefined) {
+          set.priority = b.priority;
+          // A new priority restarts the targets from when the ticket was raised.
+          if (row.type === 'ticket' && b.priority !== row.priority) {
+            const due = slaDueDates(await loadSlaPolicy(tx, space.id), b.priority, row.createdAt, await workCalendar(tx));
+            set.slaResponseDueAt = due.response;
+            set.slaResolveDueAt = due.resolve;
+          }
+        }
         if (b.assigneeId !== undefined) set.assigneeId = b.assigneeId;
         if (b.estimate !== undefined) set.estimate = b.estimate;
         if (b.dueDate !== undefined) set.dueDate = b.dueDate;
@@ -438,6 +476,7 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         const changes = itemChanges(presentItem(row, space.key), after);
         await recordChanges(tx, row, actor.userId, changes);
         await addWatchers(tx, row.id, [b.assigneeId, ...newMentions]);
+        if (b.statusId !== undefined || b.assigneeId !== undefined) await markFirstResponse(tx, row, actor.userId, now);
         events.push(...eventsFromChanges(actor.orgId, actor.userId, row.id, changes));
         if (newMentions.length) {
           events.push({ type: 'mentioned', orgId: actor.orgId, actorId: actor.userId, itemId: row.id, userIds: newMentions, excerpt: rich?.text.slice(0, 200) });

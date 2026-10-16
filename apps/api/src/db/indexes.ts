@@ -150,6 +150,7 @@ const INDEXES: Record<string, Ix[]> = {
     ['key_history', { keyHistory: 1 }, { sparse: true }],
     ['fix_versions', { fixVersionIds: 1 }, { sparse: true }],
     ['components', { componentIds: 1 }, { sparse: true }],
+    ['sla_resolve', { spaceId: 1, slaResolveDueAt: 1 }, { sparse: true }],
   ],
   labels: [
     ['id', { id: 1 }, U],

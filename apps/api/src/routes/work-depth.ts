@@ -11,6 +11,7 @@ import { can, type Actor } from '../permissions/can.js';
 import { addWatchers, recordActivity } from '../work/activity.js';
 import { refreshSearchText } from '../work/search-text.js';
 import { deliverSafely, type NotifyEvent } from '../work/notify.js';
+import { markFirstResponse } from '../work/sla.js';
 import { sanitizeDoc } from '../work/rich-text.js';
 import {
   assertMentionable,
@@ -137,7 +138,10 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
       const result = await withTenantTx(deps.db, actor.orgId, async (t) => {
         events.length = 0;
         const { row, space } = await resolveItem(t, actor, req.params.id);
-        if (!can(actor, 'comment.create', spaceCtx(space))) throw forbidden();
+        // The person who raised a ticket can always follow up on it, even without member rights.
+        const ownTicket =
+          row.type === 'ticket' && row.reporterId === actor.userId && can(actor, 'ticket.submit', spaceCtx(space));
+        if (!ownTicket && !can(actor, 'comment.create', spaceCtx(space))) throw forbidden();
         assertWritable(space);
         await assertMentionable(t, space, clean.mentions);
         const created = await t.comments.insert({
@@ -151,6 +155,7 @@ export async function workDepthRoutes(app: FastifyInstance, deps: AuthDeps) {
           createdAt: new Date(),
         });
         await refreshSearchText(t, row.id);
+        await markFirstResponse(t, row, actor.userId);
         await addWatchers(t, row.id, [actor.userId, ...clean.mentions]);
         await recordActivity(t, {
           item: row,

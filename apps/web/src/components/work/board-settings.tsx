@@ -554,9 +554,12 @@ function StatusRow({
 }
 
 /** Kanban or Scrum. Scrum needs the plan's sprints feature; switching back keeps sprints and returns planned work. */
-function BoardTypeSwitch({ spaceKey, type }: { spaceKey: string; type: 'kanban' | 'scrum' }) {
+function BoardTypeSwitch({ spaceKey, type }: { spaceKey: string; type: 'kanban' | 'scrum' | 'service' }) {
   const setType = useSetBoardType(spaceKey);
   const scrumAllowed = useHasFeature('scrum_sprints');
+  if (type === 'service') {
+    return <p className="text-muted-foreground text-sm">Service desk: tickets are worked from the queue against response targets.</p>;
+  }
   const other = type === 'kanban' ? 'scrum' : 'kanban';
   return (
     <div className="space-y-2">

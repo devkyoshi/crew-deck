@@ -2,6 +2,7 @@ import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { NotificationDoc } from '../db/types.js';
 import type { EmailMessage } from '../email/sender.js';
+import { slaClockState } from '@crew-deck/shared';
 import { notifyOne } from './notify.js';
 
 const esc = (s: string) =>
@@ -23,6 +24,12 @@ export function describeNotification(n: Pick<NotificationDoc, 'type' | 'data'>, 
       return `${who} moved ${what} from ${d.from} to ${d.to}`;
     case 'due_soon':
       return `${what} is due ${d.when === 'today' ? 'today' : 'tomorrow'}`;
+    case 'ticket_received':
+      return `${who} raised ${what}`;
+    case 'sla_due_soon':
+      return `${what} is close to its ${d.clock === 'response' ? 'response' : 'resolve'} deadline`;
+    case 'sla_breached':
+      return `${what} missed its ${d.clock === 'response' ? 'response' : 'resolve'} deadline`;
     case 'sprint_started':
       return `${who} started ${d.sprint ?? 'a sprint'} in ${d.spaceKey}`;
     case 'sprint_completed':
@@ -114,6 +121,53 @@ export async function remindDueSoon(db: Db, now = new Date()) {
   return created;
 }
 
+/**
+ * Warns about tickets whose response or resolve target is close or missed. Runs with the other hourly
+ * jobs; the dedupe key keeps it to one warning and one miss per person, ticket and clock.
+ */
+export async function sweepSla(db: Db, now = new Date()) {
+  const horizon = new Date(now.getTime() + 60 * 60_000);
+  const open = (due: string, done: string) => ({ [due]: { $ne: null, $lte: horizon }, [done]: null });
+  const items = await db.global.all.workItems.find(
+    {
+      type: 'ticket',
+      deletedAt: null,
+      $or: [open('slaResponseDueAt', 'firstResponseAt'), open('slaResolveDueAt', 'resolvedAt')],
+    },
+    { limit: 5000 },
+  );
+  let created = 0;
+  for (const item of items) {
+    const t = db.tenant(item.orgId);
+    const space = await t.spaces.findOne({ id: item.spaceId, deletedAt: null, status: 'active' });
+    if (!space) continue;
+    const clocks = [
+      { clock: 'response', state: slaClockState(item.slaResponseDueAt, item.firstResponseAt, now) },
+      { clock: 'resolve', state: slaClockState(item.slaResolveDueAt, item.resolvedAt, now) },
+    ] as const;
+    // Who answers for it: the assignee, or the people who run the desk while nobody has it.
+    let who: string[] = item.assigneeId ? [item.assigneeId] : [];
+    if (!who.length) {
+      const admins = await t.spaceMembers.find({ spaceId: space.id, principalType: 'user', spaceRole: 'admin' });
+      who = [...new Set([...admins.map((a) => a.principalId), space.ownerId].filter((x): x is string => !!x))];
+    }
+    for (const { clock, state } of clocks) {
+      if (state !== 'due_soon' && state !== 'breached') continue;
+      for (const userId of who) {
+        const n = await notifyOne(t, space, item, {
+          userId,
+          type: state === 'breached' ? 'sla_breached' : 'sla_due_soon',
+          actorId: null,
+          data: { clock },
+          dedupeKey: `sla:${state}:${clock}:${item.id}`,
+        });
+        if (n) created++;
+      }
+    }
+  }
+  return created;
+}
+
 export function startNotificationJobs(
   db: Db,
   config: Pick<Config, 'TENANT_ORIGIN_TEMPLATE'>,
@@ -128,13 +182,21 @@ export function startNotificationJobs(
     remindDueSoon(db)
       .then((n) => n && log.info(`created ${n} due-date reminder(s)`))
       .catch((e: Error) => log.error(`due-date reminders failed: ${e.message}`));
+  const sweep = () =>
+    sweepSla(db)
+      .then((n) => n && log.info(`created ${n} ticket deadline notification(s)`))
+      .catch((e: Error) => log.error(`ticket deadline sweep failed: ${e.message}`));
   void remind();
+  void sweep();
   const a = setInterval(flush, 60_000);
   const b = setInterval(remind, 60 * 60_000);
+  // Deadlines are measured in minutes, so this runs more often than the daily-ish reminders.
+  const c = setInterval(sweep, 5 * 60_000);
   return {
     close: async () => {
       clearInterval(a);
       clearInterval(b);
+      clearInterval(c);
     },
   };
 }

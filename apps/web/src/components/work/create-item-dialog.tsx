@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Notice } from '@/components/shared/notice';
 import { useMe } from '@/components/shell/me-context';
+import { useSpace } from '@/components/spaces/space-context';
 import { ApiError } from '@/lib/api';
 import { useCreateItem, errorText } from '@/lib/work-api';
 import {
@@ -39,6 +40,8 @@ import { useVocabulary } from './use-vocabulary';
 type Parent = { id: string; key: string; title: string; type: ItemType } | null;
 
 const TYPES: ItemType[] = ['story', 'task', 'bug', 'epic', 'subtask'];
+/** A service desk holds tickets (and the odd task or bug); epics and stories belong on a board. */
+const SERVICE_TYPES: ItemType[] = ['ticket', 'task', 'bug', 'subtask'];
 
 export function CreateItemDialog({
   spaceKey,
@@ -63,6 +66,7 @@ export function CreateItemDialog({
 }) {
   const vocab = useVocabulary();
   const me = useMe();
+  const isService = useSpace().boardType === 'service';
   const create = useCreateItem(spaceKey);
   const firstTodo = statuses.find((s) => s.category === 'todo') ?? statuses[0];
 
@@ -87,7 +91,7 @@ export function CreateItemDialog({
   // Start fresh each time the dialog opens, using the column or filter it was opened from.
   useEffect(() => {
     if (!open) return;
-    setType(defaults?.type ?? 'task');
+    setType(defaults?.type ?? (isService ? 'ticket' : 'task'));
     setTitle('');
     setDescription('');
     setStatusId(defaults?.statusId ?? firstTodo?.id ?? '');
@@ -159,7 +163,7 @@ export function CreateItemDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Create {vocab.noun}</DialogTitle>
+            <DialogTitle>{isService ? 'New ticket' : `Create ${vocab.noun}`}</DialogTitle>
             <DialogDescription>It starts in the status you choose and gets the next key in this space.</DialogDescription>
           </DialogHeader>
 
@@ -181,7 +185,7 @@ export function CreateItemDialog({
           )}
 
           <div role="radiogroup" aria-label="Type" className="flex flex-wrap gap-1.5">
-            {TYPES.filter((t) => vocab.allowedTypes.includes(t) || t === type).map((t) => (
+            {(isService ? SERVICE_TYPES : TYPES.filter((t) => vocab.allowedTypes.includes(t) || t === type)).map((t) => (
               <button
                 key={t}
                 type="button"

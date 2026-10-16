@@ -549,6 +549,7 @@ export async function sprintRoutes(app: FastifyInstance, deps: AuthDeps) {
         if (!can(actor, 'board.manage', spaceCtx(space))) throw forbidden();
         assertWritable(space);
         const board = await loadBoard(t, space.id);
+        if (board.type === 'service') throw conflict('A service desk keeps its board type.');
         if (board.type === req.body.type) return { type: board.type, movedToBacklog: 0 };
         if (await t.sprints.exists({ spaceId: space.id, state: 'active' })) {
           throw conflict('A sprint is running. Complete it before changing the board type.');

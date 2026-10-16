@@ -19,6 +19,7 @@ export type Action =
   | 'audit.viewOrg'
   | 'audit.viewSpace'
   | 'item.view'
+  | 'ticket.submit'
   | 'item.create'
   | 'item.edit'
   | 'item.delete'
@@ -135,6 +136,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
 
     // Work items (brief section 7). Viewing follows the space; editing needs member or better.
     case 'item.view':
+    case 'ticket.submit':
     case 'item.watch':
     case 'space.view':
       if (adminLike) return true;

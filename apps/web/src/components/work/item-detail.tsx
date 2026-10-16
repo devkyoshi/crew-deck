@@ -55,6 +55,7 @@ import {
 import { TimeSection } from './time-section';
 import { ComponentPicker, VersionPicker } from './version-bits';
 import { BlockedMoveDialog, BlockedNotice, ChecklistSection, movesBlockedForward, ResolutionField } from './item-extras';
+import { SlaDetail } from './sla-badge';
 import { TYPE_META, type ItemType, type Person, type WorkItem } from '@/lib/work';
 import { cn } from '@/lib/utils';
 import { ItemPanelSkeleton } from './board-bits';
@@ -304,7 +305,8 @@ export function ItemDetail({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
             {(Object.keys(TYPE_META) as ItemType[])
-              .filter((t) => vocab.allowedTypes.includes(t) || t === item.type)
+              // A ticket keeps its type, and nothing else becomes one.
+              .filter((t) => (item.type === 'ticket' ? t === 'ticket' : t !== 'ticket' && (vocab.allowedTypes.includes(t) || t === item.type)))
               .map((t) => (
               <DropdownMenuItem
                 key={t}
@@ -517,6 +519,13 @@ export function ItemDetail({
               onChange={(priority) => save({ priority }, { priority })}
             />
           </Field>
+
+          {item.sla && (
+            <div className="space-y-1.5">
+              <p className="text-muted-foreground text-xs font-medium">Deadlines</p>
+              <SlaDetail sla={item.sla} />
+            </div>
+          )}
 
           <Field label="Estimate (story points)" htmlFor="f-estimate">
             <EstimateField

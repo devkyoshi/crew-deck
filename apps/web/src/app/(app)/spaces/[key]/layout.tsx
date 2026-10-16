@@ -101,12 +101,19 @@ export default function SpaceLayout({
   const tabs = [
     { href: base, label: 'Overview' },
     ...(space.boardType === 'scrum' ? [{ href: `${base}/backlog`, label: 'Backlog' }] : []),
-    { href: `${base}/board`, label: 'Board' },
-    { href: `${base}/list`, label: 'List' },
-    { href: `${base}/epics`, label: 'Epics' },
-    { href: `${base}/roadmap`, label: 'Roadmap' },
-    { href: `${base}/calendar`, label: 'Calendar' },
-    { href: `${base}/releases`, label: 'Releases' },
+    ...(space.boardType === 'service'
+      ? [
+          { href: `${base}/list`, label: 'Queue' },
+          { href: `${base}/board`, label: 'Board' },
+        ]
+      : [
+          { href: `${base}/board`, label: 'Board' },
+          { href: `${base}/list`, label: 'List' },
+          { href: `${base}/epics`, label: 'Epics' },
+          { href: `${base}/roadmap`, label: 'Roadmap' },
+          { href: `${base}/calendar`, label: 'Calendar' },
+          { href: `${base}/releases`, label: 'Releases' },
+        ]),
     { href: `${base}/documents`, label: 'Documents' },
     { href: `${base}/reports`, label: 'Reports' },
     { href: `${base}/members`, label: 'Members' },

@@ -1,4 +1,4 @@
-import { DEFAULT_STATUSES, WORKSPACE_TEMPLATES, isWorkType, type StatusTemplate } from '@crew-deck/shared';
+import { DEFAULT_STATUSES, SERVICE_STATUSES, WORKSPACE_TEMPLATES, isWorkType, type StatusTemplate } from '@crew-deck/shared';
 import type { TenantDb } from '../db/client.js';
 
 /**
@@ -10,9 +10,9 @@ import type { TenantDb } from '../db/client.js';
 export async function seedSpaceWork(
   t: TenantDb,
   spaceId: string,
-  opts: { statuses?: readonly StatusTemplate[]; boardType?: 'kanban' | 'scrum' } = {},
+  opts: { statuses?: readonly StatusTemplate[]; boardType?: 'kanban' | 'scrum' | 'service' } = {},
 ) {
-  let statuses = opts.statuses;
+  let statuses = opts.statuses ?? (opts.boardType === 'service' ? SERVICE_STATUSES : undefined);
   if (!statuses) {
     const org = await t.organization();
     statuses =

@@ -1,4 +1,5 @@
 import type {
+  SlaState,
   BoardType,
   ItemType,
   Priority,
@@ -18,11 +19,12 @@ import {
   CircleDot,
   CornerDownRight,
   Equal,
+  Ticket,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
 
-export type { BoardType, ItemType, Priority, StatusCategory, StatusColor };
+export type { BoardType, ItemType, Priority, SlaState, StatusCategory, StatusColor };
 
 // ---- API shapes (apps/api/src/work and routes/board.ts) ------------------------------------------------
 
@@ -91,6 +93,11 @@ export interface WorkItem {
   fixVersions?: VersionRef[];
   affectsVersions?: VersionRef[];
   components?: { id: string; name: string }[];
+  /** Tickets only: the response and resolve deadlines and where each stands. */
+  sla?: {
+    response: { dueAt: string | null; doneAt: string | null; state: SlaState };
+    resolve: { dueAt: string | null; doneAt: string | null; state: SlaState };
+  } | null;
 }
 
 export interface VersionRef {
@@ -179,6 +186,12 @@ export const TYPE_META: Record<
     icon: Bug,
     tile: 'bg-rose-100 dark:bg-rose-500/20',
     text: 'text-rose-700 dark:text-rose-300',
+  },
+  ticket: {
+    label: 'Ticket',
+    icon: Ticket,
+    tile: 'bg-amber-100 dark:bg-amber-500/20',
+    text: 'text-amber-700 dark:text-amber-300',
   },
   subtask: {
     label: 'Subtask',

@@ -188,7 +188,7 @@ function Axes({ max, labels, every }: { max: number; labels: string[]; every: nu
   const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
   return (
     <>
-      {[0, Math.round(max / 2), max].map((t) => (
+      {[...new Set([0, Math.round(max / 2), max])].map((t) => (
         <g key={t}>
           <line
             x1={pad.l}

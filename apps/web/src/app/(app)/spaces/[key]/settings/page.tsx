@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useSpace } from '@/components/spaces/space-context';
+import { ServiceSlaSettings } from '@/components/work/service-sla-settings';
 import { api, ApiError, qs, type SpaceDetail, type SpaceVisibility } from '@/lib/api';
 import { forgetRecentSpace } from '@/lib/recent-spaces';
 import { SPACE_ICONS, spaceIcon } from '@/lib/space-icons';
@@ -141,6 +142,19 @@ export default function SpaceSettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {space.boardType === 'service' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Response targets</CardTitle>
+            <CardDescription>
+              How quickly this desk answers and resolves tickets, by priority.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ServiceSlaSettings spaceKey={space.key} />
+          </CardContent>
+        </Card>
+      )}
       <form onSubmit={saveGeneral} noValidate>
         <Card>
           <CardHeader>

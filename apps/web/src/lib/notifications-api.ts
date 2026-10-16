@@ -10,6 +10,9 @@ export type NotificationType =
   | 'commented'
   | 'status_changed'
   | 'due_soon'
+  | 'ticket_received'
+  | 'sla_due_soon'
+  | 'sla_breached'
   | 'sprint_started'
   | 'sprint_completed';
 
@@ -32,6 +35,9 @@ export const TYPE_LABELS: Record<NotificationType, string> = {
   commented: 'A comment on something I watch',
   status_changed: 'The status changes on something I reported or am assigned',
   due_soon: 'My work is due today or tomorrow',
+  ticket_received: 'A ticket is raised in a service desk I run',
+  sla_due_soon: 'A ticket is close to its deadline',
+  sla_breached: 'A ticket misses its deadline',
   sprint_started: 'A sprint starts in my space',
   sprint_completed: 'A sprint completes in my space',
 };

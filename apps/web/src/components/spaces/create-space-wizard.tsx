@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, Kanban, Lock, Timer, Users } from 'lucide-react';
+import { Globe, Kanban, Lock, Ticket, Timer, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { DEFAULT_STATUSES, WORKSPACE_TEMPLATES, isWorkType } from '@crew-deck/shared';
@@ -56,7 +56,7 @@ const schema = z.object({
   icon: z.string(),
   description: z.string().trim().max(1000, 'Keep it under 1000 characters'),
   visibility: z.enum(['open', 'private']),
-  boardType: z.enum(['kanban', 'scrum']),
+  boardType: z.enum(['kanban', 'scrum', 'service']),
 });
 type Values = z.infer<typeof schema>;
 
@@ -131,6 +131,7 @@ export function CreateSpaceWizard() {
   }
 
   const scrumAllowed = useHasFeature('scrum_sprints');
+  const serviceAllowed = useHasFeature('service_desk');
   const nameReg = register('name');
 
   return (
@@ -272,7 +273,7 @@ export function CreateSpaceWizard() {
         {step === 1 && (
           <div className="space-y-2" role="group" aria-label="Board type">
             <h3 className="text-sm font-medium">Board type</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <button
                 type="button"
                 aria-pressed={v.boardType === 'kanban'}
@@ -312,6 +313,31 @@ export function CreateSpaceWizard() {
                 </div>
                 <p className="text-muted-foreground text-xs">
                   A backlog and sprints with start and end dates, plus sprint reports.
+                </p>
+              </button>
+              <button
+                type="button"
+                aria-pressed={v.boardType === 'service'}
+                disabled={!serviceAllowed}
+                data-testid="board-type-service"
+                onClick={() => setValue('boardType', 'service')}
+                className={cn(
+                  'hover:bg-accent/60 space-y-2 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                  v.boardType === 'service' && 'border-primary bg-accent ring-primary/30 ring-2',
+                )}
+              >
+                <Ticket className="text-primary size-5" aria-hidden />
+                <div className="flex items-center gap-2 font-medium">
+                  Service desk
+                  {!serviceAllowed && (
+                    <span className="bg-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
+                      <Lock className="size-3" aria-hidden /> Team plan
+                    </span>
+                  )}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  A request queue for QA or IT support. Anyone can raise a ticket; response and resolve targets
+                  track each one.
                 </p>
               </button>
             </div>

@@ -1,5 +1,5 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
-import { ALLOWED_CHILDREN, type ItemType } from '@crew-deck/shared';
+import { ALLOWED_CHILDREN, ticketSla, type ItemType } from '@crew-deck/shared';
 import type { TenantDb } from '../db/client.js';
 import type {
   LabelDoc,
@@ -262,6 +262,16 @@ export function presentItem(row: ItemRow, spaceKey: string) {
     subtasks: { total: row.childCount, done: row.childDone },
     sprintId: row.sprintId ?? null,
     carryOverCount: row.carryOverCount ?? 0,
+    sla:
+      row.type === 'ticket'
+        ? (() => {
+            const state = ticketSla(row);
+            return {
+              response: { dueAt: row.slaResponseDueAt ?? null, doneAt: row.firstResponseAt ?? null, state: state.response },
+              resolve: { dueAt: row.slaResolveDueAt ?? null, doneAt: row.resolvedAt, state: state.resolve },
+            };
+          })()
+        : null,
     resolution: row.statusCategory === 'done' ? (row.resolution ?? 'done') : null,
     checklist: {
       total: row.checklist?.length ?? 0,

@@ -188,3 +188,13 @@ describe('can(): work item depth (comments, links, watching, attachments)', () =
     expect(can(m, 'item.transfer', as('viewer', { isReporter: true }))).toBe(false);
   });
 });
+
+describe('can(): ticket.submit', () => {
+  it('lets anyone who can see the space raise a ticket, and nobody who cannot', () => {
+    expect(can(actor('member'), 'ticket.submit', { spaceVisibility: 'open' })).toBe(true);
+    expect(can(actor('member'), 'ticket.submit', { spaceRole: 'viewer', spaceVisibility: 'private' })).toBe(true);
+    expect(can(actor('member'), 'ticket.submit', { spaceVisibility: 'private' })).toBe(false);
+    // Raising a ticket is not the same as being allowed to create ordinary work.
+    expect(can(actor('member'), 'item.create', { spaceVisibility: 'open' })).toBe(false);
+  });
+});

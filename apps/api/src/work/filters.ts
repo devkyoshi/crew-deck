@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ITEM_TYPES, PRIORITIES } from '@crew-deck/shared';
+import { ITEM_TYPES, PRIORITIES, SLA_SOON_MS } from '@crew-deck/shared';
 import type { TenantDb } from '../db/client.js';
 import { escapeRegex } from '../lib/pagination.js';
 import { blockedItemIds } from './service.js';
@@ -29,6 +29,8 @@ export const filterQuery = z.object({
   recent: z.enum(['1']).optional(),
   /** Only items that something open still blocks. */
   blocked: z.enum(['1']).optional(),
+  /** Tickets whose response or resolve target is missed, or about to be. */
+  sla: z.enum(['breached', 'due_soon']).optional(),
   version: list(z.union([UUID, z.literal('none')])).optional(),
   component: list(z.union([UUID, z.literal('none')])).optional(),
 });
@@ -55,6 +57,18 @@ export function filterConditions(f: FilterQuery, userId: string): Record<string,
     ];
     if (/^\d+$/.test(bare)) or.push({ number: Number(bare) });
     conds.push({ $or: or });
+  }
+  if (f.sla) {
+    const now = new Date();
+    const soon = new Date(now.getTime() + SLA_SOON_MS);
+    // Open clocks only: a response clock stops at the first answer, a resolve clock at resolution.
+    const open = (due: string, done: string, limit: Date) => ({ [due]: { $ne: null, $lte: limit }, [done]: null });
+    const limit = f.sla === 'breached' ? now : soon;
+    const conds2 = [open('slaResponseDueAt', 'firstResponseAt', limit), open('slaResolveDueAt', 'resolvedAt', limit)];
+    conds.push({ type: 'ticket', $or: conds2 });
+    if (f.sla === 'due_soon') {
+      conds.push({ $nor: [open('slaResponseDueAt', 'firstResponseAt', now), open('slaResolveDueAt', 'resolvedAt', now)] });
+    }
   }
   const mine = f.mine === '1';
   const assignees = [...(f.assignee ?? []), ...(mine ? [userId] : [])];

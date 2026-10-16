@@ -55,7 +55,7 @@ export const USAGE_OPTIONS: readonly UsageOption[] = [
   { key: 'plan_campaigns', label: 'Plan campaigns', hint: 'Campaign boards', status: 'built', module: 'spaces' },
   { key: 'content_calendar', label: 'Content calendar', hint: 'Calendar of due and release dates', status: 'built', module: 'spaces' },
   { key: 'approvals', label: 'Run approvals', hint: 'Request and approve with a trail', status: 'planned' },
-  { key: 'service_requests', label: 'Handle requests and tickets', hint: 'Request queue with SLAs', status: 'planned' },
+  { key: 'service_requests', label: 'Handle requests and tickets', hint: 'Service desk queue with response and resolve targets', status: 'built', module: 'spaces' },
   { key: 'checklists', label: 'Use checklists', hint: 'Checklists on items, with reusable templates', status: 'built', module: 'spaces' },
   { key: 'documents', label: 'Store documents', hint: 'Attachments on items and a document library per space', status: 'built', module: 'spaces' },
   { key: 'track_time', label: 'Track time', hint: 'Log hours, planned against remaining', status: 'built', module: 'spaces' },
@@ -95,7 +95,7 @@ export interface WorkspaceTemplate {
   };
 }
 
-type TemplateItemType = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+type TemplateItemType = 'epic' | 'story' | 'task' | 'bug' | 'ticket' | 'subtask';
 
 const S = (name: string, category: StatusTemplate['category'], color: string): StatusTemplate => ({
   name,
@@ -108,6 +108,14 @@ export const DEFAULT_STATUSES: StatusTemplate[] = [
   S('In Progress', 'in_progress', 'blue'),
   S('In Review', 'in_progress', 'violet'),
   S('Done', 'done', 'green'),
+];
+
+/** Columns a new service desk starts with. */
+export const SERVICE_STATUSES: StatusTemplate[] = [
+  S('Open', 'todo', 'slate'),
+  S('In Progress', 'in_progress', 'blue'),
+  S('Waiting', 'in_progress', 'amber'),
+  S('Resolved', 'done', 'green'),
 ];
 
 const WORK_ITEM = { singular: 'work item', plural: 'work items' };
@@ -388,6 +396,7 @@ const BASE_TYPE_LABELS: Record<TemplateItemType, string> = {
   story: 'Story',
   task: 'Task',
   bug: 'Bug',
+  ticket: 'Ticket',
   subtask: 'Subtask',
 };
 

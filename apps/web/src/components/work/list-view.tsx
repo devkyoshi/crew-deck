@@ -32,6 +32,8 @@ import { BulkBar } from './bulk-bar';
 import { FilterBar } from './filter-bar';
 import { ItemSheet, useUrlState } from './item-sheet';
 import { SavedFilters } from './saved-filters';
+import { SlaSummary } from './sla-badge';
+import { NewTicketButton } from './new-ticket';
 import { useVocabulary } from './use-vocabulary';
 import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
 
@@ -44,7 +46,9 @@ type ColumnId =
   | 'due'
   | 'labels'
   | 'updated'
-  | 'created';
+  | 'created'
+  | 'reporter'
+  | 'sla';
 
 const COLUMNS: { id: ColumnId; label: string; sort?: ListSort }[] = [
   { id: 'type', label: 'Type' },
@@ -56,20 +60,24 @@ const COLUMNS: { id: ColumnId; label: string; sort?: ListSort }[] = [
   { id: 'labels', label: 'Labels' },
   { id: 'updated', label: 'Updated', sort: 'updated' },
   { id: 'created', label: 'Created', sort: 'created' },
+  { id: 'reporter', label: 'Requester' },
+  { id: 'sla', label: 'Deadline' },
 ];
 const DEFAULT_COLUMNS: ColumnId[] = ['type', 'status', 'priority', 'assignee', 'due'];
+/** A service desk's queue leads with who asked and how the deadline stands. */
+const SERVICE_COLUMNS: ColumnId[] = ['reporter', 'status', 'priority', 'assignee', 'sla'];
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
-function readColumns(key: string): ColumnId[] {
+function readColumns(key: string, fallback: ColumnId[]): ColumnId[] {
   try {
     const v = JSON.parse(window.localStorage.getItem(key) ?? 'null') as unknown;
     if (Array.isArray(v)) return v.filter((c): c is ColumnId => COLUMNS.some((x) => x.id === c));
   } catch {
     // storage unavailable
   }
-  return DEFAULT_COLUMNS;
+  return fallback;
 }
 
 /** Every item of the space as a sortable table, sharing the board's filters, selection and bulk actions. */
@@ -87,11 +95,13 @@ export function ListView() {
   const list = useItemList(space.key, filterStr, sort, dir);
   const statuses = useStatuses(space.key);
   const [selected, setSelected] = useState<string[]>([]);
-  const prefKey = `list:${me.user.id}:columns`;
-  const [columns, setColumns] = useState<ColumnId[]>(DEFAULT_COLUMNS);
+  const isService = space.boardType === 'service';
+  const defaults = isService ? SERVICE_COLUMNS : DEFAULT_COLUMNS;
+  const prefKey = `list:${me.user.id}:${isService ? 'queue' : 'columns'}`;
+  const [columns, setColumns] = useState<ColumnId[]>(defaults);
   const searchRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => setColumns(readColumns(prefKey)), [prefKey]);
+  useEffect(() => setColumns(readColumns(prefKey, defaults)), [prefKey]);
 
   const setFilters = (next: Filters) =>
     push((p) => {
@@ -204,11 +214,49 @@ export function ListView() {
         return shortDate(item.updatedAt);
       case 'created':
         return shortDate(item.createdAt);
+      case 'reporter':
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <UserAvatar person={item.reporter} size={20} />
+            <span className="truncate">{item.reporter.name ?? item.reporter.email}</span>
+          </span>
+        );
+      case 'sla':
+        return item.sla ? <SlaSummary sla={item.sla} /> : '';
     }
   };
 
   return (
     <div className="space-y-4">
+      {isService && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Show tickets" className="flex flex-wrap gap-1.5">
+            {(
+              [
+                ['', 'All'],
+                ['breached', 'Missed deadline'],
+                ['due_soon', 'Due soon'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filters.sla === value}
+                onClick={() => setFilters({ ...filters, sla: value })}
+                className={cn(
+                  'hover:bg-accent rounded-full border px-3 py-1 text-sm outline-none focus-visible:ring-2',
+                  filters.sla === value && 'border-primary bg-accent ring-primary/30 font-medium ring-1',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto">
+            <NewTicketButton spaceKey={space.key} statuses={statuses.data?.items ?? []} />
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
           <FilterBar
@@ -267,7 +315,9 @@ export function ListView() {
           description={
             hasActiveFilters(filters)
               ? 'Try other filters.'
-              : `Create ${vocab.nounPlural} from the board.`
+              : isService
+                ? 'Raise a ticket to start the queue.'
+                : `Create ${vocab.nounPlural} from the board.`
           }
           action={
             hasActiveFilters(filters) ? (

@@ -9,6 +9,7 @@ export type FeatureKey =
   | 'branding_name'
   | 'branding_full'
   | 'scrum_sprints'
+  | 'service_desk'
   | 'shared_filters'
   | 'burndown_reports'
   | 'releases'

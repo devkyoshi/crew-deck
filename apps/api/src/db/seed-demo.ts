@@ -8,7 +8,7 @@ import type { SpaceRole } from './types.js';
 import { seedSpaceWork } from '../work/seed.js';
 
 type DemoItem = {
-  type: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+  type: 'epic' | 'story' | 'task' | 'bug' | 'ticket' | 'subtask';
   title: string;
   status: string;
   priority?: 'highest' | 'high' | 'medium' | 'low' | 'lowest';

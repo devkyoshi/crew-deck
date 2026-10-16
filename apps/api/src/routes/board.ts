@@ -52,8 +52,8 @@ export function readSettings(stored: unknown): BoardSettings {
   return { ...DEFAULT_SETTINGS, ...(parsed.success ? parsed.data : {}) };
 }
 
-/** Cards on the board: stories, tasks and bugs. Epics have their own page; subtasks show as progress. */
-export const BOARD_TYPES_SHOWN = ['story', 'task', 'bug'] as const;
+/** Cards on the board: stories, tasks, bugs and tickets. Epics have their own page; subtasks show as progress. */
+export const BOARD_TYPES_SHOWN = ['story', 'task', 'bug', 'ticket'] as const;
 const PAGE = 50;
 
 export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {

@@ -263,7 +263,7 @@ export interface BoardDoc {
   id: string;
   orgId: string;
   spaceId: string;
-  type: 'kanban' | 'scrum';
+  type: 'kanban' | 'scrum' | 'service';
   name: string;
   settings: Record<string, unknown>;
   createdAt: Date;
@@ -296,7 +296,7 @@ export interface WorkItemDoc {
   orgId: string;
   spaceId: string;
   number: number;
-  type: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+  type: 'epic' | 'story' | 'task' | 'bug' | 'ticket' | 'subtask';
   parentId: string | null;
   title: string;
   description: unknown;
@@ -335,6 +335,10 @@ export interface WorkItemDoc {
   keyHistory?: string[];
   /** How many sprints this item was carried out of unfinished. */
   carryOverCount?: number;
+  /** Tickets only: when the response and resolve targets fall due, and when the team first answered. */
+  slaResponseDueAt?: Date | null;
+  slaResolveDueAt?: Date | null;
+  firstResponseAt?: Date | null;
   resolvedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -668,6 +672,9 @@ export type NotificationType =
   | 'commented'
   | 'status_changed'
   | 'due_soon'
+  | 'ticket_received'
+  | 'sla_due_soon'
+  | 'sla_breached'
   | 'sprint_started'
   | 'sprint_completed';
 

@@ -103,7 +103,7 @@ function BurndownChart({ data }: { data: Burndown }) {
   const path = (pts: { date: string; points: number }[]) =>
     pts.map((p, i) => `${i ? 'L' : 'M'}${x(days.indexOf(p.date)).toFixed(1)},${y(p.points).toFixed(1)}`).join(' ');
   const short = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  const ticks = [0, Math.round(max / 2), max];
+  const ticks = [...new Set([0, Math.round(max / 2), max])];
   const every = Math.max(1, Math.ceil(days.length / 7));
 
   return (

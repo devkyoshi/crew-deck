@@ -17,7 +17,8 @@ export type NotifyEvent =
   | { type: 'assigned'; orgId: string; actorId: string; itemId: string; userId: string }
   | { type: 'mentioned'; orgId: string; actorId: string; itemId: string; userIds: string[]; excerpt?: string }
   | { type: 'commented'; orgId: string; actorId: string; itemId: string; excerpt: string; skip: string[] }
-  | { type: 'status_changed'; orgId: string; actorId: string; itemId: string; from: string; to: string };
+  | { type: 'status_changed'; orgId: string; actorId: string; itemId: string; from: string; to: string }
+  | { type: 'ticket_received'; orgId: string; actorId: string; itemId: string };
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
   'assigned',
@@ -25,6 +26,9 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   'commented',
   'status_changed',
   'due_soon',
+  'ticket_received',
+  'sla_due_soon',
+  'sla_breached',
   'sprint_started',
   'sprint_completed',
 ];
@@ -36,6 +40,9 @@ export const DEFAULT_PREFS: Record<NotificationType, { inApp: boolean; email: bo
   commented: { inApp: true, email: true },
   status_changed: { inApp: true, email: false },
   due_soon: { inApp: true, email: true },
+  ticket_received: { inApp: true, email: true },
+  sla_due_soon: { inApp: true, email: false },
+  sla_breached: { inApp: true, email: true },
   sprint_started: { inApp: true, email: false },
   sprint_completed: { inApp: true, email: false },
 };
@@ -109,6 +116,13 @@ async function recipients(t: TenantDb, e: NotifyEvent, item: WorkItemDoc): Promi
       return watchers
         .filter((w) => !e.skip.includes(w.userId))
         .map((w) => ({ userId: w.userId, type: 'commented', data: { excerpt: e.excerpt } }));
+    }
+    case 'ticket_received': {
+      // The people who run the desk: its space admins and owner, plus whoever it was assigned to.
+      const admins = await t.spaceMembers.find({ spaceId: item.spaceId, principalType: 'user', spaceRole: 'admin' });
+      const space = await t.spaces.findOne({ id: item.spaceId });
+      const ids = [...admins.map((a) => a.principalId), space?.ownerId, item.assigneeId].filter((x): x is string => !!x);
+      return [...new Set(ids)].map((userId) => ({ userId, type: 'ticket_received' as const, data: {} }));
     }
     case 'status_changed':
       return [...new Set([item.reporterId, item.assigneeId].filter((x): x is string => !!x))].map((userId) => ({

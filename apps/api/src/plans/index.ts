@@ -24,6 +24,7 @@ export const FEATURE_KEYS = [
   'branding_name',
   'branding_full',
   'scrum_sprints',
+  'service_desk',
   'shared_filters',
   'burndown_reports',
   'releases',

@@ -134,7 +134,7 @@ const createBody = z.object({
   description: descriptionSchema.optional(),
   icon: iconSchema.default('folder'),
   visibility: visibilitySchema.default('open'),
-  boardType: z.enum(['kanban', 'scrum']).default('kanban'),
+  boardType: z.enum(['kanban', 'scrum', 'service']).default('kanban'),
   members: z
     .array(z.object({ type: z.enum(['user', 'group']), id: z.string().uuid(), role: roleSchema }))
     .max(200)
@@ -223,6 +223,9 @@ export async function spaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         assertWithinLimit(plan, 'spaces', await countSpaces(tx, actor.orgId));
         if (b.boardType === 'scrum') {
           assertFeature(plan, 'scrum_sprints', 'Scrum boards');
+        }
+        if (b.boardType === 'service') {
+          assertFeature(plan, 'service_desk', 'Service desks');
         }
         // Keys are unique per workspace and never reused, deleted spaces included.
         if (await tx.spaces.exists({ key: b.key })) throw keyTaken();

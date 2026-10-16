@@ -17,7 +17,7 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
 // ---- Work items (docs/work-items) ----------------------------------------------------------------
 
-export const ITEM_TYPES = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
+export const ITEM_TYPES = ['epic', 'story', 'task', 'bug', 'ticket', 'subtask'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
 /** How two work items relate. Stored once, read from either end ("blocks" / "is blocked by"). */
@@ -37,7 +37,8 @@ export type Resolution = (typeof RESOLUTIONS)[number];
 /** Most entries a checklist on one item may have, and the most a template may have. */
 export const MAX_CHECKLIST = 50;
 
-export const BOARD_TYPES = ['kanban', 'scrum'] as const;
+/** `service` is a service desk: a request queue worked against SLA targets. */
+export const BOARD_TYPES = ['kanban', 'scrum', 'service'] as const;
 export type BoardType = (typeof BOARD_TYPES)[number];
 
 /** Fixed palette for status and label colours (never free hex), so contrast is always checked. */
@@ -63,7 +64,9 @@ export const ALLOWED_CHILDREN: Record<ItemType, readonly ItemType[]> = {
   story: ['subtask'],
   task: ['subtask'],
   bug: ['subtask'],
+  ticket: ['subtask'],
   subtask: [],
 };
 
 export * from './workspace';
+export * from './sla';
