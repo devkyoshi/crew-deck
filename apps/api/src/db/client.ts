@@ -68,6 +68,8 @@ const TENANT = {
   checklistTemplates: 'checklist_templates',
   versions: 'versions',
   components: 'components',
+  spaceFolders: 'space_folders',
+  spaceFiles: 'space_files',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -129,6 +131,8 @@ export interface TenantDocs {
   checklistTemplates: T.ChecklistTemplateDoc;
   versions: T.VersionDoc;
   components: T.ComponentDoc;
+  spaceFolders: T.SpaceFolderDoc;
+  spaceFiles: T.SpaceFileDoc;
 }
 
 export interface GlobalDocs {
@@ -614,6 +618,8 @@ export class TenantDb {
   readonly checklistTemplates!: TenantRepos['checklistTemplates'];
   readonly versions!: TenantRepos['versions'];
   readonly components!: TenantRepos['components'];
+  readonly spaceFolders!: TenantRepos['spaceFolders'];
+  readonly spaceFiles!: TenantRepos['spaceFiles'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

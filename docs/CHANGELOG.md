@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16 - Space documents (W14)
+
+- **Documents tab** in every space: create folders (nested), upload files by button or drag and drop, download, rename, move and delete. Everyone in the space can open them; members manage their own, space admins everything.
+- Uses the workspace's file storage and plan limits (file size and total storage).
+- ADR-064.
+
 ## 2026-10-16 - Versions and components (W10)
 
 - **Releases tab:** versions with dates and progress, release them (unfinished work moves to another version or leaves), release notes by type with copy as text. From the Team plan.

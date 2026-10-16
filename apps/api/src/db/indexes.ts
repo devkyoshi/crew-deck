@@ -113,6 +113,15 @@ const INDEXES: Record<string, Ix[]> = {
     ['id', { id: 1 }, U],
     ['space_name', { spaceId: 1, nameLower: 1 }, U],
   ],
+  space_folders: [
+    ['id', { id: 1 }, U],
+    ['name', { spaceId: 1, parentId: 1, nameLower: 1 }, U],
+  ],
+  space_files: [
+    ['id', { id: 1 }, U],
+    ['folder', { spaceId: 1, folderId: 1, createdAt: 1 }],
+    ['org', { orgId: 1 }],
+  ],
   components: [
     ['id', { id: 1 }, U],
     ['space_name', { spaceId: 1, nameLower: 1 }, U],

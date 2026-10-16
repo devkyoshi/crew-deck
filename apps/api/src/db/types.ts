@@ -580,6 +580,34 @@ export interface AttachmentDoc {
   createdAt: Date;
 }
 
+/** A folder in a space's document library. Folders nest. */
+export interface SpaceFolderDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  parentId: string | null;
+  name: string;
+  nameLower: string;
+  createdBy: string;
+  createdAt: Date;
+}
+
+/** A file in a space's document library (not tied to a work item). */
+export interface SpaceFileDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  folderId: string | null;
+  uploaderId: string;
+  /** Cleaned display name. Never used on disk. */
+  name: string;
+  mime: string;
+  image: string | null;
+  size: number;
+  storageKey: string;
+  createdAt: Date;
+}
+
 /** A board or list filter someone saved (personal, or shared with everyone who can open the space). */
 export interface SavedFilterDoc {
   id: string;

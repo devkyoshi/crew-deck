@@ -31,6 +31,7 @@ import { workSettingsRoutes } from './routes/work-settings.js';
 import { statusRoutes } from './routes/statuses.js';
 import { boardRoutes } from './routes/board.js';
 import { workItemRoutes } from './routes/work-items.js';
+import { spaceDocRoutes } from './routes/space-docs.js';
 import { versionRoutes } from './routes/versions.js';
 import { workWorkflowRoutes } from './routes/work-workflow.js';
 import { workCopyRoutes } from './routes/work-copy.js';
@@ -157,6 +158,7 @@ export function buildApp({
   app.register(sprintRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(liveRoutes, { prefix: '/api/v1', ...authDeps, live, ...liveTiming });
   app.register(attachmentRoutes, { prefix: '/api/v1', ...authDeps, storage });
+  app.register(spaceDocRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workSettingsRoutes, { prefix: '/api/v1', ...authDeps });

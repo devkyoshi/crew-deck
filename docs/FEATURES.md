@@ -77,6 +77,7 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Backlog and sprints (Scrum) (W6)                                     | Built   | `scrum_sprints`    |
 | Burndown and sprint report (W6)                                      | Built   | `burndown_reports` |
 | Live updates on boards, lists, backlogs and items (W7)               | Built   |                    |
+| Space documents: folders and shared files per space (W14) | Built | `max_attachment_mb`, `storage_mb` |
 | Versions with release flow and release notes (Team plan), components with default assignee, filters (W10) | Built | `releases` |
 | Workflow rules (allowed moves), resolution, blocked badges and filter, checklists with templates (W9) | Built | |
 | Old keys of moved items keep working; backlog order; search in comments and file names; daily summary email; S3 file storage (W8) | Built | `storage_mb` |

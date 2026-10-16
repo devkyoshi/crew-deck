@@ -348,6 +348,12 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-064: Space documents are a folder library on the same file storage (W14)
+
+- Each space has a document library: nested folders (up to 8 levels, 500 per space, one name per level) and files that belong to the space, not to a work item. Everyone who can open the space can read and download; members add, rename, move and delete what they added; space admins manage everything. Only an admin may delete a folder that has things in it.
+- Files use the same storage driver, signed links, size and type checks (`receiveUpload`) and plan limits (`max_attachment_mb`, `storage_mb`) as item attachments, and count toward the workspace's storage. The signed-link route serves both. A file with the same name in a folder is saved as `name (2).ext`.
+- Folders and files are plain collections (`space_folders`, `space_files`); a folder move checks that it does not go into itself or past the depth limit. There is no per-folder permission: access is the space's.
+
 ## ADR-063: Versions and components are per space; releasing never loses work (W10)
 
 - A version (release) and a component belong to one space. Items carry ids (`fixVersionIds`, `affectsVersionIds`, `componentIds`); names are joined when an item is read, so a rename shows everywhere at once. Deleting a version or component takes it off its items and leaves the items. Moving an item to another space leaves its versions and components behind; duplicating copies them.

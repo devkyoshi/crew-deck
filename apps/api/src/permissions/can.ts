@@ -31,6 +31,8 @@ export type Action =
   | 'comment.deleteAny'
   | 'attachment.add'
   | 'attachment.delete'
+  | 'doc.add'
+  | 'doc.delete'
   | 'filter.share'
   | 'sprint.create'
   | 'sprint.start'
@@ -153,6 +155,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'label.create':
     case 'comment.create':
     case 'attachment.add':
+    case 'doc.add':
     case 'filter.share':
     case 'sprint.create':
     case 'version.manage':
@@ -166,6 +169,7 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
     case 'comment.deleteAny':
       return adminLike || spaceAdmin;
     case 'attachment.delete':
+    case 'doc.delete':
       return (
         adminLike || spaceAdmin || (resource.spaceRole === 'member' && resource.isAuthor === true)
       );

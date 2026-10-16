@@ -168,10 +168,10 @@ export const countWorkItems = (t: TenantDb, _orgId?: string) =>
 
 /** Bytes of attachments the workspace keeps. */
 export async function storageBytes(t: TenantDb) {
-  const [row] = await t.attachments.aggregate<{ total: number }>([
-    { $group: { _id: null, total: { $sum: '$size' } } },
-  ]);
-  return row?.total ?? 0;
+  const sum = [{ $group: { _id: null, total: { $sum: '$size' } } }];
+  const [items] = await t.attachments.aggregate<{ total: number }>(sum);
+  const [library] = await t.spaceFiles.aggregate<{ total: number }>(sum);
+  return (items?.total ?? 0) + (library?.total ?? 0);
 }
 
 export type Usage = Partial<Record<LimitKey, number>>;

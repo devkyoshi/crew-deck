@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { Transform } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -13,12 +12,11 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWithinLimit, loadPlan, storageBytes } from '../plans/index.js';
 import {
-  cleanFileName,
-  inspectFile,
   signFileUrl,
   verifyFileSignature,
   type StorageDriver,
 } from '../storage/index.js';
+import { receiveUpload, MAX_UPLOAD_BYTES } from '../storage/receive.js';
 import { recordActivity } from '../work/activity.js';
 import { refreshSearchText } from '../work/search-text.js';
 import { assertWritable, resolveItem, type SpaceRow } from '../work/service.js';
@@ -29,17 +27,10 @@ export interface AttachmentDeps extends AuthDeps {
 }
 
 const MB = 1024 * 1024;
-/** Hard ceiling for any upload, whatever the plan says (multipart parser limit). */
-export const MAX_UPLOAD_BYTES = 100 * MB;
-const HEAD_BYTES = 64;
+export { MAX_UPLOAD_BYTES };
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const uuidParam = z.object({ id: z.string().uuid() });
-
-const tooBig = (mb: number) =>
-  new AppError(413, 'file_too_large', `Files can be up to ${mb} MB on your plan`, {
-    file: `Choose a file of ${mb} MB or less`,
-  });
 
 export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDeps) {
   const requireAuth = makeRequireAuth(deps);
@@ -108,55 +99,9 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
       return { row, space, plan, used };
     });
 
-    const fileMb = pre.plan.limits.max_attachment_mb;
-    const maxBytes = Math.min(fileMb !== undefined ? fileMb * MB : MAX_UPLOAD_BYTES, MAX_UPLOAD_BYTES);
-    const file = await req.file({ limits: { fileSize: maxBytes, files: 1 } });
-    if (!file) throw new AppError(422, 'validation_error', 'Choose a file to upload', { file: 'Choose a file' });
-
-    const name = cleanFileName(file.filename);
     const key = `${actor.orgId}/${pre.space.id}/${pre.row.id}/${randomUUID()}`;
-    // Keep the first bytes to check what the file really is.
-    let head = Buffer.alloc(0);
-    const tap = new Transform({
-      transform(chunk: Buffer, _enc, done) {
-        if (head.length < HEAD_BYTES) head = Buffer.concat([head, chunk]).subarray(0, HEAD_BYTES);
-        done(null, chunk);
-      },
-    });
-    const discard = async (err: unknown) => {
-      await deps.storage.delete(key);
-      return err;
-    };
-    let size: number;
-    try {
-      size = await deps.storage.put(key, file.file, tap);
-    } catch (e) {
-      // The parser stops the stream at the plan's size limit.
-      const limitHit = (e as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE' || file.file.truncated;
-      throw await discard(limitHit ? tooBig(fileMb ?? MAX_UPLOAD_BYTES / MB) : e);
-    }
-    if (file.file.truncated) throw await discard(tooBig(fileMb ?? MAX_UPLOAD_BYTES / MB));
-    if (size === 0) {
-      throw await discard(new AppError(422, 'validation_error', 'That file is empty', { file: 'That file is empty' }));
-    }
-    const kind = inspectFile(head, name);
-    if (kind.executable) {
-      throw await discard(
-        new AppError(415, 'file_type_blocked', 'Programs and scripts cannot be attached', {
-          file: 'Programs and scripts cannot be attached',
-        }),
-      );
-    }
-    const storageMb = pre.plan.limits.storage_mb;
-    if (storageMb !== undefined && pre.used + size > storageMb * MB) {
-      const err = await discard(
-        new AppError(402, 'plan_limit', `The ${pre.plan.name} plan allows up to ${storageMb} MB of storage.`, {
-          limit: 'storage_mb',
-          plan: pre.plan.key ?? '',
-        }),
-      );
-      throw err;
-    }
+    const got = await receiveUpload(req, deps.storage, key, pre.plan, pre.used);
+    const { name, size } = got;
 
     try {
       const out = await withTenantTx(deps.db, actor.orgId, async (t) => {
@@ -168,8 +113,8 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
           itemId: row.id,
           uploaderId: actor.userId,
           name,
-          mime: kind.image ?? (file.mimetype || 'application/octet-stream').slice(0, 100),
-          image: kind.image,
+          mime: got.mime,
+          image: got.image,
           size,
           storageKey: key,
           createdAt: new Date(),
@@ -253,7 +198,9 @@ export async function attachmentRoutes(app: FastifyInstance, deps: AttachmentDep
       const org = await findOrgBySlug(deps.db, req.tenantSlug);
       const claims = { attachmentId: req.params.id, ...req.query };
       if (!org || !verifyFileSignature(secret, { ...claims, orgId: org.id })) throw notFound('File');
-      const a = await deps.db.tenant(org.id).attachments.get(req.params.id);
+      // Files of work items and files in a space's document library are served the same way.
+      const t = deps.db.tenant(org.id);
+      const a = (await t.attachments.get(req.params.id)) ?? (await t.spaceFiles.get(req.params.id));
       if (!a) throw notFound('File');
       const inline = a.image !== null;
       const encoded = encodeURIComponent(a.name).replace(/['()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
