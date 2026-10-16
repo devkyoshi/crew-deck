@@ -72,6 +72,39 @@ services:
       timeout: 3s
       retries: 20
 
+  # Realtime gateway (Socket.IO): live messages, typing and presence. Stateless; share it with the API's
+  # Redis and MongoDB. Put it behind the reverse proxy at /realtime (see docs/DEPLOYMENT.md).
+  realtime:
+    profiles: [full]
+    image: crew-deck-realtime
+    build:
+      context: .
+      dockerfile: apps/realtime/Dockerfile
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/?directConnection=true
+      MONGODB_DB: ${MONGODB_DB:-crewdeck}
+      REDIS_URL: redis://redis:6379
+      REALTIME_PORT: 4100
+      BASE_DOMAIN: ${BASE_DOMAIN:-localhost}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-604800}
+    ports:
+      - '4100:4100'
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:4100/realtime/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # One-off: creates the MongoDB indexes. Idempotent and safe to run on every deploy.
   migrate:
     profiles: [full, tools]

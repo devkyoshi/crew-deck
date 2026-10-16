@@ -8,14 +8,19 @@ single-VM recipe with Docker Compose. Everything here was exercised against the 
 
 ```
 Browser ──https──▶ reverse proxy ──▶ web (Next.js :3000) ──/api──▶ api (Fastify :4000)
-                                                                      ├─▶ MongoDB 7 (replica set)
-                                                                      └─▶ Redis 7
+                          │                                           ├─▶ MongoDB 7 (replica set)
+                          │                                           └─▶ Redis 7
+                          └──/realtime──▶ realtime gateway (Socket.IO :4100) ─▶ MongoDB, Redis
 ```
 
 - **web** serves the UI and proxies `/api/*` to the API, passing the original `Host` header. That header
   is how the API knows which workspace a request belongs to.
 - **api** is stateless. Sessions, the invite-email queue and the automatic check-out jobs live in Redis. The
   workers run inside the API process; running several API instances is safe (jobs are de-duplicated).
+- **realtime** is the Messages gateway (Socket.IO over WebSocket). It is stateless: rooms live in Redis through
+  the Socket.IO Redis adapter, so several instances behind a load balancer work with **no sticky sessions**
+  (clients use WebSocket only). It reads the same session cookie as the API, resolving the workspace from the
+  `Host` / `X-Forwarded-Host` header, and runs the same messaging services and permission checks as the API.
 - **MongoDB** holds all data. It must run as a **replica set** (a single node is fine), because the API
   uses multi-document transactions. Tenant isolation is enforced by the API's repository layer (every
   query carries the workspace id), so give the API a database user limited to its own database.
@@ -103,6 +108,16 @@ Anything that terminates TLS and forwards the original `Host` works. Caddy examp
 *.yourdomain.com, yourdomain.com {
     tls { dns <provider> <token> }
     reverse_proxy localhost:3000
+}
+```
+
+Route `/realtime/` to the gateway (port 4100) and keep WebSocket upgrades working. Caddy:
+
+```
+*.yourdomain.com, yourdomain.com {
+    tls { dns <provider> <token> }
+    handle /realtime/* { reverse_proxy localhost:4100 }
+    handle { reverse_proxy localhost:3000 }
 }
 ```
 

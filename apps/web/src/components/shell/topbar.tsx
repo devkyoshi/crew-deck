@@ -26,6 +26,7 @@ const titleCase = (s: string) => s.replace(/-/g, ' ').replace(/^\w/, (c) => c.to
 function useCrumbs() {
   const pathname = usePathname();
   if (pathname === '/') return [{ label: 'Home', href: '/' }];
+  if (pathname.startsWith('/messages')) return [{ label: 'Messages', href: '/messages' }];
   const parts = pathname.split('/').filter(Boolean);
   return parts.map((part, i) => {
     const href = '/' + parts.slice(0, i + 1).join('/');

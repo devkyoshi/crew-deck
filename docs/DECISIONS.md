@@ -348,6 +348,31 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-071: Messaging has no row-level security: the repository layer is the boundary, rooms are server-decided
+
+- The brief assumed Postgres row-level security; the platform is on MongoDB (ADR-051), so every messaging collection (`channels`, `channel_members`, `messages`, `message_edits`, `read_cursors`, `user_statuses`) is a tenant collection in `TenantDb`: `orgId` is added to every filter and stamped on every insert.
+- A socket never chooses its rooms. The handshake resolves the workspace from the host and the person from the session cookie, then the server joins the personal room, the workspace presence room, the session room and one room per channel the person belongs to. Typing is only accepted for rooms the server put the socket in; every send, edit, delete, read and sync goes through the same services as REST, which re-check membership in the database.
+- A channel the caller cannot see answers like one that does not exist (404 over REST, `FORBIDDEN` over the socket), so ids cannot be probed. Org admins can archive, delete and moderate public channels without being members; they cannot read private channels or DMs (open decision "admins read private channels": never, in this build).
+
+## ADR-070: Messages are ordered by a per-channel counter and are idempotent on a client id
+
+- `channels.lastSeq` is bumped with `findOneAndUpdate({$inc})` inside the insert transaction, so `seq` is strictly increasing and gap-free per channel; concurrent senders conflict on the channel document and one retries (a test sends sixteen at once). History is paged by `seq`, never by time.
+- A unique partial index on `(orgId, channelId, clientMsgId)` makes a retry safe: the service returns the existing message (HTTP 200 and `duplicate: true`, instead of 201), and a send that races its own retry resolves the duplicate-key error the same way. Someone else cannot claim another person's client id.
+- Bodies are the Tiptap JSON subset rebuilt by the same allow-list as work item comments (`sanitizeDoc`), with a plain-text mirror (`bodyText`) for search and previews. Limit 4,000 characters; headings and task lists are not offered in the composer.
+- Unread is a cursor (`read_cursors`), never a row per message: unread = messages after the cursor written by someone else, not deleted, not thread replies. Sending moves your own cursor. The cursor only moves forward, except "mark as unread".
+
+## ADR-069: The gateway is a separate service sharing the API's code; presence never touches the database
+
+- `apps/realtime` (Socket.IO with the Redis adapter, WebSocket only so no sticky sessions) imports the API's messaging services through one barrel, `@crew-deck/api/realtime`, so REST and sockets run the same code and `can()`. The API publishes to rooms through `@socket.io/redis-emitter` (persist first, publish second), including moving a person's sockets in or out of a room when membership changes.
+- Presence is a Redis hash per person with one field per connection (merged: online if any tab is active, away if all are idle, do-not-disturb overrides) and a 90 second key expiry refreshed by 30 second heartbeats; typing is a throttled signal that is never stored. Presence changes go to a per-workspace room, so they never cross workspaces.
+- The per-person and per-workspace message limits are a Lua token bucket in Redis (default 20 per 10 seconds per person). The session is re-validated every five minutes; logout (that session only), deactivation and role changes disconnect sockets at once.
+- Open decisions taken as assumed: Socket.IO, a separate gateway, Tiptap JSON, no edit window, responsive web only. Channel creation is open to every member until the admin settings arrive in M5 (`channel.create` is always true in `can()` for now).
+
+## ADR-068: Everyone is put in the default channels lazily, once
+
+- `#general` and `#announcements` are created, and a person joined to them, the first time that person opens Messages (a one-time claim on `memberships.messagingInitAt`). This covers new workspaces, people added by any route (invitation, sign-up, platform) and workspaces that existed before messaging, without touching each of those code paths. Someone who leaves `#general` is not put back; deactivation clears the claim so reactivating them restores the defaults.
+- The first person to open Messages becomes the owner of both channels, so an org owner who has not opened Messages yet is not yet a channel owner (they still post in announcements as an org admin).
+
 ## ADR-067: Dashboards store the layout, not the data (W13)
 
 - A dashboard is a person's own ordered list of up to twelve tiles (assigned to me, a saved filter, sprint health, release progress, created against resolved). Only the choice is stored (`dashboards`, one row per person); each tile reads the normal endpoints when the page opens, so it always follows the person's current access and plan, and a tile that points at something no longer visible says so instead of failing.

@@ -29,6 +29,13 @@ export default defineConfig({
       timeout: 90_000,
     },
     {
+      // The realtime gateway: live messages, typing and presence for the Messages area.
+      command: 'pnpm --filter @crew-deck/realtime dev',
+      url: 'http://localhost:4100/realtime/health',
+      reuseExistingServer: !inCI,
+      timeout: 90_000,
+    },
+    {
       command: 'pnpm --filter @crew-deck/web dev',
       url: 'http://localhost:3000/workspaces',
       reuseExistingServer: !inCI,

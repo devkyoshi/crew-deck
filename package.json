@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @crew-deck/api --filter @crew-deck/web dev",
+    "dev": "pnpm --parallel --filter @crew-deck/api --filter @crew-deck/realtime --filter @crew-deck/web dev",
     "build": "pnpm -r build",
     "lint": "eslint .",
     "format": "prettier --write .",

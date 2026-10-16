@@ -3,7 +3,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { devLoginEnabled } from '../config.js';
 import { AppError } from '../lib/errors.js';
-import { randomToken } from '../lib/crypto.js';
+import { randomToken, sha256 } from '../lib/crypto.js';
+import type { EventSink } from '../messaging/events.js';
 import {
   assertOrgActive,
   clearSessionCookie,
@@ -49,9 +50,9 @@ const attemptLimit = (max: number) => ({
 
 export async function authRoutes(
   app: FastifyInstance,
-  opts: AuthDeps & { google: GoogleClient | null },
+  opts: AuthDeps & { google: GoogleClient | null; events?: EventSink },
 ) {
-  const { db, config, sessions, google } = opts;
+  const { db, config, sessions, google, events } = opts;
   const requireTenant = makeRequireTenant(opts);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -113,7 +114,11 @@ export async function authRoutes(
     const sid = req.cookies[SESSION_COOKIE];
     if (sid && req.tenantSlug) {
       const org = await findOrgBySlug(db, req.tenantSlug);
-      if (org) await sessions.destroy(org.id, sid);
+      if (org) {
+        await sessions.destroy(org.id, sid);
+        // The realtime gateway drops this session's sockets at once (other sessions stay connected).
+        events?.disconnectSession(org.id, sha256(sid));
+      }
     }
     clearSessionCookie(reply, config);
     return { ok: true };

@@ -72,6 +72,12 @@ const TENANT = {
   spaceFiles: 'space_files',
   worklogs: 'worklogs',
   dashboards: 'dashboards',
+  channels: 'channels',
+  channelMembers: 'channel_members',
+  messages: 'messages',
+  messageEdits: 'message_edits',
+  readCursors: 'read_cursors',
+  userStatuses: 'user_statuses',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -137,6 +143,12 @@ export interface TenantDocs {
   spaceFiles: T.SpaceFileDoc;
   worklogs: T.WorklogDoc;
   dashboards: T.DashboardDoc;
+  channels: T.ChannelDoc;
+  channelMembers: T.ChannelMemberDoc;
+  messages: T.MessageDoc;
+  messageEdits: T.MessageEditDoc;
+  readCursors: T.ReadCursorDoc;
+  userStatuses: T.UserStatusDoc;
 }
 
 export interface GlobalDocs {
@@ -153,7 +165,7 @@ export interface GlobalDocs {
 /** Collections nobody may update or delete through a tenant scope (the old grants made them SELECT/INSERT only). */
 const APPEND_ONLY = new Set<string>(['auditLogs', 'workDayEdits', 'activityEvents']);
 
-const LOWER_NAME = new Set<string>(['groups', 'sites', 'labels', 'crmCompanies', 'spaceStatuses', 'crmTags']);
+const LOWER_NAME = new Set<string>(['groups', 'sites', 'labels', 'crmCompanies', 'spaceStatuses', 'crmTags', 'channels']);
 
 const now = () => new Date();
 const recordDefaults = () => ({
@@ -325,6 +337,48 @@ const DEFAULTS: Record<string, () => Document> = {
   workItemLinks: () => ({ createdAt: now() }),
   watchers: () => ({ createdAt: now() }),
   activityEvents: () => ({ field: null, oldValue: null, newValue: null, createdAt: now() }),
+  channels: () => ({
+    type: 'public',
+    name: null,
+    slug: null,
+    topic: null,
+    description: null,
+    spaceId: null,
+    dmKey: null,
+    isAnnouncement: false,
+    isArchived: false,
+    createdBy: null,
+    lastSeq: 0,
+    lastMessageAt: null,
+    createdAt: now(),
+  }),
+  channelMembers: () => ({
+    role: 'member',
+    joinedAt: now(),
+    notificationLevel: 'all',
+    mutedUntil: null,
+    isStarred: false,
+    sectionId: null,
+  }),
+  messages: () => ({
+    kind: 'user',
+    authorId: null,
+    botId: null,
+    body: null,
+    bodyText: null,
+    threadRootId: null,
+    alsoInChannel: false,
+    replyCount: 0,
+    lastReplyAt: null,
+    clientMsgId: null,
+    metadata: {},
+    editedAt: null,
+    deletedAt: null,
+    createdAt: now(),
+  }),
+  messageEdits: () => ({ editedAt: now() }),
+  readCursors: () => ({ lastReadSeq: 0, lastReadAt: now() }),
+  userStatuses: () => ({ emoji: null, text: null, expiresAt: null }),
 };
 
 /** Collections with no `id` field (their identity is a composite of other fields). */
@@ -340,6 +394,9 @@ const NO_ID = new Set<string>([
   'sprintSnapshots',
   'platformSettings',
   'plans',
+  'channelMembers',
+  'readCursors',
+  'userStatuses',
 ]);
 
 // ---- Repository -------------------------------------------------------------------------------------
@@ -628,6 +685,12 @@ export class TenantDb {
   readonly spaceFiles!: TenantRepos['spaceFiles'];
   readonly worklogs!: TenantRepos['worklogs'];
   readonly dashboards!: TenantRepos['dashboards'];
+  readonly channels!: TenantRepos['channels'];
+  readonly channelMembers!: TenantRepos['channelMembers'];
+  readonly messages!: TenantRepos['messages'];
+  readonly messageEdits!: TenantRepos['messageEdits'];
+  readonly readCursors!: TenantRepos['readCursors'];
+  readonly userStatuses!: TenantRepos['userStatuses'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

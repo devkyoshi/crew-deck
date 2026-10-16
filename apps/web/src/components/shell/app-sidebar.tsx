@@ -21,6 +21,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -30,6 +31,7 @@ import { workTypeLabel } from '@/components/workspace/work-type-picker';
 import { openWorkspace } from '@/lib/workspaces';
 import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
+import { useUnreadSummary } from '@/lib/messaging-api';
 import { visibleGroups } from './nav';
 import { SpacesNav } from './spaces-nav';
 
@@ -123,6 +125,7 @@ function TenantSwitcher() {
 function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[number] }) {
   const pathname = usePathname();
   const [open, setOpen] = usePersistedOpen(`sidebar:${group.id}`);
+  const unread = useUnreadSummary();
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="group/collapsible">
@@ -152,6 +155,16 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
+                      {item.href === '/messages' && unread.dms > 0 && (
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground rounded-full" aria-label={`${unread.dms} unread direct messages`}>
+                          {unread.dms > 99 ? '99+' : unread.dms}
+                        </SidebarMenuBadge>
+                      )}
+                      {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
+                        <SidebarMenuBadge aria-label="Unread channels">
+                          <span className="bg-primary size-2 rounded-full" />
+                        </SidebarMenuBadge>
+                      )}
                     </SidebarMenuItem>
                   );
                 })}

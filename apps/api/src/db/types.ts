@@ -108,6 +108,8 @@ export interface MembershipDoc {
   deactivatedAt: Date | null;
   reportsTo: string | null;
   crmRole: CrmRole;
+  /** Set once the person has been put in the workspace's default channels (see messaging/channels.ts). */
+  messagingInitAt?: Date | null;
   createdAt: Date;
 }
 
@@ -769,4 +771,88 @@ export interface SprintSnapshotDoc {
   remainingPoints: number;
   items: number;
   open: number;
+}
+
+// ---- Messaging (docs/Messaging Module Build Brief.md, section 3) -----------------------------------------
+
+export interface ChannelDoc {
+  id: string;
+  orgId: string;
+  type: 'public' | 'private' | 'dm' | 'group_dm';
+  /** Null for direct messages. Lowercase with hyphens. */
+  name: string | null;
+  nameLower?: string;
+  slug: string | null;
+  topic: string | null;
+  description: string | null;
+  /** Null unless this is a space's channel (M4). */
+  spaceId: string | null;
+  /** Hash of the sorted member ids: one DM per pair, one group DM per exact set of people. */
+  dmKey: string | null;
+  isAnnouncement: boolean;
+  isArchived: boolean;
+  createdBy: string | null;
+  /** Counter behind `messages.seq`; bumped inside the insert transaction. */
+  lastSeq: number;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+}
+
+export interface ChannelMemberDoc {
+  orgId: string;
+  channelId: string;
+  userId: string;
+  role: 'owner' | 'member';
+  joinedAt: Date;
+  notificationLevel: 'all' | 'mentions' | 'none';
+  mutedUntil: Date | null;
+  isStarred: boolean;
+  sectionId: string | null;
+}
+
+export interface MessageDoc {
+  id: string;
+  orgId: string;
+  channelId: string;
+  seq: number;
+  kind: 'user' | 'system' | 'bot';
+  authorId: string | null;
+  botId: string | null;
+  /** Sanitised rich text (Tiptap JSON subset). Null on a tombstone. */
+  body: unknown | null;
+  /** Plain-text mirror for search, previews and notifications. Null on a tombstone. */
+  bodyText: string | null;
+  threadRootId: string | null;
+  alsoInChannel: boolean;
+  replyCount: number;
+  lastReplyAt: Date | null;
+  clientMsgId: string | null;
+  metadata: Record<string, unknown>;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface MessageEditDoc {
+  id: string;
+  orgId: string;
+  messageId: string;
+  oldBody: unknown;
+  editedAt: Date;
+}
+
+export interface ReadCursorDoc {
+  orgId: string;
+  channelId: string;
+  userId: string;
+  lastReadSeq: number;
+  lastReadAt: Date;
+}
+
+export interface UserStatusDoc {
+  orgId: string;
+  userId: string;
+  emoji: string | null;
+  text: string | null;
+  expiresAt: Date | null;
 }

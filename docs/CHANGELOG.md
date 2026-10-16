@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M1: real-time core
+
+- **Messages** (sidebar): channels (public and private), direct messages and group messages (up to 8 people), with live delivery, an unread count that follows you across tabs, typing indicators and presence (online, away, do not disturb).
+- `#general` and `#announcements` (owners and admins post) exist in every workspace and new people join them automatically; leaving one is respected.
+- Rich composer: bold, italic, strikethrough, code, code blocks, links, lists and quotes. Enter sends, Shift+Enter adds a line, Up edits your last message, drafts are kept per conversation.
+- Messages are stored before they are announced and numbered in order per channel; a retried send never duplicates. After a reconnect the client asks for what it missed. A failed message stays in the list with Retry.
+- Edit your own messages; delete leaves a tombstone. Channel owners and admins can delete others' messages. Archive makes a channel read-only; only admins delete a channel (audited).
+- Channel browser, a four-step create channel dialog, channel details (topic, members, roles, notification level, leave, archive, delete) and a New message picker.
+- Phone layout: the list and the conversation are separate screens, details open as a sheet.
+- Realtime gateway as its own service (`apps/realtime`, port 4100). Logout, deactivation and role changes disconnect the person's live connections at once; a removed member stops receiving a channel immediately.
+- Message components added to the `/design` page; 34 API tests, 19 gateway tests (including the cross-workspace attack cases), 16 logic tests and 7 browser tests (including an accessibility scan).
+- ADR-068 to ADR-071.
+
 ## 2026-10-16 - Dashboards and parity sweep (W13)
 
 - **Dashboard** (sidebar): your own tiles, in the order you want: assigned to me, saved filter results, sprint health, release progress, created against resolved.

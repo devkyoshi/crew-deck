@@ -1,0 +1,27 @@
+{
+  "name": "@crew-deck/realtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crew-deck/api": "workspace:^",
+    "@crew-deck/shared": "workspace:^",
+    "@socket.io/redis-adapter": "8",
+    "@socket.io/redis-emitter": "5",
+    "ioredis": "6",
+    "mongodb": "6",
+    "socket.io": "4",
+    "zod": "4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.4"
+  }
+}

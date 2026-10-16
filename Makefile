@@ -1,7 +1,7 @@
 .PHONY: help install up down dev migrate seed demo db-reset test lint typecheck build format
 
 help:
-	@echo "make dev        - start Mongo+Redis (docker), migrate, seed, run web+api locally"
+	@echo "make dev        - start Mongo+Redis (docker), migrate, seed, run web+api+realtime locally"
 	@echo "make up/down    - start/stop Mongo+Redis containers"
 	@echo "make migrate    - create MongoDB indexes"
 	@echo "make seed       - seed two demo tenants"

@@ -250,6 +250,30 @@ const INDEXES: Record<string, Ix[]> = {
     ['sprint_item', { sprintId: 1, itemId: 1 }],
   ],
   sprint_snapshots: [['sprint_date', { sprintId: 1, date: 1 }, U]],
+  channels: [
+    ['id', { id: 1 }, U],
+    // Names are unique per workspace among named channels (direct messages have no name).
+    ['org_name', { orgId: 1, nameLower: 1 }, { unique: true, partialFilterExpression: { nameLower: { $type: 'string' } } }],
+    // One DM per pair, one group DM per exact set of people.
+    ['org_dm', { orgId: 1, dmKey: 1 }, { unique: true, partialFilterExpression: { dmKey: { $type: 'string' } } }],
+    ['org_type', { orgId: 1, type: 1, isArchived: 1 }],
+  ],
+  channel_members: [
+    ['pk', { orgId: 1, channelId: 1, userId: 1 }, U],
+    ['user', { orgId: 1, userId: 1 }],
+  ],
+  messages: [
+    ['id', { id: 1 }, U],
+    ['channel_seq', { orgId: 1, channelId: 1, seq: 1 }, U],
+    // A retried send finds the message it already created.
+    ['client_msg', { orgId: 1, channelId: 1, clientMsgId: 1 }, { unique: true, partialFilterExpression: { clientMsgId: { $type: 'string' } } }],
+  ],
+  message_edits: [
+    ['id', { id: 1 }, U],
+    ['message', { orgId: 1, messageId: 1, editedAt: -1 }],
+  ],
+  read_cursors: [['pk', { orgId: 1, channelId: 1, userId: 1 }, U]],
+  user_statuses: [['pk', { orgId: 1, userId: 1 }, U]],
 };
 
 export async function ensureIndexes(handle: MongoDb) {

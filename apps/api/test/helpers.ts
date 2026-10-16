@@ -8,6 +8,8 @@ import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db/client.js';
 import { randomToken, sha256 } from '../src/lib/crypto.js';
 import { createRedis } from '../src/lib/redis.js';
+import type { EventSink } from '../src/messaging/events.js';
+import type { RateLimits } from '../src/messaging/rate-limit.js';
 
 export const PASSWORD = 'correct-horse-battery';
 
@@ -69,6 +71,8 @@ export function makeApp(
     env?: Record<string, string>;
     enqueueRebalance?: (job: { orgId: string; spaceId: string; statusId: string }) => Promise<void> | void;
     liveTiming?: { heartbeatMs?: number; recheckMs?: number };
+    events?: EventSink;
+    messageLimits?: RateLimits;
   } = {},
 ) {
   const config = loadConfig({
@@ -96,11 +100,14 @@ export function makeApp(
       await opts.enqueueRebalance?.(job);
     },
     liveTiming: opts.liveTiming,
+    events: opts.events,
+    messageLimits: opts.messageLimits,
   });
   return {
     app,
     config,
     db: conn.db,
+    redis,
     async close() {
       await app.close();
       redis.disconnect();

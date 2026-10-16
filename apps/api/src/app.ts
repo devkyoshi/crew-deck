@@ -43,6 +43,9 @@ import { notificationRoutes } from './routes/notifications.js';
 import { sprintRoutes } from './routes/sprints.js';
 import { liveRoutes } from './routes/live.js';
 import { LiveHub, registerLive } from './lib/live.js';
+import { messagingRoutes } from './routes/messaging.js';
+import { RedisEventSink, type EventSink } from './messaging/events.js';
+import { RateLimiter, type RateLimits } from './messaging/rate-limit.js';
 import { workDepthRoutes } from './routes/work-depth.js';
 import { attachmentRoutes, MAX_UPLOAD_BYTES } from './routes/attachments.js';
 import multipart from '@fastify/multipart';
@@ -76,6 +79,10 @@ export interface AppDeps {
   storage?: StorageDriver;
   /** Heartbeat and access re-check intervals for live streams (shortened in tests). */
   liveTiming?: { heartbeatMs?: number; recheckMs?: number };
+  /** Where messaging events go. Defaults to Redis, which the realtime gateway delivers from. */
+  events?: EventSink;
+  /** Message rate limits (tests tighten them). */
+  messageLimits?: RateLimits;
 }
 
 export function buildApp({
@@ -88,6 +95,8 @@ export function buildApp({
   enqueueRebalance,
   storage = createStorage(config),
   liveTiming = {},
+  events = new RedisEventSink(redis),
+  messageLimits,
 }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
@@ -136,10 +145,16 @@ export function buildApp({
 
   // Plugin-per-module: each module registers under /api/v1.
   app.register(healthRoutes, { prefix: '/api/v1', db });
-  app.register(authRoutes, { prefix: '/api/v1/auth', db, config, sessions, google: googleClient });
+  app.register(authRoutes, { prefix: '/api/v1/auth', db, config, sessions, google: googleClient, events });
   const authDeps = { db, config, sessions };
   app.register(meRoutes, { prefix: '/api/v1', ...authDeps });
-  app.register(memberRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(memberRoutes, { prefix: '/api/v1', ...authDeps, events });
+  app.register(messagingRoutes, {
+    prefix: '/api/v1',
+    ...authDeps,
+    redis,
+    messaging: { db, events, limiter: new RateLimiter(redis, messageLimits) },
+  });
   app.register(invitationRoutes, {
     prefix: '/api/v1',
     ...authDeps,

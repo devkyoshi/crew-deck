@@ -58,6 +58,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { RoleBadge, StatusChip } from '@/components/shared/badges';
 import { Stepper } from '@/components/shared/stepper';
 import { WorkShowcase } from './work-showcase';
+import { MessagesShowcase } from './messages-showcase';
 import { AvatarStack, Chip, TonePill, TonedHeader } from '@/components/shared/pastel';
 import {
   CalendarClock,
@@ -392,6 +393,7 @@ export function Showcase() {
         </div>
       </Section>
       <WorkShowcase />
+      <MessagesShowcase />
     </div>
   );
 }

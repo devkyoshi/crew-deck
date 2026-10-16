@@ -10,6 +10,8 @@ import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import type { MembershipDoc, UserDoc } from '../db/types.js';
 import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { offsetOf, pageQuery } from '../lib/pagination.js';
+import { onMemberDeactivated } from '../messaging/channels.js';
+import type { EventSink } from '../messaging/events.js';
 import { can } from '../permissions/can.js';
 
 type Status = 'active' | 'invited' | 'deactivated';
@@ -111,7 +113,7 @@ async function loadTarget(t: TenantDb, userId: string) {
   return { ...toRow(m, u, users), membershipStatus: m.status };
 }
 
-export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
+export async function memberRoutes(app: FastifyInstance, deps: AuthDeps & { events?: EventSink }) {
   const requireAuth = makeRequireAuth(deps);
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -182,7 +184,8 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
       const { orgRole, reportsTo, crmRole, ...profile } = req.body;
       const isSelf = req.params.id === actor.userId;
 
-      return withTenantTx(deps.db, actor.orgId, async (t) => {
+      let roleChanged = false;
+      const updated = await withTenantTx(deps.db, actor.orgId, async (t) => {
         const target = await loadTarget(t, req.params.id);
 
         if (orgRole !== undefined && orgRole !== target.orgRole) {
@@ -193,6 +196,7 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
             throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
           }
           await t.memberships.updateOne({ userId: target.id }, { orgRole: orgRole as OrgRole });
+          roleChanged = true;
           await writeAudit(t, {
             orgId: actor.orgId,
             actorId: actor.userId,
@@ -281,6 +285,9 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
         const { membershipStatus: _s, ...member } = await loadTarget(t, target.id);
         return member;
       });
+      // A role change drops the person's sockets; they reconnect with the new role (brief section 6).
+      if (roleChanged) deps.events?.disconnectUser(actor.orgId, req.params.id);
+      return updated;
     },
   );
 
@@ -294,11 +301,13 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
     if (deactivate && userId === actor.userId) {
       throw new AppError(400, 'cannot_deactivate_self', 'You cannot deactivate yourself');
     }
-    return withTenantTx(deps.db, actor.orgId, async (t) => {
+    let nowInactive = false;
+    const member = await withTenantTx(deps.db, actor.orgId, async (t) => {
       const target = await loadTarget(t, userId);
       if (target.orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
       const already = (target.membershipStatus === 'deactivated') === deactivate;
       if (!already) {
+        nowInactive = deactivate;
         if (deactivate && target.orgRole === 'owner' && (await activeOwnerCount(t)) <= 1) {
           throw new AppError(409, 'last_owner', 'A workspace needs at least one owner');
         }
@@ -322,6 +331,9 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps) {
       const { membershipStatus: _s, ...member } = await loadTarget(t, userId);
       return member;
     });
+    // Out of every channel, and their sockets are dropped, once the change is stored.
+    if (nowInactive && deps.events) await onMemberDeactivated({ db: deps.db, events: deps.events }, actor.orgId, userId);
+    return member;
   }
 
   r.post(
