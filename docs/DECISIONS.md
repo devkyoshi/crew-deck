@@ -348,6 +348,18 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-091: The load test is a script with agreed targets, and the gateway scales out
+
+- `test/load/realtime-load.ts` starts real gateway processes against a throwaway database and drives them with real WebSocket clients; it reports delivery and acknowledgement times and counts of lost, duplicated and cross-workspace messages, and exits non-zero when a target is missed (zero lost, duplicated or leaked; p95 750 ms, p99 2000 ms, acknowledgement p95 500 ms, all proposals to confirm). A small run is part of CI. Capacity is stated per process (about 18,000 deliveries a second) and the answer past it is more instances: the gateway holds no state of its own and the Redis adapter joins them, which the two-process run confirmed. `GET /realtime/metrics` (loopback only, never through the proxy) gives what an operator needs to decide.
+
+## ADR-090: Publishing is best effort after the change is stored, except access removal
+
+- `RedisEventSink` is wrapped in a guard. A failed publish (to a channel, a person or the workspace) is logged and dropped: the change is already stored, and clients catch up through `sync`, gap detection and refetch, so the person who made the change must not see an error. Calls that take access away (leaving a channel room, disconnecting a person or a session) are retried after 0.25, 1, 3, 10 and 30 seconds and logged loudly if they never succeed, because someone who was removed must not keep receiving while a failure lasts. The gateway's five-minute re-check still ends sessions of deactivated people. A Redis outage makes new commands wait (the client queues them) rather than fail, so sends are delayed, not lost, and a retry with the same client id is one message.
+
+## ADR-089: Presence goes out in batches
+
+- Telling every connected person each time someone connects or leaves is quadratic: a morning rush of 600 people meant 360,000 messages and capped connection at 96 a second. The gateway now sends the first presence change after a quiet moment at once (unchanged for one person coming and going), and holds those that follow for up to 250 ms and sends them as one `presence:batch` carrying the last state of each person. The web app applies both. Changes made through the REST API (do not disturb, custom status) still go out at once.
+
 ## ADR-088: Open channel on a CRM record posts from the routes that change it
 
 - A channel can follow one deal or company (`crmLink`, unique per record). Opening it needs permission to edit CRM records, makes a private channel with the person as owner, and asking again returns it (and adds the person to it). Stage changes, new activities and new notes on the record (and, for a company's channel, on its deals) are posted by the CRM bot after the change is saved, from the CRM routes (which now take the messaging context), never inside the CRM transaction. The text names the person and the stage or subject; note text is not copied. The people in the channel are chosen by someone with CRM rights, so they are trusted with those words.

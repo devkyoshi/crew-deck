@@ -1,3 +1,4 @@
+import { seedMessagingDemo } from './seed-demo-messaging.js';
 import { fileURLToPath } from 'node:url';
 import { generateKeyBetween } from 'fractional-indexing';
 import { hashPassword } from '../auth/password.js';
@@ -911,6 +912,8 @@ async function seedAcme(db: Db, passwordHash: string) {
     forgottenCheckout: 'ben',
   });
   await seedCrm(ctx, 'priya');
+  // Chat last: it needs the people, the spaces and their items to exist.
+  await seedMessagingDemo(db, { id: ctx.orgId }, (h) => ctx.userId(h));
   console.log('seeded demo workspace (acme: software)');
 }
 

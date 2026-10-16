@@ -170,6 +170,8 @@ export const S2C = {
   threadUpdated: 'thread:updated',
   typing: 'typing',
   presenceChanged: 'presence:changed',
+  /** Several presence changes at once (a burst of people connecting): one message instead of many. */
+  presenceBatch: 'presence:batch',
   channelUpdated: 'channel:updated',
   notificationNew: 'notification:new',
   channelMembership: 'channel:membership',
@@ -228,6 +230,9 @@ export interface TypingEvent {
 export interface PresenceEvent {
   userId: string;
   state: PresenceState;
+}
+export interface PresenceBatchEvent {
+  changes: PresenceEvent[];
 }
 export interface ReadSyncedEvent {
   channelId: string;

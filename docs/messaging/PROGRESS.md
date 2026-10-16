@@ -13,7 +13,7 @@
 | M3 | Search and notifications | Review | Built and tested, awaiting owner sign-off. Details below |
 | M4 | Platform integration | Review | Built and tested, awaiting owner sign-off. Details below |
 | M5 | Admin and extensibility | Review | Built and tested, awaiting owner sign-off. Details below |
-| M6 | Hardening | Not started | |
+| M6 | Hardening | Review | Built and tested, awaiting owner sign-off. Details below |
 
 ## M1: what was built
 
@@ -22,6 +22,17 @@
 - **Gateway** (`apps/realtime`): Socket.IO, handshake by tenant host and session cookie, server-chosen rooms, `message:send` (acknowledged after storing), `message:edit`, `message:delete`, `read:update`, `typing:start`, `presence:update`, `sync`; revoke on logout, deactivation and role change; five-minute session re-check.
 - **Web** (`apps/web/src/components/messages`, `apps/web/src/app/(app)/messages`): conversation list, virtualized conversation, composer, message rows, pending and failed states, details panel, new message, create channel (four steps), channel browser, connection banner, typing indicator, skeletons and empty states, phone layout. Components are on the `/design` page.
 - **Tests:** `apps/api/test/messaging.test.ts` (34), `apps/api/test/realtime.test.ts` (19, runs the gateway with real socket clients, including the cross-workspace attack cases, reconnect sync, removed members and deactivation), `apps/web/src/lib/messaging-logic.test.ts` (16), `e2e/messaging.spec.ts` (browser, including an accessibility scan).
+
+## M6: what was built
+
+- **Load test:** `apps/api/test/load/realtime-load.ts` (`pnpm --filter @crew-deck/api load:realtime`), results, targets and the hot spots found in `docs/messaging/LOAD-TEST.md`; a small run in `.github/workflows/ci.yml`.
+- **Fixes from it:** presence batching in the gateway (`PresenceAnnouncer`, `presence:batch` handled by the web app), `GET /realtime/metrics`.
+- **Failure handling:** `GuardedEventSink` in `messaging/events.ts` (best-effort publish, retried access removal), tests for it, for Redis dropping every connection, for eight simultaneous identical sends and thirty concurrent senders (`messaging-m6.test.ts`, `realtime.test.ts`).
+- **Demo data:** `db/seed-demo-messaging.ts`, run by `db:seed:demo`, checked and re-run safely in `seed-demo.test.ts`.
+- **Browser tests** (`e2e/messaging-m6.spec.ts`, 9): cross-workspace socket attack, phone layout, phone accessibility in both themes, keyboard-only flow, error states, offline send and retry, ordering with two people, a 10,000-message channel.
+- **Earlier phases' tests in the suite:** M1 to M5 browser specs run unchanged.
+- **Not done in M6 (and why):** a mobile native app and push (the brief puts them later); automatic resending of a message that failed while offline (the row shows Retry, by design); load testing the search and the history API (the gateway was the risk; both are indexed queries and are covered by the 10,000-message test).
+- **Open items for the owner:** confirm or change the load targets. Known failures that are not caused by messaging: two service desk API tests that depend on the time of day (they fail during UTC working hours), and on this long-lived development database the browser tests "a missed message appears after the connection comes back" (the other person's sign-in step times out; it has passed in some runs) and "duplicate an item and move it to another space" (the target space is not in the first page of the picker). CI starts from an empty database.
 
 ## M5: what was built
 
@@ -83,6 +94,7 @@
 
 ## Log (newest first)
 
+- 2026-10-16: M6 built and verified (typecheck, lint, API, gateway, browser tests, load test). Waiting for owner review.
 - 2026-10-16: M5 built and verified (typecheck, lint, API, gateway, browser tests). Waiting for owner review.
 - 2026-10-16: M4 built and verified (typecheck, lint, API, gateway, browser tests). Waiting for owner review.
 - 2026-10-16: M3 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.

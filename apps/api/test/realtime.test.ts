@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { io as connect, type Socket } from 'socket.io-client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SOCKET_PATH } from '@crew-deck/shared';
 // The gateway is its own app (apps/realtime); its tests live here because this package owns the test database.
 import { createGateway } from '../../realtime/src/gateway.js';
@@ -724,5 +724,42 @@ describe('space channels over the socket', () => {
       threadRootId: rootId,
     });
     expect(reply).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+  });
+});
+
+describe('losing the connection to Redis', () => {
+  it('keeps working once Redis answers again: a retried send is one message, nothing is lost for good, nobody is dropped', async () => {
+    const a = await ready(client(slug, c.ann));
+    const b = await ready(client(slug, c.bob));
+    const heard = record(b, 'message:new');
+    expect(await send(a, general, 'before the restart')).toMatchObject({ ok: true });
+    await quiet(300);
+    expect(heard.map((m) => m.bodyText)).toContain('before the restart');
+    const lastSeen = heard.at(-1)!.seq as number;
+
+    // A Redis restart: every connection to it is cut at once (the clients reconnect on their own).
+    await t.redis.call('CLIENT', 'KILL', 'TYPE', 'pubsub');
+    await t.redis.call('CLIENT', 'KILL', 'TYPE', 'normal').catch(() => undefined);
+
+    // The same client id sent again across the outage is one message.
+    const id = msgId();
+    const first = await send(a, general, 'during the restart', id).catch(() => null);
+    const again = await send(a, general, 'during the restart', id);
+    expect(again).toMatchObject({ ok: true });
+    if (first && first.ok) expect((again as { ok: true; data: Json }).data.message.id).toBe(first.data.message.id);
+
+    // Both sockets are still connected and still in their rooms, so new messages flow again.
+    expect(a.connected && b.connected).toBe(true);
+    await vi.waitFor(async () => {
+      expect(await send(a, general, 'after the restart')).toMatchObject({ ok: true });
+      expect(heard.map((m) => m.bodyText)).toContain('after the restart');
+    }, { timeout: 8000, interval: 500 });
+
+    // A live event published during the outage may have been lost. The catch-up returns it, once.
+    const got = await emit<Json[]>(b, 'sync', { channels: [{ channelId: general, lastSeq: lastSeen }] });
+    if (!got.ok) throw new Error('sync failed');
+    const all = got.data.find((x) => x.channelId === general)!.messages.map((m: Json) => m.bodyText);
+    expect(all.filter((x: string) => x === 'during the restart')).toHaveLength(1);
+    expect(all).toContain('after the restart');
   });
 });

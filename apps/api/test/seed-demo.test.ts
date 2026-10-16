@@ -28,6 +28,10 @@ describe('demo seed', () => {
       templates: await db.collection('checklist_templates').countDocuments(),
       sprints: await db.collection('sprints').countDocuments(),
       links: await db.collection('work_item_links').countDocuments({ linkType: 'blocks' }),
+      channels: await db.collection('channels').countDocuments(),
+      messages: await db.collection('messages').countDocuments(),
+      reactions: await db.collection('message_reactions').countDocuments(),
+      pins: await db.collection('pins').countDocuments(),
     });
     const first = await counts();
     expect(first).toMatchObject({ versions: 2, components: 2, worklogs: 3, folders: 4, templates: 1 });
@@ -37,6 +41,17 @@ describe('demo seed', () => {
     // The Engineering epic is on the roadmap and a story carries a checklist.
     expect(await db.collection('work_items').countDocuments({ type: 'epic', startDate: { $ne: null } })).toBeGreaterThanOrEqual(1);
     expect(await db.collection('work_items').countDocuments({ 'checklist.0': { $exists: true } })).toBe(1);
+
+    // Chat: channels people really have, threads, reactions, pins, and a space channel with its bot.
+    expect(first.channels).toBeGreaterThanOrEqual(8);
+    expect(first.messages).toBeGreaterThanOrEqual(20);
+    expect(first.reactions).toBeGreaterThanOrEqual(8);
+    expect(first.pins).toBeGreaterThanOrEqual(2);
+    expect(await db.collection('messages').countDocuments({ replyCount: { $gt: 0 } })).toBeGreaterThanOrEqual(2);
+    expect(await db.collection('messages').countDocuments({ kind: 'bot' })).toBeGreaterThanOrEqual(1);
+    expect(await db.collection('channels').countDocuments({ type: 'dm' })).toBe(2);
+    expect(await db.collection('channels').countDocuments({ spaceId: { $type: 'string' } })).toBeGreaterThanOrEqual(3);
+    expect(await db.collection('user_statuses').countDocuments({ text: { $ne: null } })).toBe(1);
 
     await seedDemo(uri, name);
     expect(await counts()).toEqual(first);

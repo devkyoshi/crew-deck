@@ -1,7 +1,6 @@
 import type { Server as HttpServer } from 'node:http';
 import {
   AppError,
-  announcePresence,
   channelRoom,
   deleteMessage,
   editMessage,
@@ -40,6 +39,9 @@ import {
   syncSchema,
   typingSchema,
   type Ack,
+  type PresenceBatchEvent,
+  type PresenceEvent,
+  type PresenceState,
   type SocketErrorCode,
 } from '@crew-deck/shared';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -113,6 +115,59 @@ function toSocketError(
  * checked at the handshake, on every subscribe (the server decides which rooms a socket is in), on
  * every publish (the service re-checks membership in the database) and on history fetches.
  */
+/**
+ * Sends presence changes to a workspace. The first change after a quiet moment goes out at once, exactly as
+ * a single `presence:changed`; changes that follow within the window are held and sent together as one
+ * `presence:batch` (the last state of each person wins).
+ */
+export class PresenceAnnouncer {
+  private readonly last = new Map<string, number>();
+  private readonly held = new Map<string, Map<string, PresenceState>>();
+  private readonly timers = new Map<string, NodeJS.Timeout>();
+
+  constructor(
+    private readonly send: (orgId: string, event: string, payload: unknown) => void,
+    private readonly windowMs = 250,
+  ) {}
+
+  change(orgId: string, userId: string, c: { before: PresenceState; after: PresenceState }) {
+    if (c.before === c.after) return;
+    const now = Date.now();
+    const quiet = now - (this.last.get(orgId) ?? 0) >= this.windowMs && !this.held.has(orgId);
+    if (quiet) {
+      this.last.set(orgId, now);
+      this.send(orgId, S2C.presenceChanged, { userId, state: c.after } satisfies PresenceEvent);
+      return;
+    }
+    const queue = this.held.get(orgId) ?? new Map<string, PresenceState>();
+    queue.set(userId, c.after);
+    this.held.set(orgId, queue);
+    if (!this.timers.has(orgId)) {
+      const wait = Math.max(0, (this.last.get(orgId) ?? now) + this.windowMs - now);
+      const timer = setTimeout(() => this.flush(orgId), wait);
+      timer.unref();
+      this.timers.set(orgId, timer);
+    }
+  }
+
+  private flush(orgId: string) {
+    this.timers.delete(orgId);
+    const queue = this.held.get(orgId);
+    this.held.delete(orgId);
+    if (!queue || queue.size === 0) return;
+    this.last.set(orgId, Date.now());
+    const changes = [...queue].map(([userId, state]) => ({ userId, state }));
+    if (changes.length === 1) this.send(orgId, S2C.presenceChanged, changes[0]);
+    else this.send(orgId, S2C.presenceBatch, { changes } satisfies PresenceBatchEvent);
+  }
+
+  close() {
+    for (const t of this.timers.values()) clearTimeout(t);
+    this.timers.clear();
+    this.held.clear();
+  }
+}
+
 export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
   const { db, config, sessions, messaging, presence, limiter } = deps;
   const recheckMs = deps.recheckMs ?? 5 * 60_000;
@@ -138,6 +193,12 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
   });
   const sub = deps.redis.duplicate();
   io.adapter(createAdapter(deps.redis, sub));
+
+  // Presence changes go to everyone in the workspace. When many people connect at once (the start of a
+  // working day) one message per person per listener is quadratic, so a burst is sent as one batch.
+  const announcer = new PresenceAnnouncer((orgId, event, payload) =>
+    messaging.events.toOrg(orgId, event, payload),
+  );
 
   // ---- Handshake: tenant from the host, person from the session cookie -----------------------------
   io.use(async (socket, next) => {
@@ -197,7 +258,7 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
 
     void presence
       .beat(actor.orgId, actor.userId, socket.id, 'active')
-      .then((c) => announcePresence(messaging, actor.orgId, actor.userId, c))
+      .then((c) => announcer.change(actor.orgId, actor.userId, c))
       .catch((e) => log.error('presence failed', e));
 
     // Re-validate the session and membership every few minutes (brief section 6, Auth).
@@ -218,7 +279,7 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
       clearInterval(timer);
       void presence
         .drop(actor.orgId, actor.userId, socket.id)
-        .then((c) => announcePresence(messaging, actor.orgId, actor.userId, c))
+        .then((c) => announcer.change(actor.orgId, actor.userId, c))
         .catch((e) => log.error('presence drop failed', e));
     });
 
@@ -282,7 +343,7 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
     handle(C2S.sync, syncSchema, (p, a) => syncChannels(messaging, a, p.channels));
     handle(C2S.presenceUpdate, presenceUpdateSchema, async (p) => {
       const change = await presence.beat(actor.orgId, actor.userId, socket.id, p.state);
-      announcePresence(messaging, actor.orgId, actor.userId, change);
+      announcer.change(actor.orgId, actor.userId, change);
       return { state: change.after };
     });
 
@@ -309,7 +370,21 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
 
   return {
     io,
+    /** For operations and the load test: how many connections and rooms this process holds. */
+    stats() {
+      const mem = process.memoryUsage();
+      return {
+        sockets: io.sockets.sockets.size,
+        rooms: io.sockets.adapter.rooms.size,
+        rssMb: Math.round(mem.rss / 1048576),
+        heapMb: Math.round(mem.heapUsed / 1048576),
+        uptimeSeconds: Math.round(process.uptime()),
+        /** Cumulative processor time, so two readings give the share of one core in use. */
+        cpuMs: Math.round((process.cpuUsage().user + process.cpuUsage().system) / 1000),
+      };
+    },
     async close() {
+      announcer.close();
       await io.close();
       sub.disconnect();
     },

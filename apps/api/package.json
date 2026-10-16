@@ -12,6 +12,7 @@
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts",
     "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
     "db:seed:demo": "tsx --env-file=../../.env src/db/seed-demo.ts",
+    "load:realtime": "tsx --env-file=../../.env test/load/realtime-load.ts",
     "db:platform-admin": "tsx --env-file=../../.env src/db/create-platform-admin.ts"
   },
   "dependencies": {

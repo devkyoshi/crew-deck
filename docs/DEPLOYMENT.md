@@ -21,6 +21,9 @@ Browser ──https──▶ reverse proxy ──▶ web (Next.js :3000) ──/
   the Socket.IO Redis adapter, so several instances behind a load balancer work with **no sticky sessions**
   (clients use WebSocket only). It reads the same session cookie as the API, resolving the workspace from the
   `Host` / `X-Forwarded-Host` header, and runs the same messaging services and permission checks as the API.
+  Capacity and how to measure it are in [messaging/LOAD-TEST.md](messaging/LOAD-TEST.md): one process handles about
+  18,000 message deliveries a second; run more instances when its processor share stays above 0.8 of a core
+  (`GET /realtime/metrics` on the machine itself).
 - **MongoDB** holds all data. It must run as a **replica set** (a single node is fine), because the API
   uses multi-document transactions. Tenant isolation is enforced by the API's repository layer (every
   query carries the workspace id), so give the API a database user limited to its own database.

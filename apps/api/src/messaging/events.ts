@@ -33,7 +33,7 @@ export interface EventSink {
 }
 
 /** Publishes through Redis; the gateway's Socket.IO Redis adapter delivers to the sockets it holds. */
-export class RedisEventSink implements EventSink {
+class RawRedisEventSink implements EventSink {
   private readonly emitter: Emitter;
 
   constructor(redis: Redis) {
@@ -60,6 +60,79 @@ export class RedisEventSink implements EventSink {
   }
   disconnectSession(orgId: string, sessionHash: string) {
     this.emitter.in(sessionRoom(orgId, sessionHash)).disconnectSockets(true);
+  }
+}
+
+/**
+ * Makes publishing safe to call after a change has been stored. Persist first, publish second: when the
+ * publish itself fails (Redis restarting, a bad payload) the stored change must not turn into an error for
+ * the person who made it, so failures are logged and dropped; clients catch up through `sync` and gap
+ * detection. The exceptions are the calls that take access away (leaving a room, ending a session, a
+ * deactivated person): those are retried with a growing delay, because a person who was removed must not
+ * keep receiving while the failure lasts.
+ */
+export class GuardedEventSink implements EventSink {
+  constructor(
+    private readonly inner: EventSink,
+    private readonly opts: {
+      log?: (message: string, error: unknown) => void;
+      /** Delays between retries of access-removing calls. */
+      retryDelaysMs?: number[];
+    } = {},
+  ) {}
+
+  private soft(what: string, fn: () => void) {
+    try {
+      fn();
+    } catch (e) {
+      (this.opts.log ?? ((m, err) => console.error(m, err)))(`event publish failed (${what})`, e);
+    }
+  }
+
+  private firm(what: string, fn: () => void) {
+    const delays = this.opts.retryDelaysMs ?? [250, 1000, 3000, 10_000, 30_000];
+    const attempt = (n: number) => {
+      try {
+        fn();
+      } catch (e) {
+        if (n >= delays.length) {
+          (this.opts.log ?? ((m, err) => console.error(m, err)))(`${what} failed for good`, e);
+          return;
+        }
+        const timer = setTimeout(() => attempt(n + 1), delays[n]);
+        timer.unref();
+      }
+    };
+    attempt(0);
+  }
+
+  toChannel(orgId: string, channelId: string, event: string, payload: unknown) {
+    this.soft(event, () => this.inner.toChannel(orgId, channelId, event, payload));
+  }
+  toUser(orgId: string, userId: string, event: string, payload: unknown) {
+    this.soft(event, () => this.inner.toUser(orgId, userId, event, payload));
+  }
+  toOrg(orgId: string, event: string, payload: unknown) {
+    this.soft(event, () => this.inner.toOrg(orgId, event, payload));
+  }
+  joinChannel(orgId: string, userId: string, channelId: string) {
+    this.soft('join', () => this.inner.joinChannel(orgId, userId, channelId));
+  }
+  leaveChannel(orgId: string, userId: string, channelId: string) {
+    this.firm('leaving a channel room', () => this.inner.leaveChannel(orgId, userId, channelId));
+  }
+  disconnectUser(orgId: string, userId: string) {
+    this.firm('disconnecting a person', () => this.inner.disconnectUser(orgId, userId));
+  }
+  disconnectSession(orgId: string, sessionHash: string) {
+    this.firm('disconnecting a session', () => this.inner.disconnectSession(orgId, sessionHash));
+  }
+}
+
+/** The sink the servers use: Redis, guarded. */
+export class RedisEventSink extends GuardedEventSink {
+  constructor(redis: Redis) {
+    super(new RawRedisEventSink(redis));
   }
 }
 

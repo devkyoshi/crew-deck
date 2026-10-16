@@ -25,11 +25,22 @@ const http = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}');
     return;
   }
+  // Connection counts and memory, for the load test and for operators on the machine itself: only from
+  // the loopback address and never through the proxy (which adds forwarding headers).
+  if (req.url === '/realtime/metrics') {
+    const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    if (!local || req.headers['x-forwarded-for'] || req.headers['x-forwarded-host']) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(gateway.stats()));
+    return;
+  }
   // Socket.IO answers its own path; anything else is not ours.
   if (!req.url?.startsWith('/realtime/socket.io')) res.writeHead(404).end();
 });
 
-const gateway = createGateway(http, {
+const gateway: ReturnType<typeof createGateway> = createGateway(http, {
   db,
   config,
   redis,

@@ -25,6 +25,7 @@ import {
   type MessageDTO,
   type MyChannelDTO,
   type NotificationEvent,
+  type PresenceBatchEvent,
   type PresenceEvent,
   type ReactionEvent,
   type ReadSyncedEvent,
@@ -355,6 +356,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socket.on(S2C.presenceChanged, (e: PresenceEvent) =>
         useMessaging.getState().setPresence(e.userId, e.state),
       );
+      socket.on(S2C.presenceBatch, (e: PresenceBatchEvent) => {
+        for (const c of e.changes) useMessaging.getState().setPresence(c.userId, c.state);
+      });
       socket.on(S2C.channelUpdated, (c: ChannelDTO) =>
         patchChannel(qc, c.id, (cur) => ({ ...cur, ...c, people: c.people ?? cur.people })),
       );

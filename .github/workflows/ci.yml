@@ -80,6 +80,14 @@ jobs:
           pnpm db:seed:demo
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+      # A small run of the realtime load test (docs/messaging/LOAD-TEST.md): it starts its own gateway and
+      # fails the build on lost, duplicated or cross-workspace deliveries, or slow delivery.
+      - name: Realtime load smoke test
+        env:
+          TENANTS: '3'
+          USERS: '120'
+          SECONDS: '10'
+        run: pnpm --filter @crew-deck/api load:realtime
       # Playwright starts the API and web dev servers itself (see playwright.config.ts).
       - name: Run end-to-end tests
         run: pnpm exec playwright test

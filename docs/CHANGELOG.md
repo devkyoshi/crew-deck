@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M6: hardening
+
+- **Load test** (`pnpm --filter @crew-deck/api load:realtime`, and a small run in CI): thousands of sockets across several workspaces, checking that every message arrives exactly once, never in another workspace, and fast. 6,000 people across 8 workspaces on two gateways: 24,000 deliveries a second, p99 276 ms, nothing lost. Details and targets in `docs/messaging/LOAD-TEST.md`.
+- **Faster connections:** a burst of people connecting no longer sends each of them a presence message about everyone else; changes within 250 ms are sent as one batch (`presence:batch`). Connection throughput up 2.3 times.
+- **Failure handling:** a publish that fails after a message was stored (Redis restarting) no longer turns into an error for the sender, and removing someone's access (leaving a room, ending a session) is retried until it works. Tests cover Redis losing every connection, the same message sent eight times at once, and thirty senders at once.
+- **Gateway metrics:** `GET /realtime/metrics` on the gateway machine itself (connections, rooms, memory, processor time).
+- **Demo data:** the demo workspace (acme) now has channels, threads, reactions, mentions, pins, work item keys, two direct messages with unread messages, a space channel with its bot, and a status.
+- **Browser tests:** a cross-workspace socket attack (wrong host, someone else's channel, listening to their events), phone layout and accessibility in both themes, keyboard-only use, error states with Try again, a message sent while offline then retried once, ordering with two people, and a channel with 10,000 messages (opens in about 3 s on the development server, frames stay under 20 ms at p95).
+- ADR-089 to ADR-091.
+
 ## 2026-10-16 - Messaging, phase M5: admin and extensibility
 
 - **Messaging settings** (Settings > Messaging, workspace owner only): who can create channels (everyone or admins), the limit above which only admins can use `@channel` and `@here`, whether new channels are announcement-only, whether every space gets a channel, whether being on leave pauses notifications, and the channels new people join besides #general and #announcements. Members stop seeing "Create a channel" when it is limited to admins, and the server refuses it too.
