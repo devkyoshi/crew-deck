@@ -11,6 +11,7 @@ export interface Filters {
   due: '' | 'overdue' | 'today' | 'week' | 'none';
   mine: boolean;
   recent: boolean;
+  blocked: boolean;
 }
 
 export const NO_FILTERS: Filters = {
@@ -23,6 +24,7 @@ export const NO_FILTERS: Filters = {
   due: '',
   mine: false,
   recent: false,
+  blocked: false,
 };
 
 const list = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -40,6 +42,7 @@ export function parseFilters(params: URLSearchParams): Filters {
     due: (DUES as readonly string[]).includes(due ?? '') ? (due as Filters['due']) : '',
     mine: params.get('mine') === '1',
     recent: params.get('recent') === '1',
+    blocked: params.get('blocked') === '1',
   };
 }
 
@@ -55,10 +58,11 @@ export function filterString(f: Filters): string {
   if (f.due) p.set('due', f.due);
   if (f.mine) p.set('mine', '1');
   if (f.recent) p.set('recent', '1');
+  if (f.blocked) p.set('blocked', '1');
   return p.toString();
 }
 
-export const FILTER_KEYS = ['q', 'assignee', 'type', 'priority', 'label', 'epic', 'due', 'mine', 'recent'];
+export const FILTER_KEYS = ['q', 'assignee', 'type', 'priority', 'label', 'epic', 'due', 'mine', 'recent', 'blocked'];
 
 export const hasActiveFilters = (f: Filters) => filterString(f) !== '';
 
@@ -71,4 +75,5 @@ export const countFilters = (f: Filters) =>
   (f.epic.length ? 1 : 0) +
   (f.due ? 1 : 0) +
   (f.mine ? 1 : 0) +
-  (f.recent ? 1 : 0);
+  (f.recent ? 1 : 0) +
+  (f.blocked ? 1 : 0);

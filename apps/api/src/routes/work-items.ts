@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { ITEM_TYPES, PRIORITIES, type ItemType } from '@crew-deck/shared';
+import { ITEM_TYPES, MAX_CHECKLIST, PRIORITIES, type ItemType } from '@crew-deck/shared';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
@@ -15,6 +15,7 @@ import { textToDoc } from '../work/doc.js';
 import { mentionsIn, sanitizeDoc } from '../work/rich-text.js';
 import type { StorageDriver } from '../storage/index.js';
 import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
+import { assertTransition, loadWorkflow, resolutionFor, resolutionSchema } from '../work/workflow.js';
 import { refreshSearchText, SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
@@ -35,6 +36,7 @@ import {
   setItemLabels,
   stale,
   statusIn,
+  statusLabel,
   validateHierarchy,
   type SpaceRow,
 } from '../work/service.js';
@@ -73,6 +75,10 @@ const patchBody = z
     estimate: estimateSchema.nullable(),
     dueDate: dateSchema.nullable(),
     labelIds: z.array(z.string().uuid()).max(20),
+    resolution: resolutionSchema,
+    checklist: z
+      .array(z.object({ id: z.string().min(1).max(64), text: z.string().trim().min(1).max(200), done: z.boolean() }))
+      .max(MAX_CHECKLIST),
   })
   .partial()
   .strict()
@@ -352,9 +358,24 @@ export async function workItemRoutes(app: FastifyInstance, deps: AuthDeps & { st
         if (b.dueDate !== undefined) set.dueDate = b.dueDate;
         if (b.statusId !== undefined && b.statusId !== row.statusId) {
           const target = await statusIn(tx, space, b.statusId);
+          assertTransition(await loadWorkflow(tx, space.id), await statusLabel(tx, row.statusId), await statusLabel(tx, target.id));
           set.statusId = target.id;
           set.rank = await rankAtEnd(tx, space.id, target.id);
           set.resolvedAt = resolvedAtFor(target.category, null, now);
+          set.resolution = resolutionFor(target.category, row.resolution, b.resolution);
+        } else if (b.resolution !== undefined) {
+          const cat = (await tx.spaceStatuses.get(row.statusId))?.category;
+          if (cat !== 'done') {
+            throw new AppError(422, 'not_resolved', 'Only finished items have a resolution', { resolution: 'Move the item to a Done status first' });
+          }
+          set.resolution = b.resolution;
+        }
+        if (b.checklist !== undefined) {
+          const ids = new Set(b.checklist.map((c) => c.id));
+          if (ids.size !== b.checklist.length) {
+            throw new AppError(422, 'invalid_checklist', 'Checklist entries need distinct ids', { checklist: 'Reload and try again' });
+          }
+          set.checklist = b.checklist;
         }
 
         // The version check lives in the update's filter, so two simultaneous edits cannot both win.

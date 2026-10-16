@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -9,6 +10,7 @@ import { AppError, forbidden } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertWithinLimit, countWorkItems, loadPlan } from '../plans/index.js';
 import { addWatchers, recordActivity } from '../work/activity.js';
+import { resolutionFor } from '../work/workflow.js';
 import { SEARCH_TEXT_VERSION, searchTextOf } from '../work/search-text.js';
 import {
   assertWritable,
@@ -83,6 +85,8 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
             dueDate: src.dueDate,
             rank: await rankAtEnd(t, space.id, src.statusId),
             labelIds: src.labelIds ?? [],
+            resolution: src.resolution ?? null,
+            checklist: (src.checklist ?? []).map((c) => ({ ...c, id: randomUUID() })),
             resolvedAt: src.resolvedAt ? now : null,
             createdAt: now,
             updatedAt: now,
@@ -176,6 +180,7 @@ export async function workCopyRoutes(app: FastifyInstance, deps: AuthDeps) {
               statusId: status.id,
               rank: await rankAtEnd(t, target.id, status.id),
               resolvedAt: resolvedAtFor(status.category, item.resolvedAt, now),
+              resolution: resolutionFor(status.category, item.resolution),
               labelIds: mapLabels(item.labelIds ?? []),
               assigneeId,
               // The parent (an epic) lives in the old space, so a moved story loses it.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 - Workflow rules, dependencies and checklists (W9)
+
+- **Workflow rules:** a space admin can limit which status work may move to from each status (Board settings, Workflow rules). Off by default.
+- **Resolution:** finishing work records why (Done, Won't do, Duplicate, Cannot reproduce).
+- **Dependencies:** cards show how many open items block them and how many they hold up; a Blocked filter; a warning when a blocked item starts moving.
+- **Checklists** on any item, with progress on the card, and ready-made checklists per space.
+- ADR-062.
+
 ## 2026-10-15 - Leftovers (W8)
 
 - **Moved items keep their old key:** opening `ENG-12` after the item moved to `OPS-3` leads to it.

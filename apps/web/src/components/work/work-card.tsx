@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CornerLeftUp, GripVertical, ListChecks } from 'lucide-react';
+import { Ban, CheckSquare, CornerLeftUp, GripVertical, ListChecks, Lock } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LabelChips } from './label-bits';
 import { DueDate, EstimatePill, PriorityIcon, TypeIcon, UserAvatar } from './work-bits';
@@ -111,6 +111,36 @@ export function WorkItemCard({
               <ListChecks className="size-3.5" aria-hidden />
               {sub.done}/{sub.total}
               <span className="sr-only"> subtasks done</span>
+            </span>
+          )}
+          {(item.blockedBy ?? 0) > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 text-[11px] font-medium text-red-900 dark:bg-red-500/15 dark:text-red-200"
+              title={`Blocked by ${item.blockedBy} open ${item.blockedBy === 1 ? 'item' : 'items'}`}
+            >
+              <Ban className="size-3" aria-hidden />
+              {item.blockedBy}
+              <span className="sr-only"> open blockers</span>
+            </span>
+          )}
+          {(item.blocks ?? 0) > 0 && (
+            <span
+              className="text-muted-foreground inline-flex items-center gap-1 text-xs tabular-nums"
+              title={`Blocks ${item.blocks} open ${item.blocks === 1 ? 'item' : 'items'}`}
+            >
+              <Lock className="size-3.5" aria-hidden />
+              {item.blocks}
+              <span className="sr-only"> items waiting on this</span>
+            </span>
+          )}
+          {(item.checklist?.total ?? 0) > 0 && (
+            <span
+              className="text-muted-foreground inline-flex items-center gap-1 text-xs tabular-nums"
+              title={`${item.checklist!.done} of ${item.checklist!.total} checklist entries done`}
+            >
+              <CheckSquare className="size-3.5" aria-hidden />
+              {item.checklist!.done}/{item.checklist!.total}
+              <span className="sr-only"> checklist entries done</span>
             </span>
           )}
           {show('dueDate') && item.dueDate && <DueDate date={item.dueDate} done={done} />}

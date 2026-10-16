@@ -105,6 +105,10 @@ const INDEXES: Record<string, Ix[]> = {
     ['space_pos', { spaceId: 1, position: 1 }],
     ['space_name', { spaceId: 1, nameLower: 1 }, U],
   ],
+  checklist_templates: [
+    ['id', { id: 1 }, U],
+    ['space', { spaceId: 1, nameLower: 1 }, U],
+  ],
   work_items: [
     ['id', { id: 1 }, U],
     ['space_number', { spaceId: 1, number: 1 }, U],

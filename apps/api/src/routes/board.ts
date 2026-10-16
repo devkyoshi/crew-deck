@@ -5,7 +5,7 @@ import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { withTenant } from '../db/client.js';
 import type { BoardDoc } from '../db/types.js';
-import { filterConditions, filterQuery, hasFilters, type FilterQuery } from '../work/filters.js';
+import { filterConditions, filterQuery, hasFilters, lookupConditions, type FilterQuery } from '../work/filters.js';
 import { liveTouch } from '../lib/live.js';
 import { forbidden, notFound } from '../lib/errors.js';
 import { can, type Actor } from '../permissions/can.js';
@@ -108,6 +108,7 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
       const extra = filterConditions(filters, actor.userId);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
+        extra.push(...(await lookupConditions(tx, space.id, filters)));
         const boardRow = await loadBoard(tx, space.id);
         const board = presentBoard(boardRow);
         const statuses = await listStatuses(tx, space.id);
@@ -164,6 +165,7 @@ export async function boardRoutes(app: FastifyInstance, deps: AuthDeps) {
       const extra = filterConditions(req.query, actor.userId);
       return withTenant(deps.db, actor.orgId, async (tx) => {
         const space = await resolveSpace(tx, actor, req.params.id);
+        extra.push(...(await lookupConditions(tx, space.id, req.query)));
         const board = presentBoard(await loadBoard(tx, space.id));
         if (board.type === 'scrum') {
           const sprint = await tx.sprints.findOne({ spaceId: space.id, state: 'active' });

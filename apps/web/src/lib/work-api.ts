@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, ApiError, qs } from '@/lib/api';
-import type { BoardData, Label, Person, StatusColor, WorkItem, WorkStatus } from '@/lib/work';
+import type { BoardData, ChecklistEntry, Label, Resolution, Person, StatusColor, WorkItem, WorkStatus } from '@/lib/work';
 
 // ---- Query keys ---------------------------------------------------------------------------------------
 
@@ -125,6 +125,8 @@ export type ItemPatch = Partial<{
   estimate: number | null;
   dueDate: string | null;
   labelIds: string[];
+  resolution: Resolution;
+  checklist: ChecklistEntry[];
 }>;
 
 /**

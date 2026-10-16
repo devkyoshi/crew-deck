@@ -50,6 +50,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadError } from '@/components/shared/load-error';
 import { api } from '@/lib/api';
+import { ChecklistTemplates, WorkflowSettings } from './workflow-settings';
 import { toastError, refreshWork, statusesKey, useStatuses } from '@/lib/work-api';
 import {
   CATEGORY_META,
@@ -122,6 +123,26 @@ export function BoardSettingsSheet({
               </p>
             </div>
             <StatusEditor spaceKey={spaceKey} />
+          </section>
+
+          <section aria-labelledby="bs-workflow" className="space-y-3">
+            <div>
+              <h3 id="bs-workflow" className="text-sm font-semibold">
+                Workflow rules
+              </h3>
+              <p className="text-muted-foreground text-xs">Choose which status work may move to from each status.</p>
+            </div>
+            <WorkflowSettings spaceKey={spaceKey} />
+          </section>
+
+          <section aria-labelledby="bs-checklists" className="space-y-3">
+            <div>
+              <h3 id="bs-checklists" className="text-sm font-semibold">
+                Checklists
+              </h3>
+              <p className="text-muted-foreground text-xs">Ready-made lists anyone can add to a {vocab.noun}.</p>
+            </div>
+            <ChecklistTemplates spaceKey={spaceKey} />
           </section>
 
           <section aria-labelledby="bs-cards" className="space-y-3">

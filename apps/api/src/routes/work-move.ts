@@ -12,6 +12,7 @@ import { can } from '../permissions/can.js';
 import { addWatchers, itemChanges, recordActivity, recordChanges } from '../work/activity.js';
 import type { StorageDriver } from '../storage/index.js';
 import { deleteStoredFiles, dropAttachments } from '../work/purge.js';
+import { assertTransition, loadWorkflow, transitionAllowed, resolutionFor, resolutionSchema } from '../work/workflow.js';
 import type { EnqueueRebalance } from '../work/jobs.js';
 import { deliverSafely, eventsFromChanges, type NotifyEvent } from '../work/notify.js';
 import {
@@ -31,6 +32,7 @@ import {
   resolvedAtFor,
   stale,
   statusIn,
+  statusLabel,
   validateHierarchy,
   type SpaceRow,
 } from '../work/service.js';
@@ -52,6 +54,7 @@ const moveBody = z
     assigneeId: z.string().uuid().nullable().optional(),
     priority: z.enum(PRIORITIES).optional(),
     epicId: z.string().uuid().nullable().optional(),
+    resolution: resolutionSchema.optional(),
   })
   .refine((b) => !(b.afterItemId && b.beforeItemId), 'Use afterItemId or beforeItemId, not both');
 
@@ -108,6 +111,9 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
         // Everything below runs behind the space lock, so a competing move has already committed.
         await lockSpace(tx, space.id);
         const target = await statusIn(tx, space, b.statusId);
+        if (target.id !== row.statusId) {
+          assertTransition(await loadWorkflow(tx, space.id), await statusLabel(tx, row.statusId), await statusLabel(tx, target.id));
+        }
 
         const columnBase = { spaceId: space.id, statusId: target.id, deletedAt: null };
         const column = { ...columnBase, id: { $ne: row.id } };
@@ -167,6 +173,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
           statusId: target.id,
           rank,
           resolvedAt: resolvedAtFor(target.category, row.resolvedAt, now),
+          resolution: resolutionFor(target.category, row.resolution, b.resolution),
           updatedAt: now,
         };
         if (b.assigneeId !== undefined) {
@@ -277,6 +284,14 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
       if (ok.length) {
         if (b.action === 'move') {
           const target = await statusIn(tx, space, b.statusId);
+          const workflow = await loadWorkflow(tx, space.id);
+          const toName = await statusLabel(tx, target.id);
+          const blockedMoves = ok.filter((x) => x.statusId !== target.id && !transitionAllowed(workflow, x.statusId, target.id));
+          for (const item of blockedMoves) {
+            const from = await statusLabel(tx, item.statusId);
+            failed.push({ id: item.id, key: `${space.key}-${item.number}`, reason: `Not allowed from ${from.name} to ${toName.name}` });
+            ok.splice(ok.indexOf(item), 1);
+          }
           const toMove = ok.filter((x) => x.statusId !== target.id);
           const ranks = await ranksAtEnd(tx, space.id, target.id, toMove.length);
           for (const [i, item] of toMove.entries()) {
@@ -286,6 +301,7 @@ export async function workMoveRoutes(app: FastifyInstance, deps: MoveDeps) {
                 statusId: target.id,
                 rank: ranks[i]!,
                 resolvedAt: resolvedAtFor(target.category, item.resolvedAt, now),
+                resolution: resolutionFor(target.category, null),
                 updatedAt: now,
               },
             );

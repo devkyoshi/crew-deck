@@ -313,6 +313,10 @@ export interface WorkItemDoc {
   searchText?: string;
   /** Which sources `searchText` was built from (see work/search-text.ts). */
   searchVersion?: number;
+  /** Why the item was finished (set with a Done status). */
+  resolution?: 'done' | 'wont_do' | 'duplicate' | 'cannot_reproduce' | null;
+  /** A short to-do list inside the item. */
+  checklist?: { id: string; text: string; done: boolean }[];
   /** Order inside the backlog or a sprint list; items without one follow the ranked ones by board rank. */
   backlogRank?: string | null;
   /** Earlier keys (`ENG-12`) of an item that was moved to another space; they still resolve to it. */
@@ -323,6 +327,17 @@ export interface WorkItemDoc {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+}
+
+/** A reusable checklist a space offers when someone adds a checklist to an item. */
+export interface ChecklistTemplateDoc {
+  id: string;
+  orgId: string;
+  spaceId: string;
+  name: string;
+  nameLower: string;
+  items: string[];
+  createdAt: Date;
 }
 
 export interface LabelDoc {

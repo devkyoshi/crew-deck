@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { ITEM_TYPES, PRIORITIES } from '@crew-deck/shared';
+import type { TenantDb } from '../db/client.js';
 import { escapeRegex } from '../lib/pagination.js';
+import { blockedItemIds } from './service.js';
 
 const UUID = z.string().uuid();
 /** Comma-separated list in a query string, each entry checked by `item`. */
@@ -25,6 +27,8 @@ export const filterQuery = z.object({
   due: z.enum(['overdue', 'today', 'week', 'none']).optional(),
   mine: z.enum(['1']).optional(),
   recent: z.enum(['1']).optional(),
+  /** Only items that something open still blocks. */
+  blocked: z.enum(['1']).optional(),
 });
 export type FilterQuery = z.infer<typeof filterQuery>;
 
@@ -32,6 +36,11 @@ export type FilterQuery = z.infer<typeof filterQuery>;
 export const hasFilters = (f: FilterQuery) => Object.values(f).some((v) => v !== undefined);
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Conditions that need a lookup first (so they cannot sit in `filterConditions`). */
+export async function lookupConditions(t: TenantDb, spaceId: string, f: FilterQuery): Promise<Record<string, unknown>[]> {
+  return f.blocked === '1' ? [{ id: { $in: await blockedItemIds(t, spaceId) } }] : [];
+}
 
 /** Mongo conditions (to be `$and`-ed) for the filters, for the current person (`mine` = assigned to them). */
 export function filterConditions(f: FilterQuery, userId: string): Record<string, unknown>[] {

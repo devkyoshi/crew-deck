@@ -211,6 +211,7 @@ export function FilterBar({
   if (filters.mine) chips.push({ key: 'mine', label: `My ${vocab.nounPlural}`, remove: () => set({ mine: false }) });
   if (filters.recent)
     chips.push({ key: 'recent', label: 'Recently updated', remove: () => set({ recent: false }) });
+  if (filters.blocked) chips.push({ key: 'blocked', label: 'Blocked', remove: () => set({ blocked: false }) });
 
   return (
     <div className="space-y-2" role="search" aria-label="Filter the board">
@@ -334,6 +335,16 @@ export function FilterBar({
           onClick={() => set({ recent: !filters.recent })}
         >
           Recently updated
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={filters.blocked ? 'default' : 'outline'}
+          className="h-8"
+          aria-pressed={filters.blocked}
+          onClick={() => set({ blocked: !filters.blocked })}
+        >
+          Blocked
         </Button>
       </div>
 

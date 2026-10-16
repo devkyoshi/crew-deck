@@ -389,7 +389,7 @@ Added on 2026-10-15 after W1 to W7 were built. Scope: close the known gaps, then
 
 Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised list, search in comments and file names, S3 driver and file cleanup on delete, daily summary email, upgrade notice and pricing rows, ADR renumbering. See `PROGRESS.md`.
 
-### W9: Workflow rules and dependencies
+### W9: Workflow rules and dependencies (built)
 
 - Per-space allowed transitions (`from -> to`), default any to any; editor in board settings; enforced in `work/service.ts` for edit, move, bulk and transfer (422 with a reason). `can()` action `workflow.manage` (admin).
 - Resolution (Fixed, Won't do, Duplicate, Cannot reproduce) when moving to a Done status.

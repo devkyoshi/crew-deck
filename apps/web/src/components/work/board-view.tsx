@@ -58,6 +58,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { BlockedMoveDialog, movesBlockedForward } from './item-extras';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -342,6 +343,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
   const [toDelete, setToDelete] = useState<WorkItem | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [blockedMove, setBlockedMove] = useState<{ item: WorkItem; body: MoveBody } | null>(null);
   const [confirmLane, setConfirmLane] = useState<{ item: WorkItem; body: MoveBody; text: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -621,7 +623,9 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
       } else if (mode === 'priority') body.priority = lane as WorkItem['priority'];
       else body.epicId = lane === 'none' ? null : lane;
     }
+    const category = data?.statuses.find((s) => s.id === statusId)?.category;
     if (ask) setConfirmLane({ item, body, text: ask });
+    else if (category && movesBlockedForward(item, category)) setBlockedMove({ item, body });
     else move.mutate({ item, body });
   }
 
@@ -1121,6 +1125,19 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
           onSaved={() => qc.invalidateQueries({ queryKey: boardKey(spaceKey) })}
         />
       )}
+
+      <BlockedMoveDialog
+        item={blockedMove?.item ?? null}
+        onConfirm={() => {
+          const pending = blockedMove!;
+          setBlockedMove(null);
+          move.mutate({ item: pending.item, body: pending.body });
+        }}
+        onCancel={() => {
+          setBlockedMove(null);
+          setCells(server.cells);
+        }}
+      />
 
       <AlertDialog open={!!confirmLane} onOpenChange={(o) => !o && (setConfirmLane(null), setCells(server.cells))}>
         <AlertDialogContent>

@@ -52,6 +52,7 @@ import {
   useUpdateItem,
   type ItemPatch,
 } from '@/lib/work-api';
+import { BlockedMoveDialog, BlockedNotice, ChecklistSection, movesBlockedForward, ResolutionField } from './item-extras';
 import { TYPE_META, type ItemType, type Person, type WorkItem } from '@/lib/work';
 import { cn } from '@/lib/utils';
 import { ItemPanelSkeleton } from './board-bits';
@@ -176,6 +177,7 @@ export function ItemDetail({
   const del = useDeleteItem();
   const [title, setTitle] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [blockedMove, setBlockedMove] = useState<{ run: () => void } | null>(null);
   const [dialog, setDialog] = useState<'duplicate' | 'transfer' | null>(null);
   const conversation = useRef<ConversationHandle>(null);
   const links = useRef<LinksHandle>(null);
@@ -425,6 +427,8 @@ export function ItemDetail({
             className="text-xl font-semibold tracking-tight"
           />
 
+          <BlockedNotice item={item} />
+
           <section aria-label="Description" className="space-y-2">
             <h2 className="text-sm font-semibold">Description</h2>
             <DescriptionEditor
@@ -434,6 +438,8 @@ export function ItemDetail({
               onSave={(doc) => save({ descriptionDoc: doc })}
             />
           </section>
+
+          <ChecklistSection item={item} canEdit={canEdit} onChange={(next) => save({ checklist: next })} />
 
           {showChildren && (
             <ChildrenSection
@@ -467,19 +473,24 @@ export function ItemDetail({
                       `${item.subtasks.total - item.subtasks.done} subtasks are still open. They were not changed.`,
                     );
                   }
-                  save(
-                    { statusId: id },
-                    {
-                      statusId: id,
-                      status: { id, name: s.name, category: s.category, color: s.color },
-                    },
-                  );
+                  const run = () =>
+                    save(
+                      { statusId: id },
+                      {
+                        statusId: id,
+                        status: { id, name: s.name, category: s.category, color: s.color },
+                      },
+                    );
+                  if (movesBlockedForward(item, s.category)) setBlockedMove({ run });
+                  else run();
                 }}
               />
             ) : (
               <StatusChip name={item.status.name} category={item.status.category} color={item.status.color} />
             )}
           </Field>
+
+          <ResolutionField item={item} disabled={!canEdit} onChange={(resolution) => save({ resolution }, { resolution })} />
 
           <Field label="Assignee" htmlFor="f-assignee">
             <AssigneePicker
@@ -602,6 +613,14 @@ export function ItemDetail({
         open={dialog === 'transfer'}
         onOpenChange={(o) => setDialog(o ? 'transfer' : null)}
         onDone={openKey}
+      />
+      <BlockedMoveDialog
+        item={blockedMove ? item : null}
+        onConfirm={() => {
+          blockedMove?.run();
+          setBlockedMove(null);
+        }}
+        onCancel={() => setBlockedMove(null)}
       />
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

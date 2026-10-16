@@ -80,6 +80,25 @@ export interface WorkItem {
   sprintId?: string | null;
   /** Sprints this item was carried out of unfinished. */
   carryOverCount?: number;
+  /** Why it was finished (only while it is in a Done status). */
+  resolution?: Resolution | null;
+  checklist?: { total: number; done: number; items: ChecklistEntry[] };
+  /** Open items that block this one / that this one blocks. */
+  blockedBy?: number;
+  blocks?: number;
+}
+
+export type Resolution = 'done' | 'wont_do' | 'duplicate' | 'cannot_reproduce';
+export const RESOLUTION_LABEL: Record<Resolution, string> = {
+  done: 'Done',
+  wont_do: 'Won’t do',
+  duplicate: 'Duplicate',
+  cannot_reproduce: 'Cannot reproduce',
+};
+export interface ChecklistEntry {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 export interface BoardSettings {

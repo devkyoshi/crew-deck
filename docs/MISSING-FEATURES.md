@@ -36,12 +36,12 @@ Legend: **Built** works today. **Partial** works but with a gap. **Missing** is 
 | --- | --- | --- |
 | Run sprints (`run_sprints`) | **Built** (backlog, sprints, reports); offered as ready at sign-up | `scrum_sprints` |
 | Work in scrum (`work_in_scrum`) | **Built** (Scrum board type, burndown); offered as ready at sign-up | `scrum_sprints`, `burndown_reports` |
-| Map work dependencies (`map_dependencies`) | Links ("blocks / is blocked by") are **Built** on the item page and offered as ready at sign-up; still missing: showing them on cards and warning when a blocked item moves | — |
+| Map work dependencies (`map_dependencies`) | Links ("blocks / is blocked by"), badges on cards, a Blocked filter and a warning when a blocked item moves are **Built** | — |
 | Plan a roadmap (`roadmap`) | Timeline of epics with dates | — |
 | Content calendar (`content_calendar`) | Calendar view of items by due date | — |
 | Run approvals (`approvals`) | Approval step on an item or a request, with approver, decision and trail | — |
 | Handle requests and tickets (`service_requests`) | Request queue, request types and forms, SLAs, email intake | — |
-| Use checklists (`checklists`) | Checklists inside descriptions and comments are **Built** (rich text); missing: checklist progress on cards and reusable checklist templates | — |
+| Use checklists (`checklists`) | Checklists on items with progress on cards, and reusable templates, are **Built** | — |
 | Store documents (`documents`) | Attachments on items and storage limits are **Built**; missing: a documents library, versions and object storage (S3) | `max_attachment_mb`, `storage_mb` |
 
 ## 3. Work management: built, with these gaps
@@ -52,6 +52,7 @@ summary, S3 storage, upgrade notice). Known gaps now:
 
 - **CSV export** is capped at 5,000 rows.
 - **Notifications** have no push notifications; emails need a Brevo key.
+- **Workflow rules** apply to moving between statuses only; they do not yet require fields or comments on a move.
 - **Sprints:** no sprint velocity or cumulative flow reports yet (planned W11).
 - **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
 - **Uploads** are not virus-scanned beyond refusing programs and scripts.

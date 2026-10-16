@@ -12,7 +12,7 @@ import { escapeRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
 import { assertFeature, loadPlan } from '../plans/index.js';
 import { loadVisibleSpaces, type SpaceView } from '../spaces/access.js';
-import { filterConditions, filterQuery } from '../work/filters.js';
+import { filterConditions, filterQuery, lookupConditions } from '../work/filters.js';
 import { hydrateItems, listStatuses, presentItem } from '../work/service.js';
 import { resolveSpace, spaceCtx } from './spaces.js';
 
@@ -361,7 +361,7 @@ export async function workFindRoutes(app: FastifyInstance, deps: AuthDeps) {
     const statuses = await listStatuses(t, space.id);
     const match: Record<string, unknown> = { spaceId: space.id, deletedAt: null };
     if (q.types === 'cards') match.type = { $in: ['story', 'task', 'bug'] };
-    const conds = filterConditions(q, actor.userId);
+    const conds = [...filterConditions(q, actor.userId), ...(await lookupConditions(t, space.id, q))];
     if (conds.length) match.$and = conds;
     const dir = q.dir === 'asc' ? 1 : -1;
     const [counted] = await t.workItems.aggregate<{ n: number }>([{ $match: match }, { $count: 'n' }]);

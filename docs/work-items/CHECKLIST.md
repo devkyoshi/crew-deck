@@ -183,11 +183,12 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ## W9: Workflow rules and dependencies
 
-- [ ] Workflow transitions per space (editor, enforced on edit, move, bulk, transfer)
-- [ ] Resolution on Done
-- [ ] Blocked / blocks badges on cards, warning on moving a blocked item, "Blocked" filter
-- [ ] Checklists on items with progress on cards, checklist templates
-- [ ] Tests, docs, owner review
+- [x] Workflow transitions per space (editor, enforced on edit, move, bulk; transfers exempt)
+- [x] Resolution on Done
+- [x] Blocked / blocks badges on cards, warning on moving a blocked item, "Blocked" filter
+- [x] Checklists on items with progress on cards, checklist templates
+- [x] Tests, docs
+- [ ] Owner review and sign-off
 
 ## W10: Versions and components
 

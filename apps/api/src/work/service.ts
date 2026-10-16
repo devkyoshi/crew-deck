@@ -58,6 +58,9 @@ export interface ItemRow extends WorkItemDoc {
   labels: { id: string; name: string; color: string }[];
   childCount: number;
   childDone: number;
+  /** Open items that block this one, and open items this one blocks. */
+  blockedBy: number;
+  blocks: number;
 }
 
 /** Joins statuses, people, parents, labels and subtask counts onto a batch of item documents. */
@@ -69,7 +72,7 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
   const labelIds = [...new Set(docs.flatMap((d) => d.labelIds ?? []))];
   const peopleIds = docs.flatMap((d) => [d.reporterId, ...(d.assigneeId ? [d.assigneeId] : [])]);
 
-  const [statuses, people, parents, labels, children] = await Promise.all([
+  const [statuses, people, parents, labels, children, links] = await Promise.all([
     t.spaceStatuses.find({ id: { $in: statusIds } }),
     t.users(peopleIds),
     parentIds.length ? t.workItems.find({ id: { $in: parentIds } }) : Promise.resolve([]),
@@ -78,7 +81,12 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
       { parentId: { $in: ids }, deletedAt: null },
       { projection: { parentId: 1, statusId: 1 } },
     ),
+    t.workItemLinks.find(
+      { linkType: 'blocks', $or: [{ fromItemId: { $in: ids } }, { toItemId: { $in: ids } }] },
+      { projection: { fromItemId: 1, toItemId: 1 } },
+    ),
   ]);
+  const { blockedBy, blocks } = await openBlockCounts(t, ids, links);
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const parentById = new Map(parents.map((p) => [p.id, p]));
   const labelById = new Map(labels.map((l) => [l.id, l]));
@@ -130,8 +138,44 @@ export async function hydrateItems(t: TenantDb, docs: WorkItemDoc[]): Promise<It
         .sort((x, y) => x.name.toLowerCase().localeCompare(y.name.toLowerCase())),
       childCount: childCount.get(d.id) ?? 0,
       childDone: childDone.get(d.id) ?? 0,
+      blockedBy: blockedBy.get(d.id) ?? 0,
+      blocks: blocks.get(d.id) ?? 0,
     };
   });
+}
+
+/**
+ * For each item: how many open items block it and how many open items it blocks. An end counts only
+ * while it is live and not in a Done status, so finishing a blocker clears the badge.
+ */
+async function openBlockCounts(t: TenantDb, ids: string[], links: { fromItemId: string; toItemId: string }[]) {
+  const blockedBy = new Map<string, number>();
+  const blocks = new Map<string, number>();
+  if (links.length === 0) return { blockedBy, blocks };
+  const mine = new Set(ids);
+  const others = [...new Set(links.flatMap((l) => [l.fromItemId, l.toItemId]))];
+  const docs = await t.workItems.find(
+    { id: { $in: others }, deletedAt: null },
+    { projection: { id: 1, statusId: 1 } },
+  );
+  const cats = new Map((await t.spaceStatuses.find({ id: { $in: [...new Set(docs.map((d) => d.statusId))] } })).map((s) => [s.id, s.category]));
+  const open = new Set(docs.filter((d) => cats.get(d.statusId) !== 'done').map((d) => d.id));
+  for (const l of links) {
+    // `from` blocks `to`; each end only counts the other end while that one is open.
+    if (mine.has(l.toItemId) && open.has(l.fromItemId)) blockedBy.set(l.toItemId, (blockedBy.get(l.toItemId) ?? 0) + 1);
+    if (mine.has(l.fromItemId) && open.has(l.toItemId)) blocks.set(l.fromItemId, (blocks.get(l.fromItemId) ?? 0) + 1);
+  }
+  return { blockedBy, blocks };
+}
+
+/** Ids of the space's open items that something open still blocks (for the Blocked filter). */
+export async function blockedItemIds(t: TenantDb, spaceId: string): Promise<string[]> {
+  const items = await t.workItems.find({ spaceId, deletedAt: null }, { projection: { id: 1 } });
+  const ids = items.map((i) => i.id);
+  if (ids.length === 0) return [];
+  const links = await t.workItemLinks.find({ linkType: 'blocks', toItemId: { $in: ids } }, { projection: { fromItemId: 1, toItemId: 1 } });
+  const { blockedBy } = await openBlockCounts(t, ids, links);
+  return [...blockedBy.keys()];
 }
 
 type Person = { id: string; name: string | null; email: string; avatarUrl: string | null };
@@ -183,6 +227,14 @@ export function presentItem(row: ItemRow, spaceKey: string) {
     subtasks: { total: row.childCount, done: row.childDone },
     sprintId: row.sprintId ?? null,
     carryOverCount: row.carryOverCount ?? 0,
+    resolution: row.statusCategory === 'done' ? (row.resolution ?? 'done') : null,
+    checklist: {
+      total: row.checklist?.length ?? 0,
+      done: row.checklist?.filter((c) => c.done).length ?? 0,
+      items: row.checklist ?? [],
+    },
+    blockedBy: row.blockedBy,
+    blocks: row.blocks,
     labels: row.labels,
   };
 }
@@ -398,6 +450,12 @@ export const stale = () =>
 
 /** Filter fragment: this item still has the updated_at the caller last saw (millisecond precision). */
 export const matchesVersion = (expected: Date) => ({ updatedAt: expected });
+
+/** A status's id and name, for messages that name it. A missing status reads as an empty name. */
+export async function statusLabel(t: TenantDb, statusId: string) {
+  const s = await t.spaceStatuses.findOne({ id: statusId }, { projection: { id: 1, name: 1 } });
+  return { id: statusId, name: s?.name ?? '' };
+}
 
 export async function statusIn(t: TenantDb, space: { id: string }, statusId: string) {
   const s: SpaceStatusDoc | null = await t.spaceStatuses.findOne({ id: statusId, spaceId: space.id });

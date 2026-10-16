@@ -348,6 +348,14 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-062: Workflow rules are a list of allowed moves, off by default (W9)
+
+- A space's rules live in its board settings: `restricted` plus, per source status, the statuses it may move to. A source status with no entry is unrestricted, so a new status works straight away and turning the switch on changes nothing until a row is edited. Every way of changing a status (edit, move, bulk move, the sprint-free paths) checks the rules; a bulk move reports each refused item and moves the rest. Transfers and "delete a status with a replacement" are admin or cross-space actions and are not restricted.
+- Only people who can manage statuses write the rules. They name statuses of the same space; the API refuses others.
+- Resolution (Done, Won't do, Duplicate, Cannot reproduce) belongs to the Done category: it is set (default Done) when an item enters a Done status, can be changed while there, and is cleared when the item leaves.
+- "Blocked" is derived, never stored: an item is blocked while a live, not-Done item has a `blocks` link to it. Moving a blocked item forward only asks for confirmation; it is never refused.
+- A checklist is part of the item (up to 50 entries, saved as a whole list with the item's version check) and its changes are recorded in the activity history. Templates are per space, up to 20.
+
 ## ADR-061: Moved items keep their old keys, backlog order is its own rank, the digest is a send time (W8)
 
 - A transferred item keeps its earlier keys in `keyHistory`; a lookup that finds nothing under a key checks the history and then applies the usual access check to the item's current space. Keys are never reused, so an old key cannot point at two items. The item page replaces the address with the current key.
