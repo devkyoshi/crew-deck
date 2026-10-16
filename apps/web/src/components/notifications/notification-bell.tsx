@@ -29,7 +29,7 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative size-8" aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}>
           <Bell />
           {count > 0 && (
-            <span className="bg-destructive text-destructive-foreground absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums">
+            <span className="bg-red-600 text-white absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums">
               {count > 99 ? '99+' : count}
             </span>
           )}

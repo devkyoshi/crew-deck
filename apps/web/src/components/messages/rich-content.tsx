@@ -87,7 +87,7 @@ function renderNode(n: Node, key: number): ReactNode {
       );
     case 'mention':
       return (
-        <span key={key} className="bg-primary/10 text-primary rounded px-1 font-medium">
+        <span key={key} className="mention bg-primary/10 text-primary rounded px-1 font-medium">
           @{String(n.attrs?.label ?? 'someone')}
         </span>
       );

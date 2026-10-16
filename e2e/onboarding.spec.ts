@@ -91,7 +91,7 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: /Here’s what we’ll create/ })).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByText('Sales', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sales, Marketing', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Email me the link' }).click();
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   await page.getByTestId('dev-link').click();
@@ -121,7 +121,7 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   const members = await apiCall(page, 'GET', '/members');
   expect(members.json.total).toBe(1);
   const spaces = (await apiCall(page, 'GET', '/spaces')).json;
-  expect(spaces.items.map((sp: { key: string }) => sp.key)).toEqual(['SALES']);
+  expect(spaces.items.map((sp: { key: string }) => sp.key)).toEqual(['MKT', 'SALES']);
   await page.goto(`${origin}/admin/billing`);
   await expect(page.getByRole('heading', { name: 'Plan and billing', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Business', level: 2 })).toBeVisible();

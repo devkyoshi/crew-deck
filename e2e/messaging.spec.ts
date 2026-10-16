@@ -95,7 +95,7 @@ test('a direct message shows an unread badge until it is opened', async ({ page,
 
   // The owner never reloaded: the DM and its badge arrive on their own.
   const nav = page.getByRole('navigation', { name: 'Conversations' });
-  const row = nav.getByRole('link', { name: new RegExp(person.name.split(' ')[0]!) });
+  const row = nav.getByRole('link', { name: person.name });
   await expect(row.getByLabel(/1 unread/)).toBeVisible({ timeout: 8000 });
   await row.click();
   await expect(page.getByRole('article').filter({ hasText: text })).toBeVisible();

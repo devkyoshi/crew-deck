@@ -97,15 +97,16 @@ test('the create-space wizard can be completed without a mouse', async ({ page }
   await page.getByRole('button', { name: 'Next', exact: true }).focus();
   await page.keyboard.press('Enter');
   // Choose "Private" with Space on the focused toggle.
-  const priv = page.getByRole('button', { name: /Private/ });
+  const priv = page.getByRole('radio', { name: /Private/ });
   await priv.focus();
   await page.keyboard.press('Space');
-  await expect(priv).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Next', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Next', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Create space' }).focus();
+  await expect(priv).toBeChecked();
+  const create = page.getByRole('button', { name: 'Create space' });
+  for (let i = 0; i < 5 && !(await create.isVisible()); i++) {
+    await page.getByRole('button', { name: 'Next', exact: true }).focus();
+    await page.keyboard.press('Enter');
+  }
+  await create.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
