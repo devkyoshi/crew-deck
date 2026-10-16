@@ -41,7 +41,7 @@ const ADMIN_PAGES = [
   '/admin/groups',
   '/admin/spaces',
   '/admin/audit',
-  '/admin/crm',
+  '/crm/pipelines',
   '/admin/billing',
   '/admin/settings/branding',
   '/admin/settings/workspace',

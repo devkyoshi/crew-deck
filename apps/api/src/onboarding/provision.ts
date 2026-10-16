@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { modulesFor, WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
+import {
+  modulesFor,
+  suggestedUsageFor,
+  WORKSPACE_TEMPLATES,
+  workTypesOf,
+  type WorkType,
+} from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import type { Db, TenantDb } from '../db/client.js';
 import { AppError, isUniqueViolation } from '../lib/errors.js';
@@ -28,6 +34,8 @@ export interface ProvisionInput {
   createdBy: string;
   /** What the workspace is for, and how the team plans to use it. Drives the template. */
   workType?: WorkType | null;
+  /** Every kind of work the company does; the first is the primary one. Falls back to `workType`. */
+  workTypes?: readonly string[];
   usage?: string[];
 }
 
@@ -51,9 +59,10 @@ const slugTaken = () =>
  * start with the matching columns (see WORKSPACE_TEMPLATES in @crew-deck/shared).
  */
 export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise<Provisioned> {
-  const workType = input.workType ?? null;
-  const usage = input.usage ?? (workType ? WORKSPACE_TEMPLATES[workType].suggestedUsage : []);
-  const modules = modulesFor(workType ?? 'other', usage);
+  const workTypes = workTypesOf(input.workTypes?.[0] ?? input.workType, input.workTypes);
+  const workType = workTypes[0] ?? null;
+  const usage = input.usage?.length ? input.usage : suggestedUsageFor(workTypes);
+  const modules = modulesFor(workTypes.length ? workTypes : 'other', usage);
   try {
     return await db.globalTx(async (g) => {
       if (input.consumeTokenHash) {
@@ -83,6 +92,7 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
         domainRestricted: input.domainRestricted,
         createdVia: input.via,
         workType,
+        workTypes,
         usage,
       });
       const t = g.forOrg(orgId);
@@ -110,7 +120,14 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
         }
         await t.memberships.insert({ userId, orgRole: 'owner' });
         // A workspace of a known kind starts with a first space, so the team lands on a real board.
-        if (workType) await createStarterSpace(t, workType, userId);
+        // One starter space per kind of work; templates that share a space key only get one.
+        const keys = new Set<string>();
+        for (const type of workTypes) {
+          const key = WORKSPACE_TEMPLATES[type].starter.space.key;
+          if (keys.has(key)) continue;
+          keys.add(key);
+          await createStarterSpace(t, type, userId);
+        }
       } else {
         inviteToken = randomToken();
         await t.invitations.insert({
@@ -133,6 +150,7 @@ export async function provisionWorkspace(db: Db, input: ProvisionInput): Promise
           createdBy: input.createdBy,
           owner: input.ownerEmail,
           workType,
+          workTypes,
         },
       });
       return { orgId, slug: input.slug.toLowerCase(), userId, inviteToken };

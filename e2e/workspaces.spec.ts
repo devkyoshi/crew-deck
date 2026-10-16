@@ -32,7 +32,7 @@ test('a construction company signs up and its first space starts with constructi
   await expect(page.getByText(/is available/)).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What kind of work does your company do?' })).toBeVisible();
   await page.getByTestId('work-type-construction').click();
   await expect(page.getByTestId('work-type-construction')).toHaveAttribute('aria-checked', 'true');
   await scan(page, 'sign-up: kind of work');
@@ -41,7 +41,7 @@ test('a construction company signs up and its first space starts with constructi
   await expect(page.getByRole('heading', { name: 'How does your team plan to use it?' })).toBeVisible();
   // Construction suggestions are ticked; options that are not built say so.
   await expect(page.getByTestId('usage-site_work').getByRole('checkbox')).toBeChecked();
-  await expect(page.getByTestId('usage-checklists')).toContainText('Coming soon');
+  await expect(page.getByTestId('usage-approvals')).toContainText('Coming soon');
   await scan(page, 'sign-up: usage');
   await page.getByRole('button', { name: 'Continue' }).click();
 

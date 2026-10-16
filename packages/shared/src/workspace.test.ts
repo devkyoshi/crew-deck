@@ -3,10 +3,13 @@ import { STATUS_COLORS } from './index';
 import {
   capitalize,
   modulesFor,
+  suggestedUsageFor,
+  usageNeedsCrm,
   USAGE_KEYS,
   vocabularyFor,
   WORK_TYPES,
   WORKSPACE_TEMPLATES,
+  workTypesOf,
 } from './workspace';
 
 const KEY_RE = /^[A-Z][A-Z0-9]{1,9}$/;
@@ -28,7 +31,8 @@ describe('workspace templates', () => {
 
   it('turns check-in on for everyone and CRM where the work needs it', () => {
     expect(modulesFor('construction', [])).toEqual(['members', 'spaces', 'checkin']);
-    expect(modulesFor('sales', [])).toContain('crm');
+    expect(modulesFor('sales', WORKSPACE_TEMPLATES.sales.suggestedUsage)).toContain('crm');
+    expect(modulesFor('sales', [])).not.toContain('crm');
     expect(modulesFor('legal', ['track_leads'])).toContain('crm');
   });
 });
@@ -62,5 +66,34 @@ describe('vocabularyFor', () => {
   it('capitalizes nouns for headings', () => {
     expect(capitalize('work item')).toBe('Work item');
     expect(capitalize('')).toBe('');
+  });
+});
+
+describe('several kinds of work', () => {
+  it('workTypesOf keeps order, drops invalid and duplicates, and falls back to the single type', () => {
+    expect(workTypesOf('software', ['sales', 'nope', 'sales', 'marketing'])).toEqual(['sales', 'marketing']);
+    expect(workTypesOf('software', [])).toEqual(['software']);
+    expect(workTypesOf(null, undefined)).toEqual([]);
+  });
+
+  it('modulesFor unions the modules of every type', () => {
+    expect(modulesFor(['software', 'sales'], [])).toEqual(
+      expect.arrayContaining([...modulesFor('software', []), ...modulesFor('sales', [])]),
+    );
+  });
+
+  it('suggestedUsageFor unions without duplicates', () => {
+    const u = suggestedUsageFor(['software', 'sales']);
+    expect(new Set(u).size).toBe(u.length);
+    for (const k of WORKSPACE_TEMPLATES.sales.suggestedUsage) expect(u).toContain(k);
+  });
+});
+
+describe('CRM follows usage', () => {
+  it('is needed only by the lead and activity options', () => {
+    expect(usageNeedsCrm(['track_leads'])).toBe(true);
+    expect(usageNeedsCrm(['log_activities', 'manage_tasks'])).toBe(true);
+    expect(usageNeedsCrm(['manage_tasks', 'run_sprints'])).toBe(false);
+    expect(usageNeedsCrm([])).toBe(false);
   });
 });

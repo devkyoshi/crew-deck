@@ -2,6 +2,7 @@
 
 import { useHydrated } from '@/components/checkin/use-hydrated';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
 import { ErrorView } from '@/components/shared/error-view';
 import { PageHeader } from '@/components/shared/page-header';
 import { api, ApiError } from '@/lib/api';
@@ -216,7 +216,8 @@ function PipelineCard({ pipeline, onChanged }: { pipeline: Pipeline; onChanged: 
   );
 }
 
-export function CrmSettings() {
+/** Sales pipelines and their stages. Switching the CRM on or off lives in Settings → Workspace. */
+export function PipelineSettings() {
   const qc = useQueryClient();
   const access = useCrmAccess();
   // Match the server HTML until hydrated (the sidebar may have fetched CRM access already).
@@ -229,15 +230,6 @@ export function CrmSettings() {
     enabled: access.data?.canAdmin && enabled,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['crm'] });
-  const toggle = useMutation({
-    mutationFn: (on: boolean) => api('/crm/settings', { method: 'PUT', body: { enabled: on } }),
-    onSuccess: async () => {
-      toast.success('CRM setting saved');
-      await qc.invalidateQueries({ queryKey: ['crm-access'] });
-      await refresh();
-    },
-    onError: fail,
-  });
   const createPipeline = useMutation({
     mutationFn: () => api('/crm/pipelines', { method: 'POST', body: { name: newPipeline.trim() } }),
     onSuccess: () => {
@@ -251,28 +243,26 @@ export function CrmSettings() {
     return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
   if (access.isError) return <ErrorView error={access.error} reset={() => access.refetch()} />;
 
+  if (!enabled)
+    return (
+      <div className="max-w-3xl space-y-4">
+        <PageHeader title="Pipelines" description="Shape your sales pipelines and their stages." />
+        <section className="bg-card rounded-2xl border p-5 text-sm">
+          <p className="font-medium">The CRM is switched off for this workspace.</p>
+          <p className="text-muted-foreground mt-1">
+            Tick “Track leads and deals” in{' '}
+            <Link href="/admin/settings/workspace" className="text-primary underline underline-offset-2">
+              Settings → Workspace
+            </Link>{' '}
+            to turn it on and manage pipelines.
+          </p>
+        </section>
+      </div>
+    );
+
   return (
     <div className="max-w-3xl space-y-4">
-      <PageHeader
-        title="CRM"
-        description="Switch the CRM on or off and shape your sales pipelines."
-      />
-      <section className="bg-card flex items-center justify-between gap-4 rounded-2xl border p-4">
-        <div>
-          <Label htmlFor="crm-enabled" className="text-base">
-            CRM module
-          </Label>
-          <p className="text-muted-foreground text-sm">
-            When off, the CRM is hidden from everyone. Your data is kept.
-          </p>
-        </div>
-        <Switch
-          id="crm-enabled"
-          checked={enabled}
-          disabled={toggle.isPending}
-          onCheckedChange={(v) => toggle.mutate(v)}
-        />
-      </section>
+      <PageHeader title="Pipelines" description="Shape your sales pipelines and their stages." />
       {enabled && (
         <>
           {pipelines.isPending && (

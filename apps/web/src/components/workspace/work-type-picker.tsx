@@ -21,6 +21,7 @@ import {
   Users,
 } from 'lucide-react';
 import {
+  suggestedUsageFor,
   USAGE_OPTIONS,
   WORK_TYPES,
   WORKSPACE_TEMPLATES,
@@ -53,45 +54,44 @@ export const WORK_TYPE_VISUALS: Record<WorkType, { icon: Icon; tint: string }> =
 export const workTypeLabel = (t: string | null | undefined) =>
   t && t in WORKSPACE_TEMPLATES ? WORKSPACE_TEMPLATES[t as WorkType].label : 'Not set';
 
-const card =
-  'border-border bg-background hover:border-primary/50 hover:bg-muted/40 focus-visible:ring-primary/40 relative flex w-full items-center gap-3 rounded-md border px-3.5 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-hidden';
+/** A compact, wrapping pill: many choices fit on a few lines instead of a long column of cards. */
+const chip =
+  'border-border bg-background hover:border-primary/50 hover:bg-muted/40 focus-visible:ring-primary/40 has-[:focus-visible]:ring-primary/40 inline-flex items-center gap-2 rounded-full border py-1.5 pr-3.5 pl-2 text-left text-sm font-medium transition-colors focus-visible:ring-2 has-[:focus-visible]:ring-2 focus-visible:outline-hidden';
+const chipOn = 'border-primary bg-primary/10 text-foreground';
 
-/** "What kind of work do you do?" A single choice, shown as a grid of cards. */
-export function WorkTypePicker({
+/** "What kind of work does your company do?" Pick all that apply, shown as a grid of cards. */
+export function WorkTypeMultiPicker({
   value,
   onChange,
   idPrefix = 'work-type',
 }: {
-  value: WorkType | null;
-  onChange: (t: WorkType) => void;
+  value: WorkType[];
+  onChange: (next: WorkType[]) => void;
   idPrefix?: string;
 }) {
+  const toggle = (type: WorkType) =>
+    onChange(value.includes(type) ? value.filter((t) => t !== type) : [...value, type]);
   return (
-    <div role="radiogroup" aria-label="What kind of work do you do?" className="grid gap-3 sm:grid-cols-2">
+    <div role="group" aria-label="What kind of work does your company do?" className="flex flex-wrap gap-2">
       {WORK_TYPES.map((type) => {
         const { icon: TypeIcon, tint } = WORK_TYPE_VISUALS[type];
-        const selected = value === type;
+        const selected = value.includes(type);
         return (
           <button
             key={type}
             type="button"
-            role="radio"
+            role="checkbox"
             aria-checked={selected}
             id={`${idPrefix}-${type}`}
             data-testid={`work-type-${type}`}
-            onClick={() => onChange(type)}
-            className={cn(card, selected && 'border-primary bg-primary/5 ring-primary/30 ring-1')}
+            title={WORKSPACE_TEMPLATES[type].blurb}
+            onClick={() => toggle(type)}
+            className={cn(chip, selected && chipOn)}
           >
-            <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', tint)}>
-              <TypeIcon className="size-4" aria-hidden />
+            <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-full', tint)}>
+              {selected ? <Check className="size-3.5" aria-hidden /> : <TypeIcon className="size-3.5" aria-hidden />}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm leading-snug font-semibold">{WORKSPACE_TEMPLATES[type].label}</span>
-              <span className="text-muted-foreground block text-xs leading-snug">
-                {WORKSPACE_TEMPLATES[type].blurb}
-              </span>
-            </span>
-            {selected && <Check className="text-primary size-4 shrink-0" aria-hidden />}
+            {WORKSPACE_TEMPLATES[type].label}
           </button>
         );
       })}
@@ -99,10 +99,14 @@ export function WorkTypePicker({
   );
 }
 
-/** Usage options worth showing for a type: its suggestions first, then everything else. */
-export function usageOptionsFor(type: WorkType | null): UsageOption[] {
-  if (!type) return [...USAGE_OPTIONS];
-  const suggested = WORKSPACE_TEMPLATES[type].suggestedUsage;
+/** "Software development, Marketing and Sales". */
+export const workTypesLabel = (types: readonly string[]) =>
+  types.length ? types.map(workTypeLabel).join(', ') : 'Not set';
+
+/** Usage options worth showing for a set of types: their suggestions first, then everything else. */
+export function usageOptionsFor(types: readonly WorkType[]): UsageOption[] {
+  if (!types.length) return [...USAGE_OPTIONS];
+  const suggested = suggestedUsageFor(types);
   const first = suggested
     .map((key) => USAGE_OPTIONS.find((o) => o.key === key))
     .filter((o): o is UsageOption => !!o);
@@ -112,47 +116,48 @@ export function usageOptionsFor(type: WorkType | null): UsageOption[] {
 
 /** "How does your team plan to use it?" Several choices, pre-checked from the work type. */
 export function UsagePicker({
-  type,
+  types,
   value,
   onChange,
   showAll = false,
 }: {
-  type: WorkType | null;
+  types: WorkType[];
   value: string[];
   onChange: (next: string[]) => void;
   /** Show every option, not just the suggested ones. */
   showAll?: boolean;
 }) {
-  const suggested = type ? WORKSPACE_TEMPLATES[type].suggestedUsage : [];
-  const options = showAll ? usageOptionsFor(type) : usageOptionsFor(type).slice(0, Math.max(suggested.length, 6));
+  const suggested = suggestedUsageFor(types);
+  const options = showAll ? usageOptionsFor(types) : usageOptionsFor(types).slice(0, Math.max(suggested.length, 6));
   const toggle = (key: string) =>
     onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
   return (
-    <div role="group" aria-label="How does your team plan to use it?" className="grid gap-3 sm:grid-cols-2">
+    <div role="group" aria-label="How does your team plan to use it?" className="flex flex-wrap gap-2">
       {options.map((o) => {
         const checked = value.includes(o.key);
         return (
           <label
             key={o.key}
-            className={cn(card, 'cursor-pointer', checked && 'border-primary/60 bg-primary/5')}
+            title={o.hint}
+            className={cn(chip, 'cursor-pointer pl-3', checked && chipOn)}
             data-testid={`usage-${o.key}`}
           >
             <input
               type="checkbox"
-              className="accent-primary size-4 shrink-0"
+              className="sr-only"
               checked={checked}
               onChange={() => toggle(o.key)}
+              aria-describedby={`usage-hint-${o.key}`}
             />
-            <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm leading-snug font-semibold">
-                <span>{o.label}</span>
-                {o.status !== 'built' && (
-                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-                    Coming soon
-                  </span>
-                )}
+            {checked && <Check className="text-primary size-3.5 shrink-0" aria-hidden />}
+            <span>{o.label}</span>
+            {o.status !== 'built' && (
+              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                Coming soon
               </span>
-              <span className="text-muted-foreground block text-xs leading-snug">{o.hint}</span>
+            )}
+            <span id={`usage-hint-${o.key}`} className="sr-only">
+              {o.hint}
             </span>
           </label>
         );

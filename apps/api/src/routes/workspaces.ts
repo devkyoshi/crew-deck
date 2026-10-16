@@ -4,10 +4,11 @@ import { z } from 'zod';
 import {
   isWorkType,
   modulesFor,
+  usageNeedsCrm,
   USAGE_KEYS,
   WORK_TYPES,
   WORKSPACE_TEMPLATES,
-  type WorkType,
+  workTypesOf,
 } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
@@ -30,6 +31,7 @@ export const MAX_OWNED_WORKSPACES = 10;
 
 const slug = z.string().trim().toLowerCase().max(40);
 const usageSchema = z.array(z.enum(USAGE_KEYS as [string, ...string[]])).max(20);
+const workTypesSchema = z.array(z.enum(WORK_TYPES)).min(1).max(WORK_TYPES.length);
 
 export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
   const { db, config, sessions } = deps;
@@ -72,9 +74,10 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         body: z.object({
           company: z.string().trim().min(2, 'Enter a name').max(80),
           slug,
-          workType: z.enum(WORK_TYPES),
+          workType: z.enum(WORK_TYPES).optional(),
+          workTypes: workTypesSchema.optional(),
           usage: usageSchema.optional(),
-        }),
+        }).refine((v) => v.workType || v.workTypes, { message: 'Choose the kind of work', path: ['workTypes'] }),
       },
     },
     async (req) => {
@@ -116,7 +119,7 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
         via: 'signup',
         ownerMode: 'verified',
         createdBy: user.email,
-        workType: b.workType,
+        workTypes: workTypesOf(b.workTypes?.[0] ?? b.workType, b.workTypes),
         usage: b.usage,
       });
       const sid = await sessions.create(out.orgId, out.userId!);
@@ -161,6 +164,7 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     const settings = await db.tenant(actor.orgId).tenantSettings.findOne({});
     return {
       workType: org.work_type,
+      workTypes: org.work_types,
       usage: org.usage,
       modules: settings?.enabledModules ?? ['members', 'spaces', 'checkin'],
       template:
@@ -172,23 +176,39 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
     '/settings/workspace',
     {
       preHandler: requireAuth,
-      schema: { body: z.object({ workType: z.enum(WORK_TYPES), usage: usageSchema }) },
+      schema: {
+        body: z
+          .object({
+            workType: z.enum(WORK_TYPES).optional(),
+            workTypes: workTypesSchema.optional(),
+            usage: usageSchema,
+          })
+          .refine((v) => v.workType || v.workTypes, {
+            message: 'Choose the kind of work',
+            path: ['workTypes'],
+          }),
+      },
     },
     async (req) => {
       const actor = actorOf(req);
       if (!can(actor, 'settings.manage')) throw forbidden();
       const b = req.body;
+      const workTypes = workTypesOf(b.workTypes?.[0] ?? b.workType, b.workTypes);
+      const workType = workTypes[0]!;
       return withTenantTx(db, actor.orgId, async (t) => {
         const before = await t.organization();
         await db.global.organizations.updateOne(
           { id: actor.orgId },
-          { workType: b.workType, usage: b.usage },
+          { workType, workTypes, usage: b.usage },
         );
         // Switching on what the team now plans to use never switches anything off.
         const current = (await t.tenantSettings.findOne({}))?.enabledModules ?? [];
-        const modules = [
-          ...new Set([...current, ...modulesFor(b.workType as WorkType, b.usage)]),
-        ];
+        // The CRM follows the usage the team chose; every other module is only ever added.
+        const crmWasOn = current.includes('crm');
+        const crmOn = usageNeedsCrm(b.usage);
+        const modules = [...new Set([...current, ...modulesFor(workTypes, b.usage)])].filter(
+          (m) => m !== 'crm' || crmOn,
+        );
         await t.tenantSettings.upsert({}, { enabledModules: modules, updatedAt: new Date() });
         await writeAudit(t, {
           orgId: actor.orgId,
@@ -196,10 +216,24 @@ export async function workspaceRoutes(app: FastifyInstance, deps: AuthDeps) {
           action: 'settings.workspace_updated',
           targetType: 'settings',
           targetId: actor.orgId,
-          before: { workType: before?.workType ?? null, usage: before?.usage ?? [] },
-          after: { workType: b.workType, usage: b.usage },
+          before: {
+            workType: before?.workType ?? null,
+            workTypes: before?.workTypes ?? [],
+            usage: before?.usage ?? [],
+          },
+          after: { workType, workTypes, usage: b.usage },
         });
-        return { workType: b.workType, usage: b.usage, modules };
+        if (crmWasOn !== crmOn) {
+          await writeAudit(t, {
+            orgId: actor.orgId,
+            actorId: actor.userId,
+            action: 'crm.module_toggled',
+            targetType: 'settings',
+            targetId: actor.orgId,
+            after: { crmEnabled: crmOn },
+          });
+        }
+        return { workType, workTypes, usage: b.usage, modules };
       });
     },
   );

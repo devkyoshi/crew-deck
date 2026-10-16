@@ -12,7 +12,7 @@ import {
   Pencil,
   Sparkles,
 } from 'lucide-react';
-import { USAGE_OPTIONS, WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
+import { suggestedUsageFor, USAGE_OPTIONS, type WorkType } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -20,8 +20,8 @@ import { Notice } from '@/components/shared/notice';
 import { useWizard } from '@/components/auth/wizard';
 import {
   UsagePicker,
-  WorkTypePicker,
-  workTypeLabel,
+  WorkTypeMultiPicker,
+  workTypesLabel,
 } from '@/components/workspace/work-type-picker';
 import {
   bigInput,
@@ -55,7 +55,7 @@ interface Answers {
   company: string;
   slug: string;
   slugTouched: boolean;
-  workType: WorkType | null;
+  workTypes: WorkType[];
   usage: string[];
   sentAt: number | null;
   devLink: string | null;
@@ -66,7 +66,7 @@ const INITIAL: Answers = {
   company: '',
   slug: '',
   slugTouched: false,
-  workType: null,
+  workTypes: [],
   usage: [],
   sentAt: null,
   devLink: null,
@@ -200,7 +200,9 @@ function SignUpWizard() {
         }
       }
     }
-    if (step === 'work' && !a.workType) next.workType = 'Choose the kind of work your team does';
+    if (step === 'work' && a.workTypes.length === 0) {
+      next.workTypes = 'Choose at least one kind of work your company does';
+    }
     setErrors(next);
     if (Object.keys(next).length) return fail();
     w.next({ email: a.email.trim().toLowerCase(), name: a.name.trim(), company: a.company.trim() });
@@ -217,7 +219,7 @@ function SignUpWizard() {
           company: a.company,
           slug: a.slug,
           name: a.name || undefined,
-          workType: a.workType ?? undefined,
+          workTypes: a.workTypes,
           usage: a.usage,
         },
       });
@@ -227,7 +229,7 @@ function SignUpWizard() {
       if (err instanceof ApiError && err.fields && Object.keys(err.fields).length) {
         // A problem with an earlier answer sends you back to fix it.
         setErrors(err.fields);
-        w.go(err.fields.email ? 'you' : err.fields.workType || err.fields.usage ? 'work' : 'company');
+        w.go(err.fields.email ? 'you' : err.fields.workType || err.fields.workTypes || err.fields.usage ? 'work' : 'company');
       } else {
         setFormError(
           err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
@@ -439,20 +441,20 @@ function SignUpWizard() {
         <form onSubmit={enter('work')} noValidate>
           <StepHero
             headingRef={w.headingRef}
-            title="What kind of work do you do?"
-            lead="This helps us suggest the right columns, modules and templates for your team. You can change it later."
+            title="What kind of work does your company do?"
+            lead="Pick all that apply. This helps us suggest the right columns, modules and templates for your team. You can change it later."
           />
-          <WorkTypePicker
-            value={a.workType}
-            onChange={(type) => {
-              clear('workType');
-              // Choosing a kind of work pre-selects what teams like yours usually need.
-              w.set({ workType: type, usage: [...WORKSPACE_TEMPLATES[type].suggestedUsage] });
+          <WorkTypeMultiPicker
+            value={a.workTypes}
+            onChange={(workTypes) => {
+              clear('workTypes');
+              // Choosing kinds of work pre-selects what teams like yours usually need.
+              w.set({ workTypes, usage: suggestedUsageFor(workTypes) });
             }}
           />
-          {errors.workType && (
+          {errors.workTypes && (
             <p role="alert" className="text-destructive mt-3 text-sm">
-              {errors.workType}
+              {errors.workTypes}
             </p>
           )}
           <StepFooter next="Continue" onBack={w.back} />
@@ -466,7 +468,7 @@ function SignUpWizard() {
             title="How does your team plan to use it?"
             lead="Tick everything that applies. We switch on the matching modules, and the rest can be added any time."
           />
-          <UsagePicker type={a.workType} value={a.usage} onChange={(usage) => w.set({ usage })} showAll />
+          <UsagePicker types={a.workTypes} value={a.usage} onChange={(usage) => w.set({ usage })} showAll />
           <StepFooter next="Continue" onBack={w.back} />
         </form>
       )}
@@ -492,7 +494,7 @@ function SignUpWizard() {
             <FieldGroup title="Workspace">
               <ReviewRow label="Company" value={a.company} onEdit={() => w.go('company')} />
               <ReviewRow label="Address" value={`${a.slug}.${domain}`} onEdit={() => w.go('company')} />
-              <ReviewRow label="Kind of work" value={workTypeLabel(a.workType)} onEdit={() => w.go('work')} />
+              <ReviewRow label="Kind of work" value={workTypesLabel(a.workTypes)} onEdit={() => w.go('work')} />
               <ReviewRow
                 label="Usage"
                 value={

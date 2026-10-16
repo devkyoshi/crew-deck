@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { modulesFor, WORKSPACE_TEMPLATES, type ModuleKey, type WorkType } from '@crew-deck/shared';
+import { modulesFor, usageNeedsCrm, WORKSPACE_TEMPLATES, type ModuleKey, type WorkType } from '@crew-deck/shared';
 import { hashPassword } from '../auth/password.js';
 import { sha256 } from '../lib/crypto.js';
 import { createDb, type Db, type TenantDb } from './client.js';
@@ -215,7 +215,10 @@ export async function seed(uri: string, dbName: string) {
     const orgIds = new Map<string, string>();
     for (const w of DEV_WORKSPACES) {
       const template = WORKSPACE_TEMPLATES[w.workType];
-      const usage = template.suggestedUsage;
+      // A workspace seeded with the CRM also says it tracks leads, as the settings page expects.
+      const usage = w.extraModules?.includes('crm') && !usageNeedsCrm(template.suggestedUsage)
+        ? [...template.suggestedUsage, 'track_leads']
+        : template.suggestedUsage;
       let org = await db.global.organizations.findOne({ slug: w.slug });
       if (!org) {
         org = await db.global.organizations.insert({

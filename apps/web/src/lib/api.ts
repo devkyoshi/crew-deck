@@ -30,6 +30,8 @@ export interface Me {
     domainRestricted: boolean;
     /** What the workspace is for (see WORK_TYPES in @crew-deck/shared), if it was chosen. */
     workType: string | null;
+    /** Every kind of work the company does; `workType` is the first. */
+    workTypes: string[];
     usage: string[];
     /** Product modules switched on for this workspace. */
     modules: string[];

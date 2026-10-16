@@ -18,6 +18,7 @@ import {
   Users,
   UsersRound,
   UsersRound as TeamIcon,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -81,6 +82,7 @@ export const NAV: NavGroup[] = [
       { title: 'Companies', href: '/crm/companies', icon: Building2, needsCrm: true },
       { title: 'Deals', href: '/crm/deals', icon: Handshake, needsCrm: true },
       { title: 'Activities', href: '/crm/activities', icon: CalendarClock, needsCrm: true },
+      { title: 'Pipelines', href: '/crm/pipelines', icon: Workflow, needsCrm: true, adminOnly: true },
     ],
   },
   {
@@ -91,7 +93,6 @@ export const NAV: NavGroup[] = [
       { title: 'Members', href: '/admin/members', icon: Users },
       { title: 'Groups', href: '/admin/groups', icon: UsersRound },
       { title: 'Spaces', href: '/admin/spaces', icon: FolderKanban },
-      { title: 'CRM', href: '/admin/crm', icon: Handshake },
       { title: 'Plan and billing', href: '/admin/billing', icon: CreditCard },
       { title: 'Audit log', href: '/admin/audit', icon: FileClock },
       { title: 'Settings', href: '/admin/settings', icon: Settings },

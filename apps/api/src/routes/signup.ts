@@ -13,7 +13,13 @@ import { randomToken, sha256 } from '../lib/crypto.js';
 import { emailDomainOf, isFreeEmailDomain, slugMessage, slugProblem } from '../onboarding/rules.js';
 import { provisionWorkspace } from '../onboarding/provision.js';
 import { getPlatformSettings } from '../onboarding/settings.js';
-import { USAGE_KEYS, WORK_TYPES, WORKSPACE_TEMPLATES, USAGE_OPTIONS } from '@crew-deck/shared';
+import {
+  USAGE_KEYS,
+  WORK_TYPES,
+  WORKSPACE_TEMPLATES,
+  USAGE_OPTIONS,
+  workTypesOf,
+} from '@crew-deck/shared';
 
 export type SendMail = (m: EmailMessage) => Promise<void>;
 
@@ -61,6 +67,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
       has_account: account,
       name: r.name,
       workType: r.workType,
+      workTypes: workTypesOf(r.workType, r.workTypes),
       usage: r.usage,
     };
   }
@@ -129,6 +136,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
           name: z.string().trim().max(100).optional(),
           slug,
           workType: z.enum(WORK_TYPES).optional(),
+          workTypes: z.array(z.enum(WORK_TYPES)).min(1).max(WORK_TYPES.length).optional(),
           usage: z.array(z.enum(USAGE_KEYS as [string, ...string[]])).max(20).optional(),
         }),
       },
@@ -168,6 +176,8 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
           'Too many requests for this email. Try again later.',
         );
       }
+      // The first kind of work is the primary one; a client that sends only `workType` still works.
+      const workTypes = workTypesOf(b.workTypes?.[0] ?? b.workType, b.workTypes);
       const token = randomToken();
       await db.global.signupRequests.insert({
         tokenHash: sha256(token),
@@ -175,7 +185,8 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         name: b.name || null,
         company: b.company,
         slug: b.slug.toLowerCase(),
-        workType: b.workType ?? null,
+        workType: workTypes[0] ?? null,
+        workTypes,
         usage: b.usage ?? [],
         expiresAt: new Date(Date.now() + SIGNUP_LINK_HOURS * 3_600_000),
       });
@@ -284,7 +295,7 @@ export async function signupRoutes(app: FastifyInstance, deps: AuthDeps & { send
         ownerMode: 'verified',
         consumeTokenHash: hash,
         createdBy: 'signup',
-        workType: (row.workType as (typeof WORK_TYPES)[number] | null) ?? null,
+        workTypes: workTypesOf(row.workType, row.workTypes),
         usage: row.usage,
       });
       const sid = await sessions.create(out.orgId, out.userId!);

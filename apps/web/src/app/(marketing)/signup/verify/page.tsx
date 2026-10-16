@@ -48,6 +48,7 @@ interface Preview {
   hasAccount: boolean;
   name: string | null;
   workType?: string | null;
+  workTypes?: string[];
 }
 
 function Expired() {
@@ -154,7 +155,7 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
           <StepHero
             headingRef={w.headingRef}
             title={first ? `Welcome, ${first}. Is this you?` : 'Welcome. Is this you?'}
-            lead={`You are creating ${preview.company} at ${preview.slug}${preview.workType ? `, set up for ${workTypeLabel(preview.workType).toLowerCase()}` : ''}.`}
+            lead={`You are creating ${preview.company} at ${preview.slug}${preview.workTypes?.length ? `, set up for ${preview.workTypes.map((t) => workTypeLabel(t).toLowerCase()).join(', ')}` : ''}.`}
           />
           <FieldStack>
             <FieldGroup title="Account">

@@ -1,32 +1,32 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
-import { WORKSPACE_TEMPLATES, isWorkType, type WorkType } from '@crew-deck/shared';
+import { suggestedUsageFor, usageNeedsCrm, workTypesOf, type WorkType } from '@crew-deck/shared';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { useIsAdmin, useMe } from '@/components/shell/me-context';
 import { Button } from '@/components/ui/button';
-import { UsagePicker, WorkTypePicker } from '@/components/workspace/work-type-picker';
+import { UsagePicker, WorkTypeMultiPicker } from '@/components/workspace/work-type-picker';
 import { api, ApiError } from '@/lib/api';
 
-const MODULE_LABEL: Record<string, string> = {
-  members: 'People and groups',
-  spaces: 'Spaces and boards',
-  checkin: 'Check-in and attendance',
-  crm: 'CRM',
-};
-
-/** What the workspace is for. Changing it adds the matching modules; it never switches any off. */
+/** What the workspace is for. Its usage choices decide which features the team sees. */
 export default function WorkspacePurposePage() {
   const isAdmin = useIsAdmin();
   const { org } = useMe();
   const router = useRouter();
-  const [workType, setWorkType] = useState<WorkType | null>(isWorkType(org.workType) ? org.workType : null);
-  const [usage, setUsage] = useState<string[]>(org.usage ?? []);
+  const [workTypes, setWorkTypes] = useState<WorkType[]>(workTypesOf(org.workType, org.workTypes));
+  // A workspace that already has the CRM keeps it: tick "Track leads and deals" for it, so saving
+  // does not switch the CRM off.
+  const [usage, setUsage] = useState<string[]>(() => {
+    const saved = org.usage ?? [];
+    return org.modules.includes('crm') && !usageNeedsCrm(saved) ? [...saved, 'track_leads'] : saved;
+  });
   const [busy, setBusy] = useState(false);
+  const qc = useQueryClient();
 
   if (!isAdmin) {
     return (
@@ -40,11 +40,12 @@ export default function WorkspacePurposePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!workType) return toast.error('Choose the kind of work first');
+    if (workTypes.length === 0) return toast.error('Choose at least one kind of work first');
     setBusy(true);
     try {
-      await api('/settings/workspace', { method: 'PUT', body: { workType, usage } });
+      await api('/settings/workspace', { method: 'PUT', body: { workTypes, usage } });
       toast.success('Saved');
+      await qc.invalidateQueries({ queryKey: ['crm-access'] });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Could not save');
@@ -57,39 +58,26 @@ export default function WorkspacePurposePage() {
     <form onSubmit={save} className="max-w-3xl space-y-8">
       <PageHeader
         title="Kind of work"
-        description="Tells us which templates, columns and modules to suggest. New spaces start with the columns that fit."
+        description="Tells us which templates and columns to suggest, and which features your team sees. New spaces start with the columns that fit."
       />
       <section className="space-y-3">
-        <h2 className="font-semibold">What kind of work does this workspace do?</h2>
-        <WorkTypePicker
-          value={workType}
-          onChange={(t) => {
-            setWorkType(t);
-            setUsage([...WORKSPACE_TEMPLATES[t].suggestedUsage]);
+        <h2 className="font-semibold">What kind of work does this workspace do? Pick all that apply.</h2>
+        <WorkTypeMultiPicker
+          value={workTypes}
+          onChange={(types) => {
+            setWorkTypes(types);
+            setUsage(suggestedUsageFor(types));
           }}
         />
       </section>
-      {workType && (
+      {workTypes.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-semibold">How does your team plan to use it?</h2>
-          <UsagePicker type={workType} value={usage} onChange={setUsage} showAll />
+          <UsagePicker types={workTypes} value={usage} onChange={setUsage} showAll />
         </section>
       )}
-      <section className="bg-card space-y-2 rounded-2xl border p-5">
-        <h2 className="font-semibold">Switched on today</h2>
-        <ul className="text-muted-foreground flex flex-wrap gap-2 text-sm">
-          {org.modules.map((m) => (
-            <li key={m} className="bg-muted rounded-full px-2.5 py-1 text-xs font-medium">
-              {MODULE_LABEL[m] ?? m}
-            </li>
-          ))}
-        </ul>
-        <p className="text-muted-foreground text-xs">
-          Saving adds any module your choices need. Nothing is switched off, so no data is hidden.
-        </p>
-      </section>
       <div className="flex justify-end">
-        <Button type="submit" disabled={busy || !workType}>
+        <Button type="submit" disabled={busy || workTypes.length === 0}>
           {busy ? 'Saving…' : 'Save'}
         </Button>
       </div>

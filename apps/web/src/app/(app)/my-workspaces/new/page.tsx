@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
-import { WORKSPACE_TEMPLATES, type WorkType } from '@crew-deck/shared';
+import { suggestedUsageFor, type WorkType } from '@crew-deck/shared';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { useMe } from '@/components/shell/me-context';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { UsagePicker, WorkTypePicker } from '@/components/workspace/work-type-picker';
+import { UsagePicker, WorkTypeMultiPicker } from '@/components/workspace/work-type-picker';
 import { useFormFeedback } from '@/hooks/use-form-feedback';
 import { api, ApiError } from '@/lib/api';
 
@@ -40,7 +40,7 @@ export default function NewWorkspacePage() {
   const [company, setCompany] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
-  const [workType, setWorkType] = useState<WorkType | null>(null);
+  const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
   const [usage, setUsage] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -69,14 +69,14 @@ export default function NewWorkspacePage() {
     if (company.trim().length < 2) next.company = 'Enter a name for the workspace';
     if (!slugValid(slug)) next.slug = 'Use 3 to 30 lowercase letters, numbers or hyphens';
     else if (check.data && !check.data.available) next.slug = check.data.reason ?? 'That address is not available';
-    if (!workType) next.workType = 'Choose the kind of work this workspace is for';
+    if (workTypes.length === 0) next.workTypes = 'Choose at least one kind of work this workspace is for';
     setErrors(next);
     if (Object.keys(next).length) return fail();
     setBusy(true);
     setFormError(null);
     try {
       const res = await api<{ url: string }>('/workspaces', {
-        body: { company: company.trim(), slug, workType, usage },
+        body: { company: company.trim(), slug, workTypes, usage },
       });
       // The new workspace has its own address; the link signs you straight in.
       window.location.assign(res.url);
@@ -162,26 +162,26 @@ export default function NewWorkspacePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="font-semibold">What kind of work do you do?</h2>
-          <WorkTypePicker
-            value={workType}
-            onChange={(t) => {
-              setWorkType(t);
-              setUsage([...WORKSPACE_TEMPLATES[t].suggestedUsage]);
-              setErrors(({ workType: _gone, ...rest }) => rest);
+          <h2 className="font-semibold">What kind of work does it do? Pick all that apply.</h2>
+          <WorkTypeMultiPicker
+            value={workTypes}
+            onChange={(types) => {
+              setWorkTypes(types);
+              setUsage(suggestedUsageFor(types));
+              setErrors(({ workTypes: _gone, ...rest }) => rest);
             }}
           />
-          {errors.workType && (
+          {errors.workTypes && (
             <p role="alert" className="text-destructive text-sm">
-              {errors.workType}
+              {errors.workTypes}
             </p>
           )}
         </section>
 
-        {workType && (
+        {workTypes.length > 0 && (
           <section className="space-y-3">
             <h2 className="font-semibold">How does your team plan to use it?</h2>
-            <UsagePicker type={workType} value={usage} onChange={setUsage} showAll />
+            <UsagePicker types={workTypes} value={usage} onChange={setUsage} showAll />
           </section>
         )}
 

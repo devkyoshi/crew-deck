@@ -11,7 +11,7 @@ const apex = { host: 'localhost:3000' };
 const tokenFrom = (link: string) => new URL(link).searchParams.get('token')!;
 
 /** Signs up through the public wizard endpoints and returns the new workspace's slug. */
-async function signUp(opts: { workType?: string; usage?: string[] }) {
+async function signUp(opts: { workType?: string; workTypes?: string[]; usage?: string[] }) {
   const id = randomUUID().slice(0, 8);
   const email = `founder-${id}@wiz${id}.test`;
   const slug = `wiz-${id}`;
@@ -52,6 +52,27 @@ describe('work types and templates', () => {
     expect(org).toMatchObject({ workType: 'sales', usage: ['track_leads', 'manage_tasks'] });
     const settings = await t.db.tenant(org!.id).tenantSettings.findOne({});
     expect(settings?.enabledModules).toEqual(expect.arrayContaining(['members', 'spaces', 'checkin', 'crm']));
+  });
+
+  it('stores several kinds of work, with the first as the primary, and merges their modules', async () => {
+    const { org } = await signUp({ workTypes: ['software', 'sales', 'marketing'] });
+    expect(org).toMatchObject({ workType: 'software', workTypes: ['software', 'sales', 'marketing'] });
+    const settings = await t.db.tenant(org!.id).tenantSettings.findOne({});
+    expect(settings?.enabledModules).toEqual(expect.arrayContaining(['members', 'spaces', 'checkin', 'crm']));
+    const spaces = await t.db.tenant(org!.id).spaces.find({});
+    expect(spaces.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('rejects an empty or invalid list of work types', async () => {
+    for (const workTypes of [[], ['astrology']]) {
+      const res = await t.app.inject({
+        method: 'POST',
+        url: '/api/v1/signup',
+        headers: apex,
+        payload: { email: uniqueEmail('x', 'bad.test'), company: 'Bad Co', slug: `bad-${randomUUID().slice(0, 6)}`, workTypes },
+      });
+      expect(res.statusCode).toBe(400);
+    }
   });
 
   it('a workspace without CRM usage does not get the CRM module', async () => {
@@ -179,7 +200,7 @@ describe('a person with several workspaces', () => {
 });
 
 describe('changing what the workspace is for', () => {
-  it('lets an owner change the type and usage, adding modules but never removing them', async () => {
+  it('lets an owner change the type and usage, the CRM follows the lead and activity options', async () => {
     const o = await createOrg('purpose');
     const cookie = await signInAs(t.app, o.slug, o.owner);
     const before = (await call({ method: 'GET', url: '/settings/workspace', slug: o.slug, cookie })).json();
@@ -200,13 +221,16 @@ describe('changing what the workspace is for', () => {
       cookie,
       payload: { workType: 'construction', usage: ['site_work'] },
     });
-    // CRM stays on: switching purpose never switches modules off.
-    expect(again.json().modules).toContain('crm');
+    // The CRM follows usage: no lead or activity option means it is off. Other modules stay on.
+    expect(again.json().modules).not.toContain('crm');
+    expect(again.json().modules).toContain('checkin');
     const me = (await call({ method: 'GET', url: '/me', slug: o.slug, cookie })).json();
     expect(me.org).toMatchObject({ workType: 'construction', usage: ['site_work'] });
-    expect(me.org.modules).toContain('crm');
+    expect(me.org.modules).not.toContain('crm');
     const log = await t.db.tenant(o.org.id).auditLogs.find({ action: 'settings.workspace_updated' });
     expect(log).toHaveLength(2);
+    const toggled = await t.db.tenant(o.org.id).auditLogs.find({ action: 'crm.module_toggled' });
+    expect(toggled).toHaveLength(2);
   });
 
   it('is for admins only', async () => {

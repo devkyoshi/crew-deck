@@ -45,6 +45,7 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
         slug: org.slug,
         domain: org.domain,
         workType: org.work_type,
+        workTypes: org.work_types,
         usage: org.usage,
         modules,
         ...branding,

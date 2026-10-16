@@ -13,7 +13,7 @@ async function signInToPlatform(page: Page) {
 
 /** The "What kind of work" and "How will you use it" steps: pick a type, keep the suggested usage. */
 async function passWorkSteps(page: Page, type = 'software') {
-  await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What kind of work does your company do?' })).toBeVisible();
   await page.getByTestId(`work-type-${type}`).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'How does your team plan to use it?' })).toBeVisible();
@@ -78,10 +78,14 @@ test('a new company signs up, runs on a trial, is isolated, and the platform can
   await expect(page.getByText(`${slug}.localhost is available`)).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
   // Choosing a kind of work pre-ticks what teams like this usually need.
-  await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What kind of work does your company do?' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('Choose the kind of work your team does')).toBeVisible();
+  await expect(page.getByText('Choose at least one kind of work your company does')).toBeVisible();
   await page.getByTestId('work-type-sales').click();
+  // A company can do several kinds of work: picking another keeps the first.
+  await page.getByTestId('work-type-marketing').click();
+  await expect(page.getByTestId('work-type-sales')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('work-type-marketing')).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByTestId('usage-track_leads').getByRole('checkbox')).toBeChecked();
   await page.getByRole('button', { name: 'Continue' }).click();
@@ -358,7 +362,7 @@ test.describe('guided sign-up navigation', () => {
     await expect(page.getByText(/is available/)).toBeVisible();
     await page.keyboard.press('Enter');
     // Kind of work: the cards are buttons, so Tab reaches them and Space picks one.
-    await expect(page.getByRole('heading', { name: 'What kind of work do you do?' })).toBeFocused();
+    await expect(page.getByRole('heading', { name: 'What kind of work does your company do?' })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByTestId('work-type-software')).toBeFocused();
     await page.keyboard.press('Space');

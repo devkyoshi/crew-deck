@@ -179,6 +179,7 @@ const DEFAULTS: Record<string, () => Document> = {
     accentColor: null,
     domainRestricted: true,
     workType: null,
+    workTypes: [],
     usage: [],
     createdAt: now(),
   }),
@@ -192,7 +193,7 @@ const DEFAULTS: Record<string, () => Document> = {
     lastLoginAt: null,
     createdAt: now(),
   }),
-  signupRequests: () => ({ name: null, workType: null, usage: [], usedAt: null, createdAt: now() }),
+  signupRequests: () => ({ name: null, workType: null, workTypes: [], usage: [], usedAt: null, createdAt: now() }),
   platformAudit: () => ({ adminId: null, orgId: null, detail: null, createdAt: now() }),
   platformAdmins: () => ({ name: null, createdAt: now() }),
   memberships: () => ({

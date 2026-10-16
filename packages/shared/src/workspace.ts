@@ -47,17 +47,21 @@ export const USAGE_OPTIONS: readonly UsageOption[] = [
   { key: 'run_sprints', label: 'Run sprints', hint: 'Backlog and sprint planning', status: 'built', module: 'spaces' },
   { key: 'work_in_scrum', label: 'Work in scrum', hint: 'Scrum boards and burndown', status: 'built', module: 'spaces' },
   { key: 'map_dependencies', label: 'Map work dependencies', hint: 'Link items that block each other', status: 'built', module: 'spaces' },
-  { key: 'roadmap', label: 'Plan a roadmap', hint: 'Timeline of epics', status: 'planned' },
+  { key: 'roadmap', label: 'Plan a roadmap', hint: 'Timeline of epics, with drag to reschedule', status: 'built', module: 'spaces' },
   { key: 'track_leads', label: 'Track leads and deals', hint: 'Companies, contacts, leads, deal pipeline', status: 'built', module: 'crm' },
   { key: 'log_activities', label: 'Log calls and meetings', hint: 'Activities and notes on CRM records', status: 'built', module: 'crm' },
   { key: 'attendance', label: 'Track attendance', hint: 'Check in and out, sites, holidays', status: 'built', module: 'checkin' },
   { key: 'site_work', label: 'Manage jobs and sites', hint: 'Sites with who is on site today', status: 'built', module: 'checkin' },
   { key: 'plan_campaigns', label: 'Plan campaigns', hint: 'Campaign boards', status: 'built', module: 'spaces' },
-  { key: 'content_calendar', label: 'Content calendar', hint: 'Calendar of publish dates', status: 'planned' },
+  { key: 'content_calendar', label: 'Content calendar', hint: 'Calendar of due and release dates', status: 'built', module: 'spaces' },
   { key: 'approvals', label: 'Run approvals', hint: 'Request and approve with a trail', status: 'planned' },
   { key: 'service_requests', label: 'Handle requests and tickets', hint: 'Request queue with SLAs', status: 'planned' },
-  { key: 'checklists', label: 'Use checklists', hint: 'Onboarding, punch lists and inspections', status: 'planned' },
-  { key: 'documents', label: 'Store documents', hint: 'Files and attachments on items', status: 'planned' },
+  { key: 'checklists', label: 'Use checklists', hint: 'Checklists on items, with reusable templates', status: 'built', module: 'spaces' },
+  { key: 'documents', label: 'Store documents', hint: 'Attachments on items and a document library per space', status: 'built', module: 'spaces' },
+  { key: 'track_time', label: 'Track time', hint: 'Log hours, planned against remaining', status: 'built', module: 'spaces' },
+  { key: 'manage_releases', label: 'Plan releases', hint: 'Versions, release notes and components', status: 'built', module: 'spaces' },
+  { key: 'view_reports', label: 'See reports', hint: 'Cumulative flow, cycle time, velocity and burndown', status: 'built', module: 'spaces' },
+  { key: 'workflow_rules', label: 'Control workflow', hint: 'Limit which status can follow which', status: 'built', module: 'spaces' },
 ];
 
 export interface StatusTemplate {
@@ -126,7 +130,7 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     type: 'software',
     label: 'Software development',
     blurb: 'Plan, track and ship software',
-    suggestedUsage: ['run_sprints', 'work_in_scrum', 'prioritize_work', 'track_bugs', 'manage_tasks', 'map_dependencies'],
+    suggestedUsage: ['run_sprints', 'work_in_scrum', 'prioritize_work', 'track_bugs', 'manage_tasks', 'map_dependencies', 'manage_releases', 'view_reports'],
     modules: [],
     starter: {
       space: { key: 'DEV', name: 'Development', icon: 'code', description: 'Features, bugs and releases.' },
@@ -151,8 +155,8 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     type: 'marketing',
     label: 'Marketing',
     blurb: 'Plan and run campaigns',
-    suggestedUsage: ['plan_campaigns', 'content_calendar', 'manage_tasks', 'approvals'],
-    modules: ['crm'],
+    suggestedUsage: ['plan_campaigns', 'content_calendar', 'manage_tasks', 'approvals', 'track_leads'],
+    modules: [],
     statuses: [S('Ideas', 'todo', 'slate'), S('Drafting', 'in_progress', 'blue'), S('Review', 'in_progress', 'amber'), S('Published', 'done', 'green')],
     itemNoun: { singular: 'task', plural: 'tasks' },
     typeLabels: { epic: 'Campaign' },
@@ -181,7 +185,7 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     type: 'project_mgmt',
     label: 'Project management',
     blurb: 'Run projects and deadlines',
-    suggestedUsage: ['manage_tasks', 'prioritize_work', 'map_dependencies', 'checklists'],
+    suggestedUsage: ['manage_tasks', 'prioritize_work', 'map_dependencies', 'checklists', 'track_time', 'view_reports'],
     modules: ['checkin'],
     itemNoun: { singular: 'task', plural: 'tasks' },
     typeLabels: { epic: 'Project' },
@@ -240,7 +244,7 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     label: 'Customer service',
     blurb: 'Answer and resolve customer issues',
     suggestedUsage: ['service_requests', 'track_leads', 'log_activities'],
-    modules: ['crm'],
+    modules: [],
     statuses: [S('New', 'todo', 'slate'), S('Working', 'in_progress', 'blue'), S('Waiting on customer', 'in_progress', 'amber'), S('Resolved', 'done', 'green')],
     itemNoun: { singular: 'case', plural: 'cases' },
     typeLabels: { task: 'Case', bug: 'Complaint' },
@@ -285,7 +289,7 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     label: 'Sales',
     blurb: 'Leads, deals and follow-ups',
     suggestedUsage: ['track_leads', 'log_activities', 'manage_tasks'],
-    modules: ['crm'],
+    modules: [],
     statuses: [S('To Do', 'todo', 'slate'), S('Following up', 'in_progress', 'blue'), S('Done', 'done', 'green')],
     itemNoun: { singular: 'task', plural: 'tasks' },
     typeLabels: { task: 'Follow-up' },
@@ -313,7 +317,7 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
     type: 'construction',
     label: 'Construction',
     blurb: 'Jobs, sites and crews',
-    suggestedUsage: ['site_work', 'attendance', 'checklists', 'manage_tasks'],
+    suggestedUsage: ['site_work', 'attendance', 'checklists', 'manage_tasks', 'track_time'],
     modules: ['checkin'],
     statuses: [S('Planned', 'todo', 'slate'), S('On site', 'in_progress', 'blue'), S('Inspection', 'in_progress', 'amber'), S('Complete', 'done', 'green')],
     itemNoun: { singular: 'job', plural: 'jobs' },
@@ -340,10 +344,30 @@ export const WORKSPACE_TEMPLATES: Record<WorkType, WorkspaceTemplate> = {
 export const isWorkType = (v: unknown): v is WorkType =>
   typeof v === 'string' && (WORK_TYPES as readonly string[]).includes(v);
 
-/** Modules for a workspace: the template's, plus any module implied by the usage the team chose. */
-export function modulesFor(type: WorkType, usage: readonly string[]): ModuleKey[] {
+/**
+ * The kinds of work a workspace does, de-duplicated and valid. Falls back to the single primary
+ * `workType` for workspaces created before several could be chosen.
+ */
+export function workTypesOf(
+  workType: string | null | undefined,
+  workTypes?: readonly string[] | null,
+): WorkType[] {
+  const list = (workTypes ?? []).filter(isWorkType);
+  const all = list.length ? list : isWorkType(workType) ? [workType] : [];
+  return [...new Set(all)];
+}
+
+/** Usage options pre-checked for a set of work types: the union of each template's suggestions. */
+export function suggestedUsageFor(types: readonly WorkType[]): string[] {
+  return [...new Set(types.flatMap((t) => WORKSPACE_TEMPLATES[t].suggestedUsage))];
+}
+
+/** Modules for a workspace: the templates', plus any module implied by the usage the team chose. */
+export function modulesFor(type: WorkType | readonly WorkType[], usage: readonly string[]): ModuleKey[] {
+  const types = typeof type === 'string' ? [type] : type;
   // Check-in (who is where today) is on for every workspace, as it was before templates existed.
-  const out = new Set<ModuleKey>(['members', 'spaces', 'checkin', ...WORKSPACE_TEMPLATES[type].modules]);
+  const out = new Set<ModuleKey>(['members', 'spaces', 'checkin']);
+  for (const t of types) for (const m of WORKSPACE_TEMPLATES[t].modules) out.add(m);
   for (const key of usage) {
     const m = USAGE_OPTIONS.find((o) => o.key === key)?.module;
     if (m) out.add(m);
@@ -352,6 +376,10 @@ export function modulesFor(type: WorkType, usage: readonly string[]): ModuleKey[
 }
 
 export const USAGE_KEYS = USAGE_OPTIONS.map((o) => o.key);
+
+/** The CRM is a sales feature: it is on exactly when the team chose a usage option that needs it. */
+export const usageNeedsCrm = (usage: readonly string[]): boolean =>
+  usage.some((key) => USAGE_OPTIONS.find((o) => o.key === key)?.module === 'crm');
 
 // ---- Vocabulary -----------------------------------------------------------------------------------------
 

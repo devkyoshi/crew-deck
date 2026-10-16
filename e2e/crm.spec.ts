@@ -201,18 +201,24 @@ test('CRM roles: viewers read only, people without access see why', async ({ pag
   }
 });
 
-test('admins can switch the CRM off and on', async ({ page }) => {
+test('the CRM follows the lead and activity options in Settings', async ({ page }) => {
   await signInAsOwner(page);
-  await page.goto('/admin/crm');
-  const toggle = page.getByRole('switch', { name: 'CRM module' });
-  await expect(toggle).toBeChecked();
-  await toggle.click();
-  await expect(toggle).not.toBeChecked();
+  await page.goto('/admin/settings/workspace');
+  const leads = page.getByTestId('usage-track_leads').getByRole('checkbox');
+  const calls = page.getByTestId('usage-log_activities').getByRole('checkbox');
+  await expect(leads).toBeChecked();
+  // Untick both CRM options and save: the CRM is switched off.
+  await leads.setChecked(false, { force: true });
+  if (await calls.isChecked()) await calls.setChecked(false, { force: true });
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Saved').first()).toBeVisible();
   await page.goto('/crm');
   await expect(page.getByText('The CRM is switched off')).toBeVisible();
-  await page.goto('/admin/crm');
-  await page.getByRole('switch', { name: 'CRM module' }).click();
-  await expect(page.getByRole('switch', { name: 'CRM module' })).toBeChecked();
+  // Tick one again: it is back.
+  await page.goto('/admin/settings/workspace');
+  await page.getByTestId('usage-track_leads').getByRole('checkbox').setChecked(true, { force: true });
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Saved').first()).toBeVisible();
   await page.goto('/crm');
   await expect(page.getByRole('heading', { name: 'CRM', level: 1 })).toBeVisible();
 });
@@ -220,7 +226,7 @@ test('admins can switch the CRM off and on', async ({ page }) => {
 test('pipeline stages can be added and reordered from settings', async ({ page }) => {
   const tag = stamp();
   await signInAsOwner(page);
-  await page.goto('/admin/crm');
+  await page.goto('/crm/pipelines');
   await page
     .getByLabel(/New stage name/)
     .first()
@@ -238,7 +244,7 @@ test('pipeline stages can be added and reordered from settings', async ({ page }
   await page.goto('/crm/deals');
   await expect(page.getByRole('region', { name: new RegExp(`^Legal ${tag},`) })).toBeVisible();
   // Clean up so later runs start from the standard pipeline.
-  await page.goto('/admin/crm');
+  await page.goto('/crm/pipelines');
   await page.getByRole('button', { name: `Delete stage Legal ${tag}` }).click();
   await expect(page.locator(`input[value="Legal ${tag}"]`)).toHaveCount(0);
 });

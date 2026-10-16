@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { OrgRole } from '@crew-deck/shared';
+import { workTypesOf, type OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { withTenant, type Db } from '../db/client.js';
 import type { OrganizationDoc } from '../db/types.js';
@@ -19,6 +19,7 @@ export type Org = {
   accent_color: string | null;
   domain_restricted: boolean;
   work_type: string | null;
+  work_types: string[];
   usage: string[];
 };
 
@@ -33,6 +34,7 @@ export const toOrg = (o: OrganizationDoc): Org => ({
   accent_color: o.accentColor,
   domain_restricted: o.domainRestricted,
   work_type: o.workType,
+  work_types: workTypesOf(o.workType, o.workTypes),
   usage: o.usage ?? [],
 });
 

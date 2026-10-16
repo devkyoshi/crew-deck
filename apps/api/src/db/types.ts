@@ -27,6 +27,8 @@ export interface OrganizationDoc {
   domainRestricted: boolean;
   /** What the workspace is for (see WORK_TYPES in @crew-deck/shared). */
   workType: string | null;
+  /** Every kind of work the company does; `workType` is the first (primary). Empty on older workspaces. */
+  workTypes: string[];
   /** How the team plans to use it (see USAGE_OPTIONS). */
   usage: string[];
   createdAt: Date;
@@ -79,6 +81,7 @@ export interface SignupRequestDoc {
   company: string;
   slug: string;
   workType: string | null;
+  workTypes: string[];
   usage: string[];
   expiresAt: Date;
   usedAt: Date | null;

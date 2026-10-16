@@ -1,20 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { ShieldAlert } from 'lucide-react';
-import { CrmSettings } from '@/components/crm/pipeline-settings';
-import { EmptyState } from '@/components/shared/empty-state';
-import { useIsAdmin } from '@/components/shell/me-context';
-
+/** The CRM switch moved to Settings → Workspace and the pipeline editor to the CRM section. */
 export default function Page() {
-  const isAdmin = useIsAdmin();
-  if (!isAdmin) {
-    return (
-      <EmptyState
-        icon={ShieldAlert}
-        title="Admins only"
-        description="You need to be a workspace admin to change CRM settings."
-      />
-    );
-  }
-  return <CrmSettings />;
+  redirect('/crm/pipelines');
 }
