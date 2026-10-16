@@ -599,6 +599,22 @@ export interface WorklogDoc {
   createdAt: Date;
 }
 
+/** One tile on a person's dashboard. Which data it shows is read live from the normal endpoints. */
+export interface GadgetDoc {
+  id: string;
+  type: 'assigned' | 'filter' | 'sprint' | 'versions' | 'flow';
+  spaceId: string | null;
+  filterId: string | null;
+}
+
+/** A person's dashboard layout: the gadgets they chose, in order. */
+export interface DashboardDoc {
+  orgId: string;
+  userId: string;
+  gadgets: GadgetDoc[];
+  updatedAt: Date;
+}
+
 /** A folder in a space's document library. Folders nest. */
 export interface SpaceFolderDoc {
   id: string;

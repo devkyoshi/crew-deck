@@ -208,8 +208,9 @@ export function ItemDetail({
       if (key === 'm') {
         e.preventDefault();
         conversation.current?.focusComment();
-      } else if (key === 'a' || key === 'l') {
-        const target = root.current.querySelector<HTMLElement>(key === 'a' ? '#f-assignee' : '#f-labels');
+      } else if (key === 'a' || key === 'l' || key === 't' || key === 'd' || key === 'v') {
+        const id = { a: '#f-assignee', l: '#f-labels', t: '#f-status', d: '#f-due', v: '#f-fixversion' }[key];
+        const target = root.current.querySelector<HTMLElement>(id);
         if (target && !target.hasAttribute('disabled')) {
           e.preventDefault();
           target.click();

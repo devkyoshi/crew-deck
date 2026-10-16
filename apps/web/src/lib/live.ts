@@ -36,6 +36,13 @@ export function useLiveSpace(spaceKey: string | null | undefined) {
       void qc.invalidateQueries({ queryKey: ['subtasks'] });
       void qc.invalidateQueries({ queryKey: ['my-items'] });
       if (kinds.has('sprint')) void qc.invalidateQueries({ queryKey: ['sprints'] });
+      if (kinds.has('version')) {
+        for (const k of ['versions', 'components', 'release-notes', 'roadmap', 'calendar']) void qc.invalidateQueries({ queryKey: [k] });
+      }
+      if (kinds.has('document')) void qc.invalidateQueries({ queryKey: ['space-docs', key] });
+      // Dates, time and work on items move the roadmap, calendar and reports.
+      for (const k of ['roadmap', 'calendar', 'flow-reports']) void qc.invalidateQueries({ queryKey: [k] });
+      void qc.invalidateQueries({ queryKey: ['worklogs'] });
       if (changedItems.size) {
         void qc.invalidateQueries({ queryKey: ['item'] });
         for (const id of changedItems) {

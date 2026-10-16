@@ -64,6 +64,9 @@ test('drag with the mouse, drop into an empty column, and snap back when refused
   test.setTimeout(120_000);
   await signInAsOwner(page);
   const sp = await setup(page, ['One', 'Two']);
+  // Live updates would refresh the card before the drag; with the stream down the page is stale, which is
+  // the situation the version check exists for.
+  await page.route('**/spaces/*/events', (route) => route.abort());
   await page.goto(`/spaces/${sp.key}/board`);
   const card = page.getByRole('article', { name: /One/ });
   await expect(card).toBeVisible();

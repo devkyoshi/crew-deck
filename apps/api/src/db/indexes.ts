@@ -117,6 +117,7 @@ const INDEXES: Record<string, Ix[]> = {
     ['id', { id: 1 }, U],
     ['name', { spaceId: 1, parentId: 1, nameLower: 1 }, U],
   ],
+  dashboards: [['user', { orgId: 1, userId: 1 }, U]],
   worklogs: [
     ['id', { id: 1 }, U],
     ['item', { itemId: 1, date: -1, createdAt: -1 }],

@@ -216,11 +216,12 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ## W13: Dashboards, parity sweep, hardening
 
-- [ ] Dashboards with a fixed set of gadgets
-- [ ] `JIRA-PARITY.md` with no Missing rows inside the chosen scope
-- [ ] Accessibility, keyboard and rate-limit pass on new screens; live-update events for new entities
-- [ ] Demo seed and Playwright suite extended
-- [ ] Tests, docs, owner review
+- [x] Dashboards with a fixed set of gadgets
+- [x] `JIRA-PARITY.md` with no Missing rows inside the chosen scope
+- [x] Accessibility, keyboard and rate-limit pass on new screens; live-update events for new entities
+- [x] Demo seed and Playwright suite extended
+- [x] Tests, docs
+- [ ] Owner review and sign-off
 
 ---
 

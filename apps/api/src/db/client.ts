@@ -71,6 +71,7 @@ const TENANT = {
   spaceFolders: 'space_folders',
   spaceFiles: 'space_files',
   worklogs: 'worklogs',
+  dashboards: 'dashboards',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -135,6 +136,7 @@ export interface TenantDocs {
   spaceFolders: T.SpaceFolderDoc;
   spaceFiles: T.SpaceFileDoc;
   worklogs: T.WorklogDoc;
+  dashboards: T.DashboardDoc;
 }
 
 export interface GlobalDocs {
@@ -333,6 +335,7 @@ const NO_ID = new Set<string>([
   'crmRecordTags',
   'watchers',
   'notificationPrefs',
+  'dashboards',
   'sprintSnapshots',
   'platformSettings',
   'plans',
@@ -623,6 +626,7 @@ export class TenantDb {
   readonly spaceFolders!: TenantRepos['spaceFolders'];
   readonly spaceFiles!: TenantRepos['spaceFiles'];
   readonly worklogs!: TenantRepos['worklogs'];
+  readonly dashboards!: TenantRepos['dashboards'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

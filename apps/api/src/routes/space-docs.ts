@@ -171,6 +171,7 @@ export async function spaceDocRoutes(app: FastifyInstance, deps: SpaceDocsDeps) 
     '/spaces/:id/folders',
     {
       preHandler: requireAuth,
+      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
       schema: { params: idParam, body: z.object({ name: folderName, parentId: z.string().uuid().nullable().default(null) }) },
     },
     async (req) => {

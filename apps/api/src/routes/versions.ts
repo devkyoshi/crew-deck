@@ -132,7 +132,7 @@ export async function versionRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.post(
     '/spaces/:id/versions',
-    { preHandler: requireAuth, schema: { params: idParam, body: versionBody } },
+    { preHandler: requireAuth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { params: idParam, body: versionBody } },
     async (req) => {
       const actor = actorOf(req);
       const b = req.body;

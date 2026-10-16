@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16 - Dashboards and parity sweep (W13)
+
+- **Dashboard** (sidebar): your own tiles, in the order you want: assigned to me, saved filter results, sprint health, release progress, created against resolved.
+- Keyboard shortcuts `T` (status), `D` (due date) and `V` (fix version) in an open item; the `?` list is complete.
+- Live updates now refresh releases, documents, the roadmap, the calendar and time logs.
+- Rate limits on the new heavier screens; demo data for releases, components, checklists, time, a blocker, a roadmap epic and document folders (Engineering space in the demo workspace).
+- `docs/work-items/JIRA-PARITY.md` lists every Jira Software feature as built, partial or out of scope.
+- Browser tests for releases, time tracking, roadmap, calendar, documents (including dragging), dashboards, cross-workspace attempts and accessibility in light and dark.
+- ADR-067.
+
 ## 2026-10-16 - Time tracking, roadmap and calendar (W12)
 
 - **Time tracking:** planned and remaining time on every item, a Log time form (like 1h 30m, with a day and a note), and the list of what was logged. Remaining time follows the logs.

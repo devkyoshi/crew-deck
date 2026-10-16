@@ -69,7 +69,7 @@ export async function timeRoadmapRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   r.post(
     '/items/:id/worklogs',
-    { preHandler: requireAuth, schema: { params: idParam, body: logBody } },
+    { preHandler: requireAuth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { params: idParam, body: logBody } },
     async (req) => {
       const actor = actorOf(req);
       const b = req.body;
@@ -184,7 +184,7 @@ export async function timeRoadmapRoutes(app: FastifyInstance, deps: AuthDeps) {
   // ---- Roadmap --------------------------------------------------------------------------------------------
 
   /** Epics and versions with their dates and progress, for the timeline. */
-  r.get('/spaces/:id/roadmap', { preHandler: requireAuth, schema: { params: idParam } }, async (req) => {
+  r.get('/spaces/:id/roadmap', { preHandler: requireAuth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { params: idParam } }, async (req) => {
     const actor = actorOf(req);
     return withTenant(deps.db, actor.orgId, async (t) => {
       const space = await resolveSpace(t, actor, req.params.id);
@@ -240,6 +240,7 @@ export async function timeRoadmapRoutes(app: FastifyInstance, deps: AuthDeps) {
     '/spaces/:id/calendar',
     {
       preHandler: requireAuth,
+      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
       schema: { params: idParam, querystring: z.object({ from: date, to: date }) },
     },
     async (req) => {

@@ -62,7 +62,7 @@ export default function SpaceLayout({
 
   if (query.isPending) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-label="Loading space">
+      <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading space">
         <Skeleton className="h-14 w-72" />
         <Skeleton className="h-10 w-80" />
         <Skeleton className="h-48 w-full" />

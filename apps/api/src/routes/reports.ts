@@ -19,6 +19,7 @@ export async function reportRoutes(app: FastifyInstance, deps: AuthDeps) {
     '/spaces/:id/reports',
     {
       preHandler: requireAuth,
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
       schema: { params: idParam, querystring: z.object({ days: z.coerce.number().int().min(7).max(90).default(30) }) },
     },
     async (req) => {

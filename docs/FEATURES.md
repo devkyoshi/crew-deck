@@ -77,6 +77,7 @@ Every feature in the product, by area. **Status:** Built = in the app today; Pla
 | Backlog and sprints (Scrum) (W6)                                     | Built   | `scrum_sprints`    |
 | Burndown and sprint report (W6)                                      | Built   | `burndown_reports` |
 | Live updates on boards, lists, backlogs and items (W7)               | Built   |                    |
+| Personal dashboards with tiles (W13) | Built | |
 | Time tracking, roadmap timeline, due-date calendar (W12) | Built | `roadmap` (timeline) |
 | Flow reports: cumulative flow, created vs resolved, cycle time, velocity (W11) | Built | `advanced_reports` |
 | Space documents: folders and shared files per space (W14) | Built | `max_attachment_mb`, `storage_mb` |

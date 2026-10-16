@@ -1,6 +1,6 @@
 # Work Items and Kanban: progress
 
-**Last updated:** 2026-10-15 (W8 built; W1 to W8 awaiting owner review; W9 to W13 planned, see `PHASES.md`)
+**Last updated:** 2026-10-16 (W1 to W14 all built and awaiting owner review; scope of the Jira parity work is in `JIRA-PARITY.md`)
 **Current phase:** W1 to W7 all in Review. Next step: the owner tries the whole module (see the review list in the log entry of 2026-10-15) and marks phases Done
 **Foundation prerequisite (Phases 0 to 5 of `docs/BRIEF.md`):** complete. Phases 0 to 9 are all shipped (HEAD at the time of writing: `0a311bb`).
 
@@ -28,7 +28,7 @@
 | W14 | Space documents | Review | 2026-10-16 | | | Folder library per space: nested folders, upload, download, rename, move, delete |
 | W11 | Flow and reports | Review | 2026-10-16 | | | Velocity, cumulative flow, cycle time, created vs resolved; computed from history |
 | W12 | Roadmap, time tracking, calendar | Review | 2026-10-16 | | | Timeline of epics and releases, time logs and estimates, due-date calendar |
-| W13 | Dashboards, parity sweep, hardening | Not started | | | | Gadget dashboards, JIRA-PARITY.md, a11y, e2e |
+| W13 | Dashboards, parity sweep, hardening | Review | 2026-10-16 | | | Dashboards, JIRA-PARITY.md, shortcuts, rate limits, live events, demo seed, browser tests |
 
 ## Pricing track (runs alongside the phases, see `PRICING-GATES.md`)
 
@@ -57,6 +57,8 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 - The brief mentions SendGrid; the platform uses Brevo through `apps/api/src/email/`. Use the existing sender.
 
 ## Log (newest first)
+
+- 2026-10-16: W13 built and set to Review; with it every planned phase (W1 to W14) is built. **Dashboards:** collection `dashboards`, `routes/dashboard.ts` (`GET`/`PUT`/`DELETE /me/dashboard`), web `/dashboard` with five tile types and move/remove buttons. **Hardening:** shortcuts `T`, `D`, `V` and the `?` list; live events refresh releases, documents, roadmap, calendar, reports and time logs; rate limits on reports, roadmap, calendar, work logs, version create and folder create; the route protection test covers all new routes. **Demo seed:** `seedWorkExtras` (versions, components, checklist and template, work logs, a blocker, a roadmap epic, a status history, folders) with `seed-demo.test.ts` (runs twice, same counts). **Browser tests:** `e2e/work-extended.spec.ts` (7: releases, time and roadmap and calendar, documents with a real mouse drag, dashboard, cross-workspace attempts, accessibility in light and dark). Accessibility fixes found: the roadmap "Today" label contrast and a missing role on the space loading placeholder. `JIRA-PARITY.md` written. Tests: `dashboard.test.ts` (2). Final checks: API 539 tests pass; full browser run 82 of 92 passed, the 10 failures being 8 already known before this work (6 CRM specs and the demo-flow walk need the CRM module on in the dev database, plus the signed-out sign-up accessibility check) and 2 caused by the new screens, both fixed in the tests (an "Add" button now matched twice in the item panel; the stale-drag test now takes the live stream down, because live updates keep the board fresh, which is why it stopped producing a conflict).
 
 - 2026-10-16: W12 built and set to Review. **API:** item fields `startDate`, `originalMinutes`, `remainingMinutes`, collection `worklogs`, `routes/time-roadmap.ts` (work logs, `GET /spaces/:id/roadmap`, `GET /spaces/:id/calendar`), `can()` actions `worklog.add`, `worklog.editOwn`, `worklog.deleteAny`, feature `roadmap` (Team and up). **Web:** Time tracking section in the item panel (`time-section.tsx`), start date field, Roadmap tab (`roadmap-view.tsx`: drag, resize, keyboard, dialog, table), Calendar tab (`calendar-view.tsx`). Tests: `time-roadmap.test.ts` (7). Review list: log time on an item and watch Remaining; open Roadmap on a Team workspace, drag an epic bar, resize it, move it with arrow keys; open Calendar and click an item.
 

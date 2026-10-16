@@ -48,7 +48,7 @@ test('create, open, edit and organise work items on a space board', async ({ pag
   await expect(panel.getByText('Saved')).toBeVisible();
 
   // Add a subtask from the panel.
-  await panel.getByRole('button', { name: 'Add' }).click();
+  await panel.getByRole('region', { name: 'Subtasks' }).getByRole('button', { name: 'Add' }).click();
   await panel.getByLabel('Subtask title').fill('Draft outline');
   await panel.getByLabel('Subtask title').press('Enter');
   await expect(panel.getByText('Draft outline')).toBeVisible();

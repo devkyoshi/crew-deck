@@ -348,6 +348,11 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-067: Dashboards store the layout, not the data (W13)
+
+- A dashboard is a person's own ordered list of up to twelve tiles (assigned to me, a saved filter, sprint health, release progress, created against resolved). Only the choice is stored (`dashboards`, one row per person); each tile reads the normal endpoints when the page opens, so it always follows the person's current access and plan, and a tile that points at something no longer visible says so instead of failing.
+- Pinning a space needs the person to be able to open it. Tiles are reordered with buttons (no drag), which keeps them usable from the keyboard. There are no shared dashboards: a shared saved filter is how a team looks at the same list.
+
 ## ADR-066: Time is minutes, the roadmap is epics and releases with dates (W12)
 
 - Planned and remaining time are whole minutes on the item; time worked is a work log (user, day, minutes, note) that cannot be dated in the future. Logging time lowers the remaining time by what was worked unless the person says what is left; editing or deleting a log moves it back. Members log time (and edit their own); space admins can delete any log. Time spent is the sum of an item's logs and is read with the item.

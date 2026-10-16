@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
     label: 'Workspace',
     items: [
       { title: 'Home', href: '/', icon: Home },
+      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { title: 'My work', href: '/my-work', icon: ListTodo },
       { title: 'My day', href: '/my-day', icon: CalendarCheck, needsCheckin: true },
       { title: 'Team', href: '/team', icon: TeamIcon, needsCheckin: true },

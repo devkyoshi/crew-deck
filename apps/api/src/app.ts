@@ -31,6 +31,7 @@ import { workSettingsRoutes } from './routes/work-settings.js';
 import { statusRoutes } from './routes/statuses.js';
 import { boardRoutes } from './routes/board.js';
 import { workItemRoutes } from './routes/work-items.js';
+import { dashboardRoutes } from './routes/dashboard.js';
 import { timeRoadmapRoutes } from './routes/time-roadmap.js';
 import { reportRoutes } from './routes/reports.js';
 import { spaceDocRoutes } from './routes/space-docs.js';
@@ -151,6 +152,7 @@ export function buildApp({
   app.register(boardRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(workItemRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(workWorkflowRoutes, { prefix: '/api/v1', ...authDeps });
+  app.register(dashboardRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(timeRoadmapRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(reportRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(versionRoutes, { prefix: '/api/v1', ...authDeps });

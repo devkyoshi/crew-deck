@@ -316,7 +316,7 @@ export function RoadmapView() {
                 style={{ left: todayX }}
                 aria-hidden
               >
-                <span className="absolute top-1 left-1 rounded bg-red-500 px-1 text-[10px] font-semibold text-white">
+                <span className="absolute top-1 left-1 rounded bg-red-700 px-1 text-[10px] font-semibold text-white">
                   Today
                 </span>
               </div>

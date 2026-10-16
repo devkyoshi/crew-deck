@@ -412,7 +412,7 @@ Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised 
 - Time tracking: original and remaining estimate, work logs (`worklogs`), roll-ups on epics. `can()` actions `worklog.add`, `worklog.editOwn`, `worklog.deleteAny`.
 - Calendar view of due dates.
 
-### W13: Dashboards, parity sweep, hardening
+### W13: Dashboards, parity sweep, hardening (built)
 
 - Per-user dashboards from a fixed set of gadgets (assigned to me, created vs resolved, sprint health, saved filter results, version progress).
 - `JIRA-PARITY.md`: a row per Jira Software feature (Built, Partial, Out of scope) with where it lives in the app.

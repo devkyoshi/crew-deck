@@ -726,6 +726,113 @@ async function seedSprints(ctx: Ctx, spaceId: string) {
   }
 }
 
+/**
+ * Releases, components, checklists, time logs, a blocker, epic dates, document folders and a status
+ * history for the Engineering space, so the newer screens (Releases, Roadmap, Calendar, Reports,
+ * Documents, dashboards) have something to show.
+ */
+async function seedWorkExtras(ctx: Ctx, spaceId: string) {
+  const { t } = ctx;
+  if (await t.versions.exists({ spaceId })) return;
+  const items = await t.workItems.find({ spaceId, deletedAt: null }, { sort: { number: 1 } });
+  const byTitle = new Map(items.map((i) => [i.title, i]));
+  const item = (title: string) => byTitle.get(title)!;
+  const statuses = await t.spaceStatuses.find({ spaceId });
+  const cat = new Map(statuses.map((st) => [st.id, st]));
+
+  const released = await t.versions.insert({
+    spaceId, name: '1.0', nameLower: '1.0', description: 'The first public release.',
+    startDate: inDays(-40), releaseDate: inDays(-10), state: 'released', releasedAt: daysAgo(10), createdAt: daysAgo(40),
+  });
+  const next = await t.versions.insert({
+    spaceId, name: '1.1', nameLower: '1.1', description: 'Faster checkout and fewer payment bugs.',
+    startDate: inDays(-5), releaseDate: inDays(21), state: 'unreleased', releasedAt: null, createdAt: daysAgo(6),
+  });
+  const payments = await t.components.insert({
+    spaceId, name: 'Payments', nameLower: 'payments', description: 'Cards, wallets and refunds.',
+    leadId: ctx.userId('priya'), defaultAssigneeId: ctx.userId('priya'), createdAt: daysAgo(30),
+  });
+  const platform = await t.components.insert({
+    spaceId, name: 'Platform', nameLower: 'platform', description: 'CI, tooling and infrastructure.',
+    leadId: ctx.userId('ben'), defaultAssigneeId: ctx.userId('ben'), createdAt: daysAgo(30),
+  });
+  for (const [title, v, c] of [
+    ['Set up error tracking', released.id, platform.id],
+    ['Let customers save a card for next time', next.id, payments.id],
+    ['Guest checkout without an account', next.id, payments.id],
+    ['Payment page crashes with more than twenty line items', next.id, payments.id],
+    ['Move CI to the new runners', next.id, platform.id],
+  ] as const) {
+    await t.workItems.updateOne({ id: item(title).id }, { fixVersionIds: [v], componentIds: [c] });
+  }
+  await t.workItems.updateOne({ id: item('Payment page crashes with more than twenty line items').id }, { affectsVersionIds: [released.id] });
+
+  // Roadmap: the epic has dates, with time planned on its stories.
+  await t.workItems.updateOne({ id: item('Checkout redesign').id }, { startDate: inDays(-20), dueDate: inDays(25) });
+  await t.workItems.updateOne({ id: item('Let customers save a card for next time').id }, { originalMinutes: 960, remainingMinutes: 420 });
+  await t.workItems.updateOne({ id: item('Guest checkout without an account').id }, { originalMinutes: 480, remainingMinutes: 480 });
+  for (const [who, mins, ago, note] of [
+    ['priya', 240, 6, 'Provider sandbox and token flow'],
+    ['priya', 180, 4, 'Saved cards table and API'],
+    ['ben', 120, 3, 'Migration and review'],
+  ] as const) {
+    await t.worklogs.insert({
+      spaceId, itemId: item('Let customers save a card for next time').id, userId: ctx.userId(who),
+      minutes: mins, date: iso(daysAgo(ago)), note, createdAt: daysAgo(ago),
+    });
+  }
+
+  // A dependency and a checklist.
+  await t.workItemLinks.insert({
+    fromItemId: item('Payment page crashes with more than twenty line items').id,
+    toItemId: item('Let customers save a card for next time').id,
+    linkType: 'blocks', createdBy: ctx.owner,
+  });
+  await t.workItems.updateOne({ id: item('Move CI to the new runners').id }, {
+    checklist: [
+      { id: 'c1', text: 'Provision the runners', done: true },
+      { id: 'c2', text: 'Move the build job', done: true },
+      { id: 'c3', text: 'Move the deploy job', done: false },
+      { id: 'c4', text: 'Switch off the old runners', done: false },
+    ],
+  });
+  await t.checklistTemplates.insert({
+    spaceId, name: 'Release steps', nameLower: 'release steps',
+    items: ['Freeze the branch', 'Run the regression suite', 'Tag the release', 'Write the release notes', 'Announce it'],
+    createdAt: daysAgo(20),
+  });
+
+  // Status history, so cumulative flow and cycle time have shape: items were created earlier and moved on.
+  const inProgress = statuses.find((st) => st.category === 'in_progress')!;
+  const done = statuses.find((st) => st.category === 'done')!;
+  for (const [n, i] of items.filter((x) => cat.get(x.statusId)?.category === 'done' && x.type !== 'epic').entries()) {
+    const created = daysAgo(18 - n * 2);
+    const started = daysAgo(12 - n * 2);
+    const finished = daysAgo(3 + n);
+    await t.workItems.updateOne({ id: i.id }, { createdAt: created, resolvedAt: finished });
+    const from = (st: { id: string; name: string; category: string }) => ({ id: st.id, name: st.name, category: st.category });
+    const todo = statuses.find((st) => st.category === 'todo')!;
+    for (const [a, b, at] of [[todo, inProgress, started], [inProgress, done, finished]] as const) {
+      await t.activityEvents.insert({ itemId: i.id, spaceId, actorId: ctx.owner, kind: 'moved', field: 'status', oldValue: from(a), newValue: from(b), createdAt: at });
+    }
+  }
+  for (const [n, i] of items.filter((x) => cat.get(x.statusId)?.category === 'in_progress' && x.type !== 'epic').entries()) {
+    await t.workItems.updateOne({ id: i.id }, { createdAt: daysAgo(9 - n) });
+    const todo = statuses.find((st) => st.category === 'todo')!;
+    await t.activityEvents.insert({
+      itemId: i.id, spaceId, actorId: ctx.owner, kind: 'moved', field: 'status',
+      oldValue: { id: todo.id, name: todo.name, category: 'todo' }, newValue: { id: inProgress.id, name: inProgress.name, category: 'in_progress' },
+      createdAt: daysAgo(5 - n),
+    });
+  }
+
+  // Documents: a small folder tree (the files themselves are uploaded by people).
+  const root = await t.spaceFolders.insert({ spaceId, parentId: null, name: 'Specs', nameLower: 'specs', createdBy: ctx.owner, createdAt: daysAgo(15) });
+  await t.spaceFolders.insert({ spaceId, parentId: root.id, name: 'Checkout', nameLower: 'checkout', createdBy: ctx.owner, createdAt: daysAgo(14) });
+  await t.spaceFolders.insert({ spaceId, parentId: null, name: 'Contracts', nameLower: 'contracts', createdBy: ctx.owner, createdAt: daysAgo(15) });
+  await t.spaceFolders.insert({ spaceId, parentId: null, name: 'Runbooks', nameLower: 'runbooks', createdBy: ctx.owner, createdAt: daysAgo(15) });
+}
+
 async function seedAcme(db: Db, passwordHash: string) {
   const ctx = await ctxFor(db, 'acme');
   if (!ctx) throw new Error('Run the base seed first (the acme workspace is missing).');
@@ -741,6 +848,7 @@ async function seedAcme(db: Db, passwordHash: string) {
     await seedItems(ctx, spaceIds.get(key)!, items, ctx.owner);
   }
   await seedSprints(ctx, spaceIds.get('APP')!);
+  await seedWorkExtras(ctx, spaceIds.get('ENG')!);
   await seedStars(ctx, [
     ['owner', 'ENG'],
     ['owner', 'OPS'],

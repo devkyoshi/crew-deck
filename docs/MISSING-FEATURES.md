@@ -53,6 +53,7 @@ summary, S3 storage, upgrade notice). Known gaps now:
 - **CSV export** is capped at 5,000 rows.
 - **Notifications** have no push notifications; emails need a Brevo key.
 - **Workflow rules** apply to moving between statuses only; they do not yet require fields or comments on a move.
+- **Dashboards** are personal; there are no shared dashboards or tile types beyond the five.
 - **Time tracking** has no timesheets across items or people and no approval of time; the roadmap has no dependency lines between epics.
 - **Reports** do not yet split by assignee, label or epic, and cannot be exported.
 - **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
