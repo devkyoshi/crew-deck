@@ -338,7 +338,7 @@ export function DocumentsView() {
           {dragging ? (
             <div
               aria-hidden
-              className="bg-card animate-in zoom-in-90 fade-in flex max-w-64 rotate-2 cursor-grabbing items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-medium shadow-xl ring-1 ring-black/5 duration-150 motion-reduce:rotate-0 motion-reduce:animate-none"
+              className="bg-card animate-in zoom-in-90 fade-in flex w-max max-w-64 rotate-2 cursor-grabbing items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-medium shadow-xl ring-1 ring-black/5 duration-150 motion-reduce:rotate-0 motion-reduce:animate-none"
             >
               {dragging.kind === 'folder' ? (
                 <Folder className="size-5 shrink-0 text-amber-600" />
