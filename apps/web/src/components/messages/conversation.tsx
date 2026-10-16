@@ -123,6 +123,13 @@ export function Conversation({ channelId }: { channelId: string }) {
 
   const focusSeq = Number(search.get('m')) || null;
 
+  // A link to a thread reply (from Threads, a notification or search) opens that thread's panel.
+  const threadParam = search.get('thread');
+  const { openThread } = panel;
+  useEffect(() => {
+    if (threadParam) openThread(channelId, threadParam);
+  }, [channelId, threadParam, openThread]);
+
   // Where "New messages" starts: the cursor as it was when this conversation was opened.
   const initialRead = useRef<{ id: string; seq: number } | null>(null);
   if (channel && initialRead.current?.id !== channelId && channel.lastReadSeq !== undefined) {

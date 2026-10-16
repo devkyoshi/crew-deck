@@ -126,6 +126,8 @@ export interface MyChannelDTO extends ChannelDTO {
   notificationLevel: NotificationLevel;
   mutedUntil: string | null;
   isStarred: boolean;
+  /** The person's own sidebar section this channel sits in, if any. */
+  sectionId: string | null;
   lastReadSeq: number;
   unread: number;
   /** Unread messages that mention me, @channel or @here. */
@@ -145,6 +147,7 @@ export const C2S = {
   readUpdate: 'read:update',
   reactionToggle: 'reaction:toggle',
   presenceUpdate: 'presence:update',
+  viewUpdate: 'view:update',
   sync: 'sync',
 } as const;
 
@@ -158,6 +161,7 @@ export const S2C = {
   typing: 'typing',
   presenceChanged: 'presence:changed',
   channelUpdated: 'channel:updated',
+  notificationNew: 'notification:new',
   channelMembership: 'channel:membership',
   readSynced: 'read:synced',
   error: 'error',
@@ -192,6 +196,8 @@ export const messageDeleteSchema = z.object({ messageId: uuid });
 export const typingSchema = z.object({ channelId: uuid });
 export const readUpdateSchema = z.object({ channelId: uuid, seq: z.number().int().min(0) });
 export const presenceUpdateSchema = z.object({ state: z.enum(['active', 'away']) });
+/** The conversation the person is looking at right now (window focused), or null. */
+export const viewUpdateSchema = z.object({ channelId: uuid.nullable() });
 export const syncSchema = z.object({
   channels: z.array(z.object({ channelId: uuid, lastSeq: z.number().int().min(0) })).max(200),
 });
@@ -241,4 +247,42 @@ export interface SendResult {
   message: MessageDTO;
   duplicate: boolean;
   notInChannel: PersonDTO[];
+}
+
+/** A notification pushed to the person's own tabs. `silent` means do not disturb or quiet hours: no desktop alert. */
+export interface NotificationEvent {
+  id: string;
+  type: string;
+  text: string;
+  channelId: string | null;
+  href: string;
+  silent: boolean;
+  createdAt: string;
+}
+
+export const QUIET_HOURS_DEFAULT = { enabled: false, start: '22:00', end: '07:00' } as const;
+export const EMAIL_DELAY_DEFAULT_MINUTES = 15;
+
+export interface SidebarSectionDTO {
+  id: string;
+  name: string;
+  position: number;
+}
+
+/** One search hit: the message, its channel, and where the words matched. */
+export interface SearchHit {
+  message: MessageDTO;
+  channel: { id: string; type: ChannelType; name: string | null };
+  /** The text around the first match, split so the UI can highlight without parsing HTML. */
+  snippet: { text: string; match: boolean }[];
+}
+
+export interface ParsedSearch {
+  text: string;
+  from: string[];
+  in: string[];
+  before: string | null;
+  after: string | null;
+  has: ('file' | 'link')[];
+  is: 'thread'[];
 }

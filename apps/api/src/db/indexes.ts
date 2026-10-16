@@ -226,6 +226,7 @@ const INDEXES: Record<string, Ix[]> = {
   ],
   notifications: [
     ['id', { id: 1 }, U],
+    ['email_due', { emailDueAt: 1, emailChecked: 1 }, { partialFilterExpression: { emailDueAt: { $type: 'date' } } }],
     ['user_time', { orgId: 1, userId: 1, createdAt: -1 }],
     ['unread', { orgId: 1, userId: 1, readAt: 1 }],
     [
@@ -267,6 +268,8 @@ const INDEXES: Record<string, Ix[]> = {
     ['channel_seq', { orgId: 1, channelId: 1, seq: 1 }, U],
     // A retried send finds the message it already created.
     ['thread', { orgId: 1, threadRootId: 1, seq: 1 }, { partialFilterExpression: { threadRootId: { $type: 'string' } } }],
+    // Full-text search over message text (no stemming, so names and codes match as typed).
+    ['text', { bodyText: 'text' }, { default_language: 'none' }],
     ['client_msg', { orgId: 1, channelId: 1, clientMsgId: 1 }, { unique: true, partialFilterExpression: { clientMsgId: { $type: 'string' } } }],
   ],
   message_edits: [
@@ -300,6 +303,10 @@ const INDEXES: Record<string, Ix[]> = {
     ['message', { orgId: 1, messageId: 1 }],
     ['channel', { orgId: 1, channelId: 1, createdAt: -1 }],
     ['pending', { messageId: 1, createdAt: 1 }],
+  ],
+  sidebar_sections: [
+    ['id', { id: 1 }, U],
+    ['user', { orgId: 1, userId: 1, position: 1 }],
   ],
   link_previews: [
     ['id', { id: 1 }, U],

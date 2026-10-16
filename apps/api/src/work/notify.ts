@@ -31,6 +31,11 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   'sla_breached',
   'sprint_started',
   'sprint_completed',
+  'dm',
+  'mention',
+  'thread_reply',
+  'channel_message',
+  'added_to_channel',
 ];
 
 /** What each event type does when the person has not chosen. */
@@ -45,6 +50,12 @@ export const DEFAULT_PREFS: Record<NotificationType, { inApp: boolean; email: bo
   sla_breached: { inApp: true, email: true },
   sprint_started: { inApp: true, email: false },
   sprint_completed: { inApp: true, email: false },
+  // Messaging: only direct messages and mentions are emailed (after the email delay, if still unseen).
+  dm: { inApp: true, email: true },
+  mention: { inApp: true, email: true },
+  thread_reply: { inApp: true, email: false },
+  channel_message: { inApp: true, email: false },
+  added_to_channel: { inApp: true, email: false },
 };
 
 export const EMAIL_BATCH_MINUTES = 5;
@@ -200,7 +211,7 @@ export async function notifyOne(
 }
 
 /** Adds a notification to the person's open email batch (or starts one, due in a few minutes). */
-async function queueEmail(t: TenantDb, userId: string, notificationId: string) {
+export async function queueEmail(t: TenantDb, userId: string, notificationId: string) {
   const now = new Date();
   let dueAt = new Date(now.getTime() + EMAIL_BATCH_MINUTES * 60_000);
   if (await digestOf(t, userId)) {

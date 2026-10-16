@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | M1 | Real-time core | Review | Built and tested, awaiting owner sign-off. Not committed yet. Details below |
 | M2 | Rich messaging | Review | Built and tested, awaiting owner sign-off. Details below |
-| M3 | Search and notifications | Not started | `$text` index behind a `SearchService`, notifications, Threads page, sections, quick switcher |
+| M3 | Search and notifications | Review | Built and tested, awaiting owner sign-off. Details below |
 | M4 | Platform integration | Not started | |
 | M5 | Admin and extensibility | Not started | |
 | M6 | Hardening | Not started | |
@@ -22,6 +22,14 @@
 - **Gateway** (`apps/realtime`): Socket.IO, handshake by tenant host and session cookie, server-chosen rooms, `message:send` (acknowledged after storing), `message:edit`, `message:delete`, `read:update`, `typing:start`, `presence:update`, `sync`; revoke on logout, deactivation and role change; five-minute session re-check.
 - **Web** (`apps/web/src/components/messages`, `apps/web/src/app/(app)/messages`): conversation list, virtualized conversation, composer, message rows, pending and failed states, details panel, new message, create channel (four steps), channel browser, connection banner, typing indicator, skeletons and empty states, phone layout. Components are on the `/design` page.
 - **Tests:** `apps/api/test/messaging.test.ts` (34), `apps/api/test/realtime.test.ts` (19, runs the gateway with real socket clients, including the cross-workspace attack cases, reconnect sync, removed members and deactivation), `apps/web/src/lib/messaging-logic.test.ts` (16), `e2e/messaging.spec.ts` (browser, including an accessibility scan).
+
+## M3: what was built
+
+- **Search:** `apps/api/src/messaging/search.ts` (`SearchService` with a Mongo text implementation, the query language, snippets), `GET /search/messages` and `/search/files`; web `messages/search`.
+- **Notifications:** `apps/api/src/messaging/notify.ts` (who is told and why, the unseen-email check), `quiet.ts` (quiet hours), viewing and do-not-disturb in `presence.ts`, the `view:update` and `notification:new` events, new notification kinds and preference fields (quiet hours, email delay, desktop), reading a conversation clears its notifications.
+- **Web:** Threads, Mentions and reactions, Starred and custom sections (drag or menu), conversation row menu (star, move, mute), do not disturb and status, quick switcher in Ctrl+K, Alt+Shift+Up/Down and Esc shortcuts, desktop notifications, notification settings.
+- Tests: `apps/api/test/messaging-m3.test.ts` (25), three more gateway tests, `e2e/messaging-m3.spec.ts` (9), `apps/web/src/lib/search-tokens.test.ts`.
+- **Not done in M3 (and why):** comfortable/compact density; the "Mentions and reactions" list is not live (it refreshes when opened); email digest for chat uses the existing daily-summary switch; offline desktop push (needs a service worker, mobile push is a later phase).
 
 ## M2: what was built
 
@@ -53,5 +61,6 @@
 
 ## Log (newest first)
 
+- 2026-10-16: M3 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M2 built and verified (typecheck, lint, API, gateway and logic tests, browser tests). Waiting for owner review.
 - 2026-10-16: M1 built and verified (typecheck, lint, API tests, gateway tests, web tests, browser tests). Waiting for owner review.

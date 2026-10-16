@@ -23,12 +23,32 @@ export async function setRead(ctx: MessagingCtx, actor: Actor, channelId: string
   );
   const cursor = await t.readCursors.findOne({ channelId, userId: actor.userId });
   const lastReadSeq = cursor?.lastReadSeq ?? target;
+  await clearChatNotifications(t, actor.userId, channelId, lastReadSeq);
   // Other tabs and devices of this person.
   ctx.events.toUser(actor.orgId, actor.userId, S2C.readSynced, {
     channelId,
     seq: lastReadSeq,
   } satisfies ReadSyncedEvent);
   return { channelId, lastReadSeq };
+}
+
+/** Reading a conversation marks its chat notifications (up to what was read) as read. */
+export async function clearChatNotifications(
+  t: ReturnType<MessagingCtx['db']['tenant']>,
+  userId: string,
+  channelId: string,
+  upToSeq: number,
+) {
+  const open = await t.notifications.find(
+    { userId, readAt: null, 'data.channelId': channelId } as never,
+    {
+      projection: { id: 1, data: 1 },
+    },
+  );
+  const ids = open
+    .filter((n) => Number((n.data as { seq?: string }).seq ?? 0) <= upToSeq)
+    .map((n) => n.id);
+  if (ids.length) await t.notifications.updateMany({ id: { $in: ids } }, { readAt: new Date() });
 }
 
 /** Moves the cursor back so this message and everything after it count as unread. */
@@ -60,6 +80,7 @@ export async function markAllRead(ctx: MessagingCtx, actor: Actor) {
       { $max: { lastReadSeq: c.lastSeq }, $set: { lastReadAt: new Date() } },
       { upsert: true },
     );
+    await clearChatNotifications(t, actor.userId, c.id, c.lastSeq);
     ctx.events.toUser(actor.orgId, actor.userId, S2C.readSynced, {
       channelId: c.id,
       seq: c.lastSeq,

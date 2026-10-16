@@ -34,13 +34,31 @@ export function describeNotification(n: Pick<NotificationDoc, 'type' | 'data'>, 
       return `${who} started ${d.sprint ?? 'a sprint'} in ${d.spaceKey}`;
     case 'sprint_completed':
       return `${who} completed ${d.sprint ?? 'a sprint'} in ${d.spaceKey}`;
+    case 'dm':
+      return `${who} sent you a message${d.excerpt ? `: “${d.excerpt}”` : ''}`;
+    case 'mention':
+      return `${who} mentioned you in ${place(d)}${d.excerpt ? `: “${d.excerpt}”` : ''}`;
+    case 'thread_reply':
+      return `${who} replied in a thread in ${place(d)}${d.excerpt ? `: “${d.excerpt}”` : ''}`;
+    case 'channel_message':
+      return `${who} posted in ${place(d)}${d.excerpt ? `: “${d.excerpt}”` : ''}`;
+    case 'added_to_channel':
+      return `${who} added you to ${place(d)}`;
   }
 }
+
+/** Where a chat notification happened, in words. */
+const place = (d: Record<string, string | null | undefined>) =>
+  d.channelType === 'public' || d.channelType === 'private' ? `#${d.channelName}` : 'a direct message';
 
 /** The link to the thing a notification is about, on the workspace's own address. */
 export function linkFor(config: Pick<Config, 'TENANT_ORIGIN_TEMPLATE'>, slug: string, n: Pick<NotificationDoc, 'data'>) {
   const origin = config.TENANT_ORIGIN_TEMPLATE.replace('{slug}', slug);
   const d = n.data as Record<string, string | undefined>;
+  // Chat: straight to the message, opening its thread when it was a reply.
+  if (d.channelId) {
+    return `${origin}/messages/${d.channelId}${d.seq ? `?m=${d.seq}` : ''}${d.threadRootId ? `${d.seq ? '&' : '?'}thread=${d.threadRootId}` : ''}`;
+  }
   if (d.key && d.spaceKey) return `${origin}/spaces/${d.spaceKey}/items/${d.key}`;
   if (d.spaceKey) return `${origin}/spaces/${d.spaceKey}/backlog`;
   return `${origin}/notifications`;

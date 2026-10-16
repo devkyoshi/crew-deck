@@ -43,6 +43,15 @@ import {
   serveMessageFile,
 } from '../messaging/files.js';
 import type { StorageDriver } from '../storage/index.js';
+import { listActivity } from '../messaging/activity.js';
+import { mongoSearch } from '../messaging/search.js';
+import {
+  createSection,
+  deleteSection,
+  listSections,
+  renameSection,
+  saveOrder,
+} from '../messaging/sections.js';
 
 const id = z.object({ id: z.string().uuid() });
 const uuids = z.array(z.string().uuid()).min(1).max(200);
@@ -426,6 +435,70 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
     async (req) => ({
       files: await listChannelFiles(deps, actorOf(req), req.params.id, req.query.limit),
     }),
+  );
+
+  // ---- Search, activity and sidebar sections -------------------------------------------------------------
+
+  r.get(
+    '/search/messages',
+    {
+      ...pre,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: {
+        querystring: z.object({
+          q: z.string().max(500),
+          page: z.coerce.number().int().min(1).max(100).optional(),
+        }),
+      },
+    },
+    async (req) => mongoSearch.messages(ctx, actorOf(req), req.query.q, { page: req.query.page }),
+  );
+  r.get(
+    '/search/files',
+    {
+      ...pre,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: { querystring: z.object({ q: z.string().max(100) }) },
+    },
+    async (req) => ({ files: await mongoSearch.files(ctx, actorOf(req), req.query.q) }),
+  );
+  r.get('/me/activity', pre, async (req) => ({ items: await listActivity(ctx, actorOf(req)) }));
+
+  const sectionName = z.string().trim().min(1).max(40);
+  r.get('/me/sidebar-sections', pre, async (req) => ({
+    sections: await listSections(ctx, actorOf(req)),
+  }));
+  r.post(
+    '/me/sidebar-sections',
+    { ...pre, schema: { body: z.object({ name: sectionName }) } },
+    async (req, reply) => {
+      reply.status(201);
+      return { section: await createSection(ctx, actorOf(req), req.body.name) };
+    },
+  );
+  r.patch(
+    '/me/sidebar-sections/:id',
+    { ...pre, schema: { params: id, body: z.object({ name: sectionName }) } },
+    async (req) => ({
+      section: await renameSection(ctx, actorOf(req), req.params.id, req.body.name),
+    }),
+  );
+  r.delete('/me/sidebar-sections/:id', { ...pre, schema: { params: id } }, async (req, reply) => {
+    await deleteSection(ctx, actorOf(req), req.params.id);
+    return reply.status(204).send();
+  });
+  r.put(
+    '/me/sidebar-order',
+    {
+      ...pre,
+      schema: {
+        body: z.object({
+          sections: z.array(z.string().uuid()).max(20).optional(),
+          assign: z.record(z.string().uuid(), z.string().uuid().nullable()).optional(),
+        }),
+      },
+    },
+    async (req) => ({ sections: await saveOrder(ctx, actorOf(req), req.body) }),
   );
 
   // ---- Presence and status ------------------------------------------------------------------------

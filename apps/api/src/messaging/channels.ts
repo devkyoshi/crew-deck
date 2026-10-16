@@ -16,7 +16,9 @@ import { AppError, forbidden, notFound } from '../lib/errors.js';
 import { escapeRegex } from '../lib/pagination.js';
 import { can, type Actor } from '../permissions/can.js';
 import { channelResource, loadChannel, requireChannel } from './access.js';
-import type { MessagingCtx } from './context.js';
+import { runLater, type MessagingCtx } from './context.js';
+import { notifyAdded } from './notify.js';
+import { ownsSection } from './sections.js';
 import { channelDTO, peopleOf } from './dto.js';
 import { insertSystem, publishStored } from './messages.js';
 
@@ -153,6 +155,7 @@ export async function listMyChannels(ctx: MessagingCtx, actor: Actor): Promise<M
       notificationLevel: m.notificationLevel,
       mutedUntil: m.mutedUntil ? m.mutedUntil.toISOString() : null,
       isStarred: m.isStarred,
+      sectionId: m.sectionId,
       lastReadSeq: cursorOf.get(c.id) ?? 0,
       unread: unread.get(c.id) ?? 0,
       mentionCount: mentions.get(c.id) ?? 0,
@@ -243,6 +246,7 @@ export async function getChannel(
     notificationLevel: member.notificationLevel,
     mutedUntil: member.mutedUntil ? member.mutedUntil.toISOString() : null,
     isStarred: member.isStarred,
+    sectionId: member.sectionId,
     lastReadSeq,
     unread: unread.get(channel.id) ?? 0,
     mentionCount: mentions.get(channel.id) ?? 0,
@@ -392,7 +396,12 @@ export async function openDm(
           createdBy: actor.userId,
         });
         await tx.channelMembers.insert(
-          ids.map((userId) => ({ channelId: c.id, userId, role: 'member' as const })),
+          ids.map((userId) => ({
+            channelId: c.id,
+            userId,
+            role: 'member' as const,
+            notificationLevel: 'all' as const,
+          })),
         );
         return c;
       });
@@ -407,6 +416,7 @@ export async function openDm(
       channelId: channel.id,
       userId: actor.userId,
       role: 'member',
+      notificationLevel: 'all',
     });
     announceMembership(ctx, actor.orgId, actor.userId, channel.id, 'added');
   }
@@ -633,6 +643,7 @@ export async function addMembers(
           after: { userId },
         }),
       );
+      runLater(ctx, () => notifyAdded(ctx, actor.orgId, access.channel, userId, actor.userId));
     }
   }
   return { added };
@@ -736,7 +747,11 @@ export async function updateMyMembership(
   if (input.notificationLevel !== undefined) set.notificationLevel = input.notificationLevel;
   if (input.mutedUntil !== undefined) set.mutedUntil = input.mutedUntil;
   if (input.isStarred !== undefined) set.isStarred = input.isStarred;
-  if (input.sectionId !== undefined) set.sectionId = input.sectionId;
+  if (input.sectionId !== undefined) {
+    if (input.sectionId !== null && !(await ownsSection(ctx, actor, input.sectionId)))
+      throw notFound('Section');
+    set.sectionId = input.sectionId;
+  }
   if ((await t.channelMembers.updateOne({ channelId, userId: actor.userId }, set)) === 0)
     throw notFound('Channel');
 }

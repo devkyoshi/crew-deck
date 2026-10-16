@@ -1,13 +1,21 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NotificationRow } from '@/components/notifications/notification-row';
@@ -133,6 +141,12 @@ function Settings() {
           }
         />
       </div>
+      <MessagingSettings
+        quiet={prefs.data.quiet}
+        emailDelayMinutes={prefs.data.emailDelayMinutes}
+        desktop={prefs.data.desktop}
+        save={(body) => save.mutate(body, { onError: () => toast.error('Could not save that') })}
+      />
       <div className="bg-card overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">
           <caption className="text-muted-foreground p-3 text-left text-xs">
@@ -177,6 +191,129 @@ function Settings() {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+const DELAYS = [5, 15, 30, 60, 120];
+
+/** Messages: desktop alerts, quiet hours and how long an unseen message waits before it is emailed. */
+function MessagingSettings({
+  quiet,
+  emailDelayMinutes,
+  desktop,
+  save,
+}: {
+  quiet: { enabled: boolean; start: string; end: string };
+  emailDelayMinutes: number;
+  desktop: boolean;
+  save: (body: { quiet?: typeof quiet; emailDelayMinutes?: number; desktop?: boolean }) => void;
+}) {
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  useEffect(() => {
+    setPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+  }, []);
+  const turnOnDesktop = async (on: boolean) => {
+    if (!on) return save({ desktop: false });
+    if (typeof Notification === 'undefined')
+      return toast.error('This browser cannot show desktop notifications');
+    // Asked now, because the person just chose to turn it on (never on first load).
+    const result =
+      Notification.permission === 'default'
+        ? await Notification.requestPermission()
+        : Notification.permission;
+    setPermission(result);
+    if (result !== 'granted')
+      return toast.error(
+        'Desktop notifications are blocked. Allow them in your browser’s site settings.',
+      );
+    save({ desktop: true });
+  };
+  return (
+    <div className="bg-card divide-y rounded-xl border text-sm">
+      <div className="flex items-center justify-between gap-4 p-3">
+        <div>
+          <p className="font-medium">Desktop notifications</p>
+          <p className="text-muted-foreground text-xs">
+            {permission === 'denied'
+              ? 'Blocked in this browser. Allow notifications for this site to use them.'
+              : permission === 'unsupported'
+                ? 'This browser cannot show them.'
+                : 'A pop-up for new messages and mentions while this tab is in the background.'}
+          </p>
+        </div>
+        <Switch
+          aria-label="Desktop notifications"
+          checked={desktop && permission === 'granted'}
+          disabled={permission === 'denied' || permission === 'unsupported'}
+          onCheckedChange={(v) => void turnOnDesktop(v)}
+        />
+      </div>
+      <div className="space-y-3 p-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="font-medium">Quiet hours</p>
+            <p className="text-muted-foreground text-xs">
+              No desktop alerts or emails in this window (your timezone). Badges and the inbox still
+              update.
+            </p>
+          </div>
+          <Switch
+            aria-label="Quiet hours"
+            checked={quiet.enabled}
+            onCheckedChange={(v) => save({ quiet: { ...quiet, enabled: v } })}
+          />
+        </div>
+        {quiet.enabled && (
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2">
+              From
+              <Input
+                type="time"
+                value={quiet.start}
+                onChange={(e) =>
+                  e.target.value && save({ quiet: { ...quiet, start: e.target.value } })
+                }
+                className="h-8 w-28"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              Until
+              <Input
+                type="time"
+                value={quiet.end}
+                onChange={(e) =>
+                  e.target.value && save({ quiet: { ...quiet, end: e.target.value } })
+                }
+                className="h-8 w-28"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-4 p-3">
+        <div>
+          <p className="font-medium">Email delay</p>
+          <p className="text-muted-foreground text-xs">
+            A direct message or mention is emailed only if you have not seen it after this long.
+          </p>
+        </div>
+        <Select
+          value={String(emailDelayMinutes)}
+          onValueChange={(v) => save({ emailDelayMinutes: Number(v) })}
+        >
+          <SelectTrigger aria-label="Email delay" className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DELAYS.map((m) => (
+              <SelectItem key={m} value={String(m)}>
+                {m >= 60 ? `${m / 60} hour${m > 60 ? 's' : ''}` : `${m} minutes`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

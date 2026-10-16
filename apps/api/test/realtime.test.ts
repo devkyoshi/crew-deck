@@ -114,6 +114,7 @@ beforeAll(async () => {
       db: t.db,
       events: new RedisEventSink(t.redis),
       limiter: new RateLimiter(t.redis, { userMax: 30, orgMax: 100_000, windowMs: 60_000 }),
+      presence: new Presence(t.redis),
     },
     presence: new Presence(t.redis),
     limiter: new RateLimiter(t.redis),
@@ -540,12 +541,20 @@ describe('threads and reactions over the socket', () => {
       threadRootId: root.data.message.id,
     });
     expect(ack.ok).toBe(true);
-    expect(await newMsg).toMatchObject({ bodyText: 'First reply', threadRootId: root.data.message.id });
+    expect(await newMsg).toMatchObject({
+      bodyText: 'First reply',
+      threadRootId: root.data.message.id,
+    });
     expect(await summary).toMatchObject({ rootId: root.data.message.id, replyCount: 1 });
     // Threads do not nest, over the socket either.
     const reply = ack.ok ? (ack.data as Json).message : null;
     expect(
-      await emit(a, 'message:send', { channelId: general, clientMsgId: msgId(), body: doc('nested'), threadRootId: reply.id }),
+      await emit(a, 'message:send', {
+        channelId: general,
+        clientMsgId: msgId(),
+        body: doc('nested'),
+        threadRootId: reply.id,
+      }),
     ).toMatchObject({ ok: false, code: 'VALIDATION' });
   });
 
@@ -557,19 +566,93 @@ describe('threads and reactions over the socket', () => {
     const heard = next(a, 'reaction:updated');
     const ack = await emit(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: '🎉' });
     expect(ack).toMatchObject({ ok: true });
-    expect(await heard).toMatchObject({ messageId: m.data.message.id, reactions: [{ emoji: '🎉', count: 1 }] });
+    expect(await heard).toMatchObject({
+      messageId: m.data.message.id,
+      reactions: [{ emoji: '🎉', count: 1 }],
+    });
     // Toggling again removes it.
-    const off = await emit<Json>(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: '🎉' });
+    const off = await emit<Json>(b, 'reaction:toggle', {
+      messageId: m.data.message.id,
+      emoji: '🎉',
+    });
     expect(off.ok && off.data.reactions).toEqual([]);
-    expect(await emit(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: 'nope' })).toMatchObject({ ok: false, code: 'VALIDATION' });
+    expect(
+      await emit(b, 'reaction:toggle', { messageId: m.data.message.id, emoji: 'nope' }),
+    ).toMatchObject({ ok: false, code: 'VALIDATION' });
 
     // Another workspace cannot react to this message, and never hears about reactions here.
     const other = await createOrg('rtr');
-    const intruder = await ready(client(other.slug, await signInAs(t.app, other.slug, other.owner)));
+    const intruder = await ready(
+      client(other.slug, await signInAs(t.app, other.slug, other.owner)),
+    );
     const spy = record(intruder, 'reaction:updated');
-    expect(await emit(intruder, 'reaction:toggle', { messageId: m.data.message.id, emoji: '👍' })).toMatchObject({ ok: false });
+    expect(
+      await emit(intruder, 'reaction:toggle', { messageId: m.data.message.id, emoji: '👍' }),
+    ).toMatchObject({ ok: false });
     await emit(a, 'reaction:toggle', { messageId: m.data.message.id, emoji: '👀' });
     await quiet(400);
+    expect(spy).toEqual([]);
+  });
+});
+
+describe('notifications over the socket', () => {
+  const ofBob = async (channelId: string) =>
+    t.db
+      .tenant(orgId)
+      .notifications.find({ userId: u.bob!.id, 'data.channelId': channelId } as never);
+
+  it('pushes a notification to the person, and stops while their tab reports viewing that conversation', async () => {
+    const dm = (await rest('ann', 'POST', '/dms', { userIds: [u.bob!.id] })).json().channel.id;
+    const a = await ready(client(slug, c.ann));
+    const b = await ready(client(slug, c.bob));
+
+    // Not viewing: the notification arrives live, silent=false.
+    const pushed = next<Json>(b, 'notification:new');
+    await send(a, dm, 'first ping');
+    const ev = await pushed;
+    expect(ev).toMatchObject({ type: 'dm', channelId: dm, silent: false });
+    expect(ev.text).toMatch(/sent you a message/);
+
+    // Viewing: nothing is created, nothing is pushed.
+    expect(await emit(b, 'view:update', { channelId: dm })).toMatchObject({ ok: true });
+    const spy = record(b, 'notification:new');
+    const before = (await ofBob(dm)).length;
+    await send(a, dm, 'second ping');
+    await quiet(700);
+    expect((await ofBob(dm)).length).toBe(before);
+    expect(spy).toEqual([]);
+
+    // Looking away brings them back.
+    expect(await emit(b, 'view:update', { channelId: null })).toMatchObject({ ok: true });
+    await send(a, dm, 'third ping');
+    await quiet(700);
+    expect((await ofBob(dm)).length).toBe(before + 1);
+  });
+
+  it('ignores a view report for a conversation the person is not in', async () => {
+    const secret = (
+      await rest('ann', 'POST', '/channels', {
+        name: `view-${Date.now() % 100000}`,
+        type: 'private',
+      })
+    ).json().channel.id;
+    const b = await ready(client(slug, c.bob));
+    const stranger = await emit(b, 'view:update', { channelId: secret });
+    // Answered the same as a valid report, and nothing is recorded: no way to probe for channels.
+    expect(stranger).toMatchObject({ ok: true });
+    expect(await new Presence(t.redis).isViewing(orgId, u.bob!.id, secret)).toBe(false);
+  });
+
+  it('never delivers one workspace’s notifications to another', async () => {
+    const other = await createOrg('rtn');
+    const intruder = await ready(
+      client(other.slug, await signInAs(t.app, other.slug, other.owner)),
+    );
+    const spy = record(intruder, 'notification:new');
+    const dm = (await rest('ann', 'POST', '/dms', { userIds: [u.cy!.id] })).json().channel.id;
+    const a = await ready(client(slug, c.ann));
+    await send(a, dm, 'private to this workspace');
+    await quiet(600);
     expect(spy).toEqual([]);
   });
 });

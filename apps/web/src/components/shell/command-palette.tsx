@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Moon, Search, SearchCheck, Sun } from 'lucide-react';
+import {
+  Hash,
+  Lock,
+  LogOut,
+  MessageSquare,
+  Moon,
+  Search,
+  SearchCheck,
+  Sun,
+  Users,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,13 +23,15 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { useIsAdmin } from './me-context';
+import { useIsAdmin, useMe } from './me-context';
 import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
 import { visibleGroups } from './nav';
 import { useSignOut } from './user-menu';
 import { TypeIcon, StatusChip } from '@/components/work/work-bits';
 import { useSearch } from '@/lib/work-find-api';
+import { conversationName, useChannels } from '@/lib/messaging-api';
+import { useHydrated } from '@/components/checkin/use-hydrated';
 
 /** Ctrl/Cmd+K: jump to work items by key or words, to pages, and run a few actions. */
 export function CommandPalette() {
@@ -37,6 +49,15 @@ export function CommandPalette() {
   const crmVisible = useCrmAccess().data?.canView === true;
   const { resolvedTheme, setTheme } = useTheme();
   const signOut = useSignOut();
+  const hydrated = useHydrated();
+  const myUserId = useMe().user.id;
+  const channelsQuery = useChannels();
+  // Conversations for the quick switcher: unread first, then the most recent.
+  const conversations = [...((hydrated ? channelsQuery.data : undefined) ?? [])].sort(
+    (a, b) =>
+      Number(b.unread > 0) - Number(a.unread > 0) ||
+      (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? ''),
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,11 +109,62 @@ export function CommandPalette() {
                   <TypeIcon type={i.type} />
                   <span className="text-muted-foreground w-20 shrink-0 tabular-nums">{i.key}</span>
                   <span className="min-w-0 flex-1 truncate">{i.title}</span>
-                  <StatusChip name={i.status.name} category={i.status.category} className="hidden sm:inline-flex" />
+                  <StatusChip
+                    name={i.status.name}
+                    category={i.status.category}
+                    className="hidden sm:inline-flex"
+                  />
                 </CommandItem>
               ))}
-              <CommandItem value={`${q} search all results`} onSelect={() => run(() => router.push(`/search?q=${encodeURIComponent(dq)}`))}>
+              <CommandItem
+                value={`${q} search all results`}
+                onSelect={() => run(() => router.push(`/search?q=${encodeURIComponent(dq)}`))}
+              >
                 <SearchCheck /> See all results for “{dq}”
+              </CommandItem>
+            </CommandGroup>
+          )}
+          {conversations.length > 0 && (
+            <CommandGroup heading="Conversations">
+              {conversations.slice(0, 30).map((c) => {
+                const name = conversationName(c, myUserId);
+                return (
+                  <CommandItem
+                    key={c.id}
+                    value={`conversation ${name}`}
+                    onSelect={() => run(() => router.push(`/messages/${c.id}`))}
+                  >
+                    {c.type === 'public' ? (
+                      <Hash />
+                    ) : c.type === 'private' ? (
+                      <Lock />
+                    ) : c.type === 'group_dm' ? (
+                      <Users />
+                    ) : (
+                      <MessageSquare />
+                    )}
+                    <span className={c.unread > 0 ? 'font-semibold' : ''}>{name}</span>
+                    {c.unread > 0 && (
+                      <span
+                        className="bg-primary ml-auto size-2 rounded-full"
+                        aria-label="Unread"
+                        role="img"
+                      />
+                    )}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          )}
+          {dq && (
+            <CommandGroup heading="Messages">
+              <CommandItem
+                value={`${q} search messages`}
+                onSelect={() =>
+                  run(() => router.push(`/messages/search?q=${encodeURIComponent(dq)}`))
+                }
+              >
+                <Search /> Search messages for “{dq}”
               </CommandItem>
             </CommandGroup>
           )}

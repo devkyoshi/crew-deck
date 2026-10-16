@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-16 - Messaging, phase M3: search and notifications
+
+- **Search** (Messages > Search, and Ctrl+K): finds messages in the conversations you are in and in public channels, never anything else. Filters `from:`, `in:#channel`, `before:`, `after:`, `has:file`, `has:link`, `is:thread`, quoted phrases, filter chips, highlighted snippets, paging, and a Files tab. A filter that matches nobody says so.
+- **Notifications:** direct messages, mentions (you, your groups, `@channel`, `@here`), replies in threads you follow, new messages in channels you set to "every message", and being added to a channel, in the same inbox and bell as work notifications. Never for your own messages, and not while you are looking at that conversation. A channel set to "nothing", or muted, stays silent except when someone mentions you by name. Do not disturb and quiet hours keep desktop alerts and emails quiet while the inbox still fills. Reading a conversation clears its notifications.
+- **Email** only for what you have not seen after your email delay (15 minutes by default), only for direct messages and mentions unless you choose more, batched with the existing email queue.
+- **Desktop notifications** (opt in on the Notifications settings, asked for only when you turn them on). New settings: quiet hours, email delay, and the new notification kinds.
+- **Threads page**, **Mentions and reactions** page, **Starred**, your own **sections** (create, rename, delete, drag or use the menu to reorder, move a conversation into one), mute for an hour, until tomorrow or until you turn it back on, **do not disturb** and a custom **status**.
+- **Quick switcher:** Ctrl+K lists your conversations (unread first) and offers a message search. Alt+Shift+Up/Down jumps to the previous or next conversation with unread messages; Esc marks the open one as read.
+- Channels now start on "mentions only" for new members; direct messages notify for everything.
+- ADR-076 to ADR-078. 25 + 3 new API and gateway tests, 9 new browser tests.
+
 ## 2026-10-16 - Messaging, phase M2: rich messaging
 
 - **Threads:** reply to any message in a side panel; the root shows the reply count, who replied and when. Replies stay out of the channel unless you tick "Also send to channel". People who reply or are mentioned follow the thread; follow or unfollow by hand. Members can reply in announcement channels. Threads do not nest.

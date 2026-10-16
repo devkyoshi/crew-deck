@@ -14,13 +14,32 @@ export type NotificationType =
   | 'sla_due_soon'
   | 'sla_breached'
   | 'sprint_started'
-  | 'sprint_completed';
+  | 'sprint_completed'
+  | 'dm'
+  | 'mention'
+  | 'thread_reply'
+  | 'channel_message'
+  | 'added_to_channel';
 
 export interface AppNotification {
   id: string;
   type: NotificationType;
   itemId: string | null;
-  data: { key?: string; title?: string; spaceKey?: string; excerpt?: string | null; from?: string; to?: string; sprint?: string };
+  data: {
+    key?: string;
+    title?: string;
+    spaceKey?: string;
+    excerpt?: string | null;
+    from?: string;
+    to?: string;
+    sprint?: string;
+    // Chat
+    channelId?: string;
+    channelName?: string | null;
+    channelType?: string;
+    seq?: string;
+    threadRootId?: string | null;
+  };
   text: string;
   actor: Person | null;
   readAt: string | null;
@@ -40,15 +59,22 @@ export const TYPE_LABELS: Record<NotificationType, string> = {
   sla_breached: 'A ticket misses its deadline',
   sprint_started: 'A sprint starts in my space',
   sprint_completed: 'A sprint completes in my space',
+  dm: 'Someone sends me a direct message',
+  mention: 'Someone mentions me (or @channel, @here, or my group) in a channel',
+  thread_reply: 'Someone replies in a thread I follow',
+  channel_message: 'A new message in a channel I set to every message',
+  added_to_channel: 'I am added to a channel',
 };
 
 /** Where a notification leads. */
 export const hrefOf = (n: AppNotification) =>
-  n.data.key && n.data.spaceKey
-    ? `/spaces/${n.data.spaceKey}/items/${n.data.key}`
-    : n.data.spaceKey
-      ? `/spaces/${n.data.spaceKey}/backlog`
-      : '/notifications';
+  n.data.channelId
+    ? `/messages/${n.data.channelId}${n.data.seq ? `?m=${n.data.seq}` : ''}${n.data.threadRootId ? `${n.data.seq ? '&' : '?'}thread=${n.data.threadRootId}` : ''}`
+    : n.data.key && n.data.spaceKey
+      ? `/spaces/${n.data.spaceKey}/items/${n.data.key}`
+      : n.data.spaceKey
+        ? `/spaces/${n.data.spaceKey}/backlog`
+        : '/notifications';
 
 /** The unread count for the bell. Refreshes on focus and every minute (live updates refresh it sooner). */
 export const useUnreadCount = () =>
@@ -78,17 +104,30 @@ export function useMarkRead() {
   });
 }
 
+export interface PreferencesResponse {
+  preferences: Preferences;
+  digest: boolean;
+  quiet: { enabled: boolean; start: string; end: string };
+  emailDelayMinutes: number;
+  desktop: boolean;
+}
+
 export const usePreferences = () =>
   useQuery({
     queryKey: ['notification-preferences'],
-    queryFn: () => api<{ preferences: Preferences; digest: boolean }>('/me/notification-preferences'),
+    queryFn: () => api<PreferencesResponse>('/me/notification-preferences'),
   });
 
 export function useSavePreferences() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { preferences?: Partial<Preferences>; digest?: boolean }) =>
-      api<{ preferences: Preferences; digest: boolean }>('/me/notification-preferences', { method: 'PUT', body }),
+    mutationFn: (body: {
+      preferences?: Partial<Preferences>;
+      digest?: boolean;
+      quiet?: PreferencesResponse['quiet'];
+      emailDelayMinutes?: number;
+      desktop?: boolean;
+    }) => api<PreferencesResponse>('/me/notification-preferences', { method: 'PUT', body }),
     onSuccess: (data) => qc.setQueryData(['notification-preferences'], data),
   });
 }

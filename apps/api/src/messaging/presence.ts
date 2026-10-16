@@ -34,6 +34,7 @@ export class Presence {
   async drop(orgId: string, userId: string, connId: string) {
     const before = await this.stateOf(orgId, userId);
     await this.redis.hdel(key(orgId, userId), connId);
+    await this.redis.hdel(orgKey(orgId, 'viewing', userId), connId);
     return { before, after: await this.stateOf(orgId, userId) };
   }
 
@@ -48,6 +49,37 @@ export class Presence {
         Math.max(60, Math.round(minutes * 60)),
       );
     return { before, after: await this.stateOf(orgId, userId) };
+  }
+
+  /**
+   * Which conversation each open connection is looking at (reported only while the window is focused).
+   * Expires with the heartbeat, so a closed laptop stops counting as "viewing" within 90 seconds.
+   */
+  async setViewing(orgId: string, userId: string, connId: string, channelId: string | null) {
+    const k = orgKey(orgId, 'viewing', userId);
+    if (channelId === null) {
+      await this.redis.hdel(k, connId);
+      return;
+    }
+    await this.redis
+      .multi()
+      .hset(k, connId, `${channelId}|${Date.now() + PRESENCE_TTL_S * 1000}`)
+      .expire(k, PRESENCE_TTL_S)
+      .exec();
+  }
+
+  /** True when any live connection of this person is looking at the channel right now. */
+  async isViewing(orgId: string, userId: string, channelId: string) {
+    const fields = await this.redis.hgetall(orgKey(orgId, 'viewing', userId));
+    const now = Date.now();
+    return Object.values(fields).some((v) => {
+      const [ch, exp] = v.split('|');
+      return ch === channelId && Number(exp) > now;
+    });
+  }
+
+  async isDnd(orgId: string, userId: string) {
+    return (await this.redis.exists(dndKey(orgId, userId))) === 1;
   }
 
   async dndUntil(orgId: string, userId: string): Promise<Date | null> {

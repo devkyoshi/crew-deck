@@ -20,9 +20,10 @@ import { can } from '../permissions/can.js';
 import { textToDoc } from '../work/doc.js';
 import { sanitizeDoc, type CleanDoc } from '../work/rich-text.js';
 import { loadChannel, requireChannel } from './access.js';
-import type { MessagingCtx } from './context.js';
+import { runLater, type MessagingCtx } from './context.js';
 import { hydrate, hydrateOne, peopleOf } from './dto.js';
-import { linksIn } from './link-preview.js';
+import { hasAnyLink, linksIn } from './link-preview.js';
+import { notifyMessage } from './notify.js';
 
 /** Thread replies are not part of the channel timeline unless they were also sent to the channel. */
 export const TIMELINE = { $or: [{ threadRootId: null }, { alsoInChannel: true }] };
@@ -311,6 +312,7 @@ export async function sendMessage(
         authorId: actor.userId,
         body: clean.doc,
         bodyText: clean.text,
+        hasLink: hasAnyLink(clean.doc, clean.text),
         clientMsgId: input.clientMsgId,
         threadRootId: root?.id ?? null,
         alsoInChannel,
@@ -378,6 +380,10 @@ export async function sendMessage(
     });
   if (links.length)
     await ctx.enqueueLinkPreviews?.({ orgId: actor.orgId, messageId: stored.id, urls: links });
+  // Notifications never delay the acknowledgement or the fan-out.
+  runLater(ctx, () =>
+    notifyMessage(ctx, { orgId: actor.orgId, message: stored, channel: access.channel, targets }),
+  );
   return {
     message: dto,
     duplicate: false,
@@ -450,6 +456,7 @@ export async function editMessage(
       {
         body: clean.doc,
         bodyText: clean.text,
+        hasLink: hasAnyLink(clean.doc, clean.text),
         editedAt: new Date(),
         metadata: links.length ? { previews: [], previewsPending: true } : {},
       },

@@ -1,3 +1,5 @@
+// Fastify's cookie typings, so programs that include API source (the gateway) type-check it too.
+import '@fastify/cookie';
 /**
  * What the realtime gateway (apps/realtime) uses from the API. The gateway runs the same messaging
  * services and the same can() module as the REST routes, so behaviour and permissions never diverge.

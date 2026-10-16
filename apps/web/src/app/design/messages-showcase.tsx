@@ -76,6 +76,7 @@ const channel = (over: Partial<MyChannelDTO>): MyChannelDTO => ({
   notificationLevel: 'all',
   mutedUntil: null,
   isStarred: false,
+  sectionId: null,
   lastReadSeq: 10,
   unread: 0,
   mentionCount: 0,

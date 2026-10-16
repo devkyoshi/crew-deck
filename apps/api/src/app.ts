@@ -45,6 +45,7 @@ import { liveRoutes } from './routes/live.js';
 import { LiveHub, registerLive } from './lib/live.js';
 import { messagingRoutes } from './routes/messaging.js';
 import { RedisEventSink, type EventSink } from './messaging/events.js';
+import { Presence } from './messaging/presence.js';
 import type { EnqueueLinkPreviews } from './messaging/link-preview.js';
 import { RateLimiter, type RateLimits } from './messaging/rate-limit.js';
 import { workDepthRoutes } from './routes/work-depth.js';
@@ -62,7 +63,12 @@ import { workspaceRoutes } from './routes/workspaces.js';
 import type { EnqueueInviteEmail } from './email/queue.js';
 
 /** Routes registered by `buildApp` (filled as routes are added). */
-export const ROUTES: { method: string | string[]; url: string; hasPreHandler: boolean; config: unknown }[] = [];
+export const ROUTES: {
+  method: string | string[];
+  url: string;
+  hasPreHandler: boolean;
+  config: unknown;
+}[] = [];
 
 export interface AppDeps {
   db: Db;
@@ -86,6 +92,8 @@ export interface AppDeps {
   messageLimits?: RateLimits;
   /** Queues link lookups for new messages (BullMQ in the server, a fake in tests). */
   enqueueLinkPreviews?: EnqueueLinkPreviews;
+  /** Runs message follow-up work (notifications); tests collect it to await. */
+  deferMessaging?: (work: () => Promise<unknown>) => void;
 }
 
 export function buildApp({
@@ -101,6 +109,7 @@ export function buildApp({
   events = new RedisEventSink(redis),
   messageLimits,
   enqueueLinkPreviews,
+  deferMessaging,
 }: AppDeps) {
   const app = Fastify({
     trustProxy: config.TRUST_PROXY,
@@ -115,13 +124,20 @@ export function buildApp({
   registerErrorHandler(app);
   // Every route, recorded as it is added, so a test can check each one is protected (see routes.test.ts).
   app.addHook('onRoute', (route) => {
-    ROUTES.push({ method: route.method, url: route.url, hasPreHandler: !!route.preHandler, config: route.config });
+    ROUTES.push({
+      method: route.method,
+      url: route.url,
+      hasPreHandler: !!route.preHandler,
+      config: route.config,
+    });
   });
   const live = new LiveHub(redis);
   registerLive(app, live);
   app.addHook('onClose', async () => live.close());
   app.register(cookie);
-  app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5, parts: 6 } });
+  app.register(multipart, {
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5, parts: 6 },
+  });
   // preHandler (not onRequest) so the key generator can read the parsed body.
   app.register(rateLimit, { global: false, hook: 'preHandler' });
 
@@ -149,7 +165,14 @@ export function buildApp({
 
   // Plugin-per-module: each module registers under /api/v1.
   app.register(healthRoutes, { prefix: '/api/v1', db });
-  app.register(authRoutes, { prefix: '/api/v1/auth', db, config, sessions, google: googleClient, events });
+  app.register(authRoutes, {
+    prefix: '/api/v1/auth',
+    db,
+    config,
+    sessions,
+    google: googleClient,
+    events,
+  });
   const authDeps = { db, config, sessions };
   app.register(meRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(memberRoutes, { prefix: '/api/v1', ...authDeps, events });
@@ -158,7 +181,15 @@ export function buildApp({
     ...authDeps,
     redis,
     storage,
-    messaging: { db, events, limiter: new RateLimiter(redis, messageLimits), storage, enqueueLinkPreviews },
+    messaging: {
+      db,
+      events,
+      limiter: new RateLimiter(redis, messageLimits),
+      storage,
+      enqueueLinkPreviews,
+      presence: new Presence(redis),
+      defer: deferMessaging,
+    },
   });
   app.register(invitationRoutes, {
     prefix: '/api/v1',

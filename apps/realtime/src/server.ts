@@ -18,6 +18,7 @@ const { db, close } = createDb(config.MONGODB_URI, config.MONGODB_DB);
 const redis = createRedis(config.REDIS_URL);
 const previews = createLinkPreviewEnqueuer(redis);
 const limiter = new RateLimiter(redis);
+const presence = new Presence(redis);
 
 const http = createServer((req, res) => {
   if (req.url === '/realtime/health') {
@@ -37,10 +38,11 @@ const gateway = createGateway(http, {
     db,
     events: new RedisEventSink(redis),
     limiter,
+    presence,
     storage: createStorage(config),
     enqueueLinkPreviews: previews.enqueue,
   },
-  presence: new Presence(redis),
+  presence,
   limiter,
   log: { info: (m) => console.log(m), error: (m, e) => console.error(m, e) },
 });

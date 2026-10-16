@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChannelDetails } from './channel-details';
 import { ConversationList } from './conversation-list';
 import { PanelProvider, usePanel } from './panel';
+import { useMessagesShortcuts } from './shortcuts';
 import { ThreadPanel } from './thread-panel';
 
 function useWide() {
@@ -85,6 +86,12 @@ function DetailsPanel({ channelId }: { channelId: string }) {
   );
 }
 
+/** Mounts the keyboard shortcuts (inside the panel provider, so Esc knows whether a panel is open). */
+function Shortcuts({ channelId }: { channelId: string | null }) {
+  useMessagesShortcuts(channelId);
+  return null;
+}
+
 /**
  * The Messages area: conversation list, the open conversation, and a details panel. On a phone the
  * list and the conversation are separate screens; on a tablet the panel overlays; on a desktop all
@@ -94,6 +101,7 @@ export function MessagesShell({ children }: { children: ReactNode }) {
   const channelId = useParams<{ channelId?: string }>().channelId ?? null;
   return (
     <PanelProvider>
+      <Shortcuts channelId={channelId} />
       {/* Below the 3rem top bar (and the inset margin on larger screens). dvh keeps the composer above a phone keyboard. */}
       <div className="flex h-[calc(100dvh-3rem)] min-h-0 md:h-[calc(100dvh-4rem)]">
         <aside

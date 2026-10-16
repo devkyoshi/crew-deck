@@ -2,6 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  ParsedSearch,
+  SearchHit,
+  SidebarSectionDTO,
   AttachmentDTO,
   ChannelDTO,
   MessageDTO,
@@ -57,6 +60,10 @@ export const keys = {
   files: (channelId: string) => ['messaging', 'files', channelId] as const,
   saved: ['messaging', 'saved'] as const,
   threads: ['messaging', 'threads'] as const,
+  sections: ['messaging', 'sections'] as const,
+  activity: ['messaging', 'activity'] as const,
+  search: (q: string, page: number) => ['messaging', 'search', q, page] as const,
+  searchFiles: (q: string) => ['messaging', 'search-files', q] as const,
 };
 
 /** A thread: its root message and replies (oldest first). */
@@ -582,4 +589,131 @@ export async function searchMentionables(query: string): Promise<Mentionable[]> 
   ];
   out.push(...special.filter((s) => !q || s.label.startsWith(q.toLowerCase())));
   return out.slice(0, 10);
+}
+
+// ---- Search, activity, sections, status ----------------------------------------------------------------------
+
+export interface SearchResponse {
+  hits: SearchHit[];
+  parsed: ParsedSearch;
+  unresolved: string[];
+  page: number;
+  hasMore: boolean;
+}
+
+export interface SearchFile extends AttachmentDTO {
+  channel: { id: string; type: ChannelDTO['type']; name: string | null };
+  messageId: string;
+  seq: number | null;
+  createdAt: string;
+}
+
+export const useMessageSearch = (q: string, page: number) =>
+  useQuery({
+    queryKey: keys.search(q, page),
+    queryFn: () => api<SearchResponse>(`/search/messages${qs({ q, page })}`),
+    enabled: q.trim().length > 0,
+    staleTime: 30_000,
+  });
+
+export const useFileSearch = (q: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.searchFiles(q),
+    queryFn: async () => (await api<{ files: SearchFile[] }>(`/search/files${qs({ q })}`)).files,
+    enabled: enabled && q.trim().length > 0,
+    staleTime: 30_000,
+  });
+
+export interface ActivityItem {
+  kind: 'mention' | 'reaction';
+  at: string;
+  message: MessageDTO;
+  channel: { id: string; type: ChannelDTO['type']; name: string | null };
+  by: PersonDTO | null;
+  emoji?: string;
+}
+
+export const useActivity = () =>
+  useQuery({
+    queryKey: keys.activity,
+    queryFn: async () => (await api<{ items: ActivityItem[] }>('/me/activity')).items,
+    staleTime: 30_000,
+  });
+
+export const useSections = () =>
+  useQuery({
+    queryKey: keys.sections,
+    queryFn: async () =>
+      (await api<{ sections: SidebarSectionDTO[] }>('/me/sidebar-sections')).sections,
+    staleTime: 5 * 60_000,
+  });
+
+export function useSectionMutations() {
+  const qc = useQueryClient();
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: keys.sections });
+    void qc.invalidateQueries({ queryKey: keys.channels });
+  };
+  return {
+    create: useMutation({
+      mutationFn: (name: string) =>
+        api<{ section: SidebarSectionDTO }>('/me/sidebar-sections', {
+          method: 'POST',
+          body: { name },
+        }),
+      onSuccess: refresh,
+    }),
+    rename: useMutation({
+      mutationFn: (v: { id: string; name: string }) =>
+        api(`/me/sidebar-sections/${v.id}`, { method: 'PATCH', body: { name: v.name } }),
+      onSuccess: refresh,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => api<void>(`/me/sidebar-sections/${id}`, { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    /** Saves the section order and/or moves channels between sections. */
+    order: useMutation({
+      mutationFn: (body: { sections?: string[]; assign?: Record<string, string | null> }) =>
+        api<{ sections: SidebarSectionDTO[] }>('/me/sidebar-order', { method: 'PUT', body }),
+      onMutate: async (body) => {
+        // Show the new order at once; the server's answer settles it.
+        if (body.sections) {
+          qc.setQueryData<SidebarSectionDTO[]>(keys.sections, (cur) =>
+            cur
+              ? body.sections!.map((id, position) => ({
+                  ...cur.find((s) => s.id === id)!,
+                  position,
+                }))
+              : cur,
+          );
+        }
+        if (body.assign) {
+          qc.setQueryData<MyChannelDTO[]>(keys.channels, (cur) =>
+            cur?.map((c) =>
+              c.id in body.assign! ? { ...c, sectionId: body.assign![c.id] ?? null } : c,
+            ),
+          );
+        }
+      },
+      onSettled: refresh,
+    }),
+  };
+}
+
+/** Do not disturb for some minutes (or off), and my custom status. */
+export function useStatusMutations() {
+  return {
+    dnd: useMutation({
+      mutationFn: (minutes: number | null) =>
+        api<{ until: string | null }>('/me/dnd', { method: 'PUT', body: { minutes } }),
+    }),
+    status: useMutation({
+      mutationFn: (body: {
+        emoji: string | null;
+        text: string | null;
+        expiresAt?: string | null;
+      }) => api<{ ok: boolean }>('/me/status', { method: 'PUT', body }),
+    }),
+  };
 }

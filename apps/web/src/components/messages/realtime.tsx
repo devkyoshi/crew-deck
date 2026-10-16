@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { io, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import {
@@ -23,6 +24,7 @@ import {
   type MembershipEvent,
   type MessageDTO,
   type MyChannelDTO,
+  type NotificationEvent,
   type PresenceEvent,
   type ReactionEvent,
   type ReadSyncedEvent,
@@ -43,6 +45,7 @@ import {
   type MessageDoc,
   type ThreadView,
 } from '@/lib/messaging-api';
+import type { PreferencesResponse } from '@/lib/notifications-api';
 import { useMe } from '@/components/shell/me-context';
 import { useMessaging } from './store';
 
@@ -103,6 +106,9 @@ const threadOnly = (m: MessageDTO) => !!m.threadRootId && !m.alsoInChannel;
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const meId = useMe().user.id;
+  const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const socketRef = useRef<Socket | null>(null);
   const typingSentAt = useRef(new Map<string, number>());
   const readSent = useRef(new Map<string, number>());
@@ -236,11 +242,30 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       let lastActivity = Date.now();
       let lastSent: 'active' | 'away' = 'active';
 
+      // Which conversation this tab is looking at: only while the window is focused and visible.
+      let lastView: string | null = null;
+      const reportView = (force = false) => {
+        const looking =
+          document.hasFocus() && !document.hidden ? useMessaging.getState().activeChannelId : null;
+        if (!force && looking === lastView) return;
+        lastView = looking;
+        if (socket.connected) socket.emit(C2S.viewUpdate, { channelId: looking });
+      };
       const heartbeat = () => {
         const away = document.hidden || Date.now() - lastActivity > 10 * 60_000;
         lastSent = away ? 'away' : 'active';
-        if (socket.connected) socket.emit(C2S.presenceUpdate, { state: lastSent });
+        if (socket.connected) {
+          socket.emit(C2S.presenceUpdate, { state: lastSent });
+          // Refreshed with every heartbeat, so a closed laptop stops counting as "viewing".
+          reportView(true);
+        }
       };
+      const unsubscribeView = useMessaging.subscribe((s, prev) => {
+        if (s.activeChannelId !== prev.activeChannelId) reportView();
+      });
+      const onFocusChange = () => reportView();
+      window.addEventListener('focus', onFocusChange);
+      window.addEventListener('blur', onFocusChange);
       const activity = () => {
         lastActivity = Date.now();
         if (lastSent === 'away' && !document.hidden) heartbeat();
@@ -266,6 +291,44 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         if (err.message === 'UNAUTHENTICATED') {
           // Either the session ended (the API will send us to sign in) or the gateway is briefly unavailable.
           void api('/me').catch(() => undefined);
+        }
+      });
+
+      // Desktop alerts: only if the person turned them on and allowed them, and not while they are looking at it.
+      let desktop = false;
+      const loadDesktop = () => {
+        const cached = qc.getQueryData<PreferencesResponse>(['notification-preferences']);
+        if (cached) return void (desktop = cached.desktop);
+        void api<PreferencesResponse>('/me/notification-preferences')
+          .then((p) => {
+            desktop = p.desktop;
+          })
+          .catch(() => undefined);
+      };
+      loadDesktop();
+      const stopWatching = qc.getQueryCache().subscribe((ev) => {
+        if (ev.query.queryKey[0] === 'notification-preferences') loadDesktop();
+      });
+      socket.on(S2C.notificationNew, (e: NotificationEvent) => {
+        void qc.invalidateQueries({ queryKey: ['notifications'] });
+        if (
+          e.silent ||
+          !desktop ||
+          typeof Notification === 'undefined' ||
+          Notification.permission !== 'granted'
+        )
+          return;
+        const here = useMessaging.getState().activeChannelId === e.channelId && document.hasFocus();
+        if (here) return;
+        try {
+          const n = new Notification('Crew Deck', { body: e.text, tag: e.id });
+          n.onclick = () => {
+            window.focus();
+            routerRef.current.push(e.href);
+            n.close();
+          };
+        } catch {
+          /* some browsers only allow notifications from a service worker: the inbox badge still shows it */
         }
       });
 
@@ -320,6 +383,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         window.removeEventListener('keydown', activity);
         document.removeEventListener('visibilitychange', heartbeat);
         window.removeEventListener('online', online);
+        window.removeEventListener('focus', onFocusChange);
+        window.removeEventListener('blur', onFocusChange);
+        unsubscribeView();
+        stopWatching();
         socket.disconnect();
         socketRef.current = null;
       };

@@ -195,3 +195,16 @@ export function startLinkPreviewJobs(
     },
   };
 }
+
+/** True when a message body has any link: a link mark, or a bare http(s) address in its text. */
+export function hasAnyLink(doc: unknown, text: string): boolean {
+  let found = /https?:\/\//i.test(text);
+  const walk = (n: unknown) => {
+    if (found || !n || typeof n !== 'object') return;
+    const node = n as { marks?: { type: string }[]; content?: unknown[] };
+    if (node.marks?.some((m) => m.type === 'link')) found = true;
+    node.content?.forEach(walk);
+  };
+  walk(doc);
+  return found;
+}

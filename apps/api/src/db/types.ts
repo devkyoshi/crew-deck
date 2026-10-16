@@ -681,7 +681,13 @@ export type NotificationType =
   | 'sla_due_soon'
   | 'sla_breached'
   | 'sprint_started'
-  | 'sprint_completed';
+  | 'sprint_completed'
+  // Messaging
+  | 'dm'
+  | 'mention'
+  | 'thread_reply'
+  | 'channel_message'
+  | 'added_to_channel';
 
 export interface NotificationDoc {
   id: string;
@@ -700,6 +706,10 @@ export interface NotificationDoc {
   readAt: Date | null;
   /** Makes scheduled reminders idempotent (one per person, item and day). */
   dedupeKey: string | null;
+  /** Messaging: when to email this if it is still unseen (the email delay). Null for no email. */
+  emailDueAt?: Date | null;
+  /** Messaging: the unseen-email check has run for this one. */
+  emailChecked?: boolean;
   createdAt: Date;
 }
 
@@ -709,6 +719,12 @@ export interface NotificationPrefsDoc {
   settings: Partial<Record<NotificationType, { inApp: boolean; email: boolean }>>;
   /** Send emails as one daily summary (mornings, in the person's timezone) instead of a few minutes after the first. */
   digest?: boolean;
+  /** Quiet hours in the person's timezone: no desktop alerts or emails (badges still update). */
+  quiet?: { enabled: boolean; start: string; end: string };
+  /** Minutes an unseen message waits before it is emailed (default 15). */
+  emailDelayMinutes?: number;
+  /** The person turned on desktop notifications for this workspace. */
+  desktop?: boolean;
   updatedAt: Date;
 }
 
@@ -826,6 +842,8 @@ export interface MessageDoc {
   alsoInChannel: boolean;
   replyCount: number;
   lastReplyAt: Date | null;
+  /** The message contains a link (a link mark or a bare address), for `has:link` search. */
+  hasLink?: boolean;
   /** Distinct people who replied (capped), newest last. */
   replyAuthors?: string[];
   clientMsgId: string | null;
@@ -933,4 +951,12 @@ export interface LinkPreviewDoc {
   /** 'failed' is cached too, so a dead link is not fetched again and again. */
   status: 'ok' | 'failed';
   fetchedAt: Date;
+}
+
+export interface SidebarSectionDoc {
+  id: string;
+  orgId: string;
+  userId: string;
+  name: string;
+  position: number;
 }

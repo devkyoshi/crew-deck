@@ -85,6 +85,7 @@ const TENANT = {
   threadFollows: 'thread_follows',
   messageAttachments: 'message_attachments',
   linkPreviews: 'link_previews',
+  sidebarSections: 'sidebar_sections',
 } as const;
 
 /** Global collections: not tenant data, only reachable through `db.global`. */
@@ -163,6 +164,7 @@ export interface TenantDocs {
   threadFollows: T.ThreadFollowDoc;
   messageAttachments: T.MessageAttachmentDoc;
   linkPreviews: T.LinkPreviewDoc;
+  sidebarSections: T.SidebarSectionDoc;
 }
 
 export interface GlobalDocs {
@@ -369,7 +371,8 @@ const DEFAULTS: Record<string, () => Document> = {
   channelMembers: () => ({
     role: 'member',
     joinedAt: now(),
-    notificationLevel: 'all',
+    // Channels start quiet (mentions only); direct messages are created with 'all'.
+    notificationLevel: 'mentions',
     mutedUntil: null,
     isStarred: false,
     sectionId: null,
@@ -731,6 +734,7 @@ export class TenantDb {
   readonly threadFollows!: TenantRepos['threadFollows'];
   readonly messageAttachments!: TenantRepos['messageAttachments'];
   readonly linkPreviews!: TenantRepos['linkPreviews'];
+  readonly sidebarSections!: TenantRepos['sidebarSections'];
 
   private readonly usersRepo: Repo<T.UserDoc>;
   private readonly orgsRepo: Repo<T.OrganizationDoc>;

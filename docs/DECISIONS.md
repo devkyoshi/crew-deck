@@ -348,6 +348,24 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-078: Search runs inside the access rule, behind a `SearchService`
+
+- A MongoDB text index on `messages.bodyText` (no stemming, so names and codes match as typed). The channels searched are computed first (the ones the person is in plus public channels) and the query is `channelId in <those> and deleted is null and $text ...`: access is part of the query, never a filter on fetched results. A private channel, someone else's direct message or another workspace can never appear, and naming one in `in:` answers "does not match" exactly like a channel that does not exist. Org admins do not read private channels through search either.
+- The query language is parsed on the server (`from:` matches any part of a name or email, `in:#channel`, `before:`, `after:`, `has:file|link`, `is:thread`, quoted phrases); unknown operators stay words. Snippets come back as plain parts with a match flag, so no HTML is ever built from message text. `has:link` uses a flag stored with the message (a link's text is not its address) and falls back to text for older messages. Results are paged by page number (search is shallow by nature), 20 a page, with the access rule applied to every page.
+- Everything goes through `SearchService` (`messages`, `files`), so Meilisearch or OpenSearch can replace the Mongo implementation later without any API change. File search matches names only.
+
+## ADR-077: Chat notifications reuse the inbox and email queue, with one decision function
+
+- New kinds (`dm`, `mention`, `thread_reply`, `channel_message`, `added_to_channel`) are rows in the shared `notifications` collection with the same preferences screen. `recipientsOfMessage` decides who is told and why, in this order: mention (by name, one of my groups, `@channel`, or `@here` while online), then followed thread, then direct message, then a channel set to every message. A muted channel, or a channel set to "nothing", only lets through being called by name. "Mentions only" also lets direct messages and followed threads through. Never the author, and not while a live tab of the person reports it is looking at that conversation (`view:update`, refreshed by the heartbeat so it lapses within 90 seconds).
+- The notification is stored and pushed (`notification:new`) after the send has been acknowledged, never before. Quiet hours (a window in the person's timezone) and do not disturb mark the push `silent` (no desktop alert) but the inbox row and badge are always created.
+- Email: each row that wants email gets `emailDueAt` (the person's delay, default 15 minutes). A job checks what is due, skips anything read in the inbox, past the person's read position, or inside quiet hours or do not disturb, and hands the rest to the existing batched email queue. Channels start on "mentions only" for new members (direct messages on "all"), so a busy channel is not a flood by default.
+- Desktop alerts use the browser Notification API only (no service worker or push yet; mobile push is a later phase). Permission is asked for when the person turns the setting on, never at load.
+
+## ADR-076: Sections, starred, threads and the quick switcher are layers over existing data
+
+- Sections are per-person (`sidebar_sections`; a channel's `sectionId` lives on its membership row), validated so nobody can use or see another person's sections. Order and assignment save in one call. Starred reuses `isStarred`. Reordering works by dragging a section's handle (mouse or keyboard through dnd-kit) and also with Move up and Move down in its menu.
+- The Threads page and "Mentions and reactions" are read endpoints over `thread_follows`, `message_mentions` and `message_reactions`. The quick switcher is the existing Ctrl+K palette with a Conversations group and a message search entry, rather than a second palette.
+
 ## ADR-075: Reactions, mentions, pins and saved messages
 
 - Reactions are one row per person and emoji (`message_reactions`, unique), validated as real emoji (skin tones, flags and joined sequences, never free text). The DTO carries the first 100 people per emoji so a client can tell whether it reacted; changes go out as `reaction:updated` to the channel room. Members can react in announcement channels; archived channels and non-members cannot.

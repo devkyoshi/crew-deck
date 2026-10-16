@@ -163,7 +163,7 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                         </Link>
                       </SidebarMenuButton>
                       {item.href === '/messages' && unread.dms > 0 && (
-                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground rounded-full">
+                        <SidebarMenuBadge className="bg-destructive text-white rounded-full">
                           {unread.dms > 99 ? '99+' : unread.dms}
                           <span className="sr-only"> unread direct messages and mentions</span>
                         </SidebarMenuBadge>

@@ -73,6 +73,7 @@ export function makeApp(
     liveTiming?: { heartbeatMs?: number; recheckMs?: number };
     events?: EventSink;
     messageLimits?: RateLimits;
+    deferMessaging?: (work: () => Promise<unknown>) => void;
     enqueueLinkPreviews?: (job: { orgId: string; messageId: string; urls: string[] }) => void | Promise<void>;
   } = {},
 ) {
@@ -103,6 +104,7 @@ export function makeApp(
     liveTiming: opts.liveTiming,
     events: opts.events,
     messageLimits: opts.messageLimits,
+    deferMessaging: opts.deferMessaging,
     enqueueLinkPreviews: opts.enqueueLinkPreviews,
   });
   return {

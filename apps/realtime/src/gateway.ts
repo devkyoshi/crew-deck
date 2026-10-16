@@ -34,6 +34,7 @@ import {
   messageEditSchema,
   messageSendSchema,
   presenceUpdateSchema,
+  viewUpdateSchema,
   reactionToggleSchema,
   readUpdateSchema,
   syncSchema,
@@ -270,6 +271,14 @@ export function createGateway(httpServer: HttpServer, deps: GatewayDeps) {
       async (p, a) => ({ reactions: await toggleReaction(messaging, a, p.messageId, p.emoji) }),
       { write: true },
     );
+    // Which conversation this tab is looking at (reported only while its window is focused). It stops
+    // notifications for that conversation, and lapses on its own if the tab goes quiet.
+    handle(C2S.viewUpdate, viewUpdateSchema, async (p) => {
+      if (p.channelId !== null && !socket.rooms.has(channelRoom(actor.orgId, p.channelId)))
+        return { ok: true };
+      await presence.setViewing(actor.orgId, actor.userId, socket.id, p.channelId);
+      return { ok: true };
+    });
     handle(C2S.sync, syncSchema, (p, a) => syncChannels(messaging, a, p.channels));
     handle(C2S.presenceUpdate, presenceUpdateSchema, async (p) => {
       const change = await presence.beat(actor.orgId, actor.userId, socket.id, p.state);

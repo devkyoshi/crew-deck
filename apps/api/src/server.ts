@@ -10,6 +10,8 @@ import { startTrialExpiry } from './plans/jobs.js';
 import { startRebalanceJobs } from './work/jobs.js';
 import { startNotificationJobs } from './work/notify-jobs.js';
 import { RedisEventSink } from './messaging/events.js';
+import { Presence } from './messaging/presence.js';
+import { startMessageEmailJobs } from './messaging/notify.js';
 import { startLinkPreviewJobs } from './messaging/link-preview.js';
 import { sweepUnsentFiles } from './messaging/files.js';
 import { createStorage } from './storage/index.js';
@@ -37,9 +39,18 @@ const linkPreviews = startLinkPreviewJobs(redis, db, new RedisEventSink(redis), 
   error: (m) => console.error(m),
 });
 // Files uploaded to a channel but never sent are removed after a day.
-const sweep = setInterval(() => {
-  void sweepUnsentFiles(db, storage).catch((e: Error) => console.error(`file sweep failed: ${e.message}`));
-}, 60 * 60 * 1000);
+const sweep = setInterval(
+  () => {
+    void sweepUnsentFiles(db, storage).catch((e: Error) =>
+      console.error(`file sweep failed: ${e.message}`),
+    );
+  },
+  60 * 60 * 1000,
+);
+const chatPresence = new Presence(redis);
+const messageEmails = startMessageEmailJobs(db, (o, u) => chatPresence.isDnd(o, u), {
+  error: (m) => console.error(m),
+});
 const app = buildApp({
   storage,
   enqueueLinkPreviews: linkPreviews.enqueue,
@@ -73,6 +84,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     await worker.close();
     clearInterval(sweep);
+    await messageEmails.close();
     await linkPreviews.close();
     await autoClose.close();
     await trials.close();
