@@ -179,7 +179,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Upgrade notice (`toastError` with "See plans"); pricing comparison rows
 - [x] ADR numbers fixed, ADR-061, docs and Ops Memory updated
 - [x] Tests: `work-leftovers.test.ts`
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ## W9: Workflow rules and dependencies
 
@@ -188,7 +188,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Blocked / blocks badges on cards, warning on moving a blocked item, "Blocked" filter
 - [x] Checklists on items with progress on cards, checklist templates
 - [x] Tests, docs
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ## W10: Versions and components
 
@@ -196,7 +196,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Components with lead and default assignee
 - [x] Filters, pickers, Releases page, plan gate `releases`
 - [x] Tests, docs
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ## W11: Flow and reports
 
@@ -204,7 +204,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Velocity, cumulative flow, cycle time, created vs resolved (with data tables)
 - [x] Plan gate `advanced_reports`
 - [x] Tests, docs
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ## W12: Roadmap, time tracking, calendar
 
@@ -212,7 +212,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Time tracking: original and remaining estimate, work logs, roll-ups
 - [x] Calendar view of due dates
 - [x] Tests, docs
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ## W13: Dashboards, parity sweep, hardening
 
@@ -221,7 +221,7 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 - [x] Accessibility, keyboard and rate-limit pass on new screens; live-update events for new entities
 - [x] Demo seed and Playwright suite extended
 - [x] Tests, docs
-- [ ] Owner review and sign-off
+- [x] Owner review and sign-off (2026-10-16)
 
 ---
 

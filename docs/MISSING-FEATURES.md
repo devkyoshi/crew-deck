@@ -78,6 +78,7 @@ summary, S3 storage, upgrade notice). Known gaps now:
 
 - **A space can end up with no active admin** through indirect changes (for example deleting its only
   admin group). Workspace admins can repair it from the space's Members tab.
+- **Browser tests known to fail** (not caused by the work module): the six CRM specs and the demo-flow CRM page need the CRM module on in the dev database; the signed-out sign-up accessibility check reports a missing page title.
 - **Google sign-in and Brevo email** are covered by tests with fakes but not exercised against the real
   services.
 - **Database-level integrity.** Since the move to MongoDB there are no foreign keys or check constraints:

@@ -1,7 +1,7 @@
 # Work Items and Kanban: progress
 
-**Last updated:** 2026-10-16 (W1 to W14 all built and awaiting owner review; scope of the Jira parity work is in `JIRA-PARITY.md`)
-**Current phase:** W1 to W7 all in Review. Next step: the owner tries the whole module (see the review list in the log entry of 2026-10-15) and marks phases Done
+**Last updated:** 2026-10-16 (W1 to W14 all built and signed off by the owner; scope of the Jira parity work is in `JIRA-PARITY.md`)
+**Current phase:** none. W1 to W14 are Done (owner sign-off 2026-10-16). New work starts from a new brief
 **Foundation prerequisite (Phases 0 to 5 of `docs/BRIEF.md`):** complete. Phases 0 to 9 are all shipped (HEAD at the time of writing: `0a311bb`).
 
 ## How to use this file
@@ -15,20 +15,20 @@
 
 | Phase | Title | Status | Started | Finished | Commit | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Statuses, items and a read-only board | Review | 2026-10-14 | | | Built and tested: migrations 0011/0012, API, `can()` actions, plan gate, board, item panel and page, board settings, create-space board type, demo seed, 395 API tests, browser and accessibility tests. Deviations: see log |
-| W2 | Drag and drop and board power features | Review | 2026-10-14 | | | Built and tested: move, bulk, labels, filters, swimlanes, WIP warnings, rebalance job, shortcuts, 420 API tests plus browser and accessibility tests. See log for deviations |
-| W3 | Work item depth | Review | 2026-10-14 | | | Built and tested: rich text (Tiptap), comments and mentions, watchers, links, activity history, attachments on local storage with signed links, duplicate, transfer, 461 API tests plus browser and accessibility tests. See log |
-| W4 | Search, list view and epics | Review | 2026-10-14 | | | Search, My work, list view with CSV, epics page, saved filters, Ctrl+K item search. Access filtering is inside every query |
-| W5 | Notifications | Review | 2026-10-14 | | | In-app and email (batched), preferences, due-date reminders, delivered after commit with an access re-check |
-| W6 | Backlog and sprints (Scrum) | Review | 2026-10-15 | | | Backlog, sprints, start and complete with carry-over, sprint report, burndown from daily snapshots, board type switch |
-| W7 | Live updates and hardening | Review | 2026-10-15 | | | Server-sent events over Redis pub/sub, route protection test, rate limits, demo Scrum space, browser tests for live updates and cross-workspace attempts |
-| W8 | Leftovers: keys, order, search, digest, S3, pricing | Review | 2026-10-15 | | | Old-key redirects, backlog order, virtualised list, search in comments and file names, daily summary, S3 driver, file cleanup on delete, upgrade notice, pricing rows |
-| W9 | Workflow rules and dependencies | Review | 2026-10-15 | | | Transition rules, resolution, blocked badges, filter and warning, checklists and templates |
-| W10 | Versions and components | Review | 2026-10-16 | | | Versions with release flow and notes, components with default assignee, pickers, filters, Releases tab |
-| W14 | Space documents | Review | 2026-10-16 | | | Folder library per space: nested folders, upload, download, rename, move, delete |
-| W11 | Flow and reports | Review | 2026-10-16 | | | Velocity, cumulative flow, cycle time, created vs resolved; computed from history |
-| W12 | Roadmap, time tracking, calendar | Review | 2026-10-16 | | | Timeline of epics and releases, time logs and estimates, due-date calendar |
-| W13 | Dashboards, parity sweep, hardening | Review | 2026-10-16 | | | Dashboards, JIRA-PARITY.md, shortcuts, rate limits, live events, demo seed, browser tests |
+| W1 | Statuses, items and a read-only board | Done | 2026-10-14 | 2026-10-16 | | Built and tested: migrations 0011/0012, API, `can()` actions, plan gate, board, item panel and page, board settings, create-space board type, demo seed, 395 API tests, browser and accessibility tests. Deviations: see log |
+| W2 | Drag and drop and board power features | Done | 2026-10-14 | 2026-10-16 | | Built and tested: move, bulk, labels, filters, swimlanes, WIP warnings, rebalance job, shortcuts, 420 API tests plus browser and accessibility tests. See log for deviations |
+| W3 | Work item depth | Done | 2026-10-14 | 2026-10-16 | | Built and tested: rich text (Tiptap), comments and mentions, watchers, links, activity history, attachments on local storage with signed links, duplicate, transfer, 461 API tests plus browser and accessibility tests. See log |
+| W4 | Search, list view and epics | Done | 2026-10-14 | 2026-10-16 | | Search, My work, list view with CSV, epics page, saved filters, Ctrl+K item search. Access filtering is inside every query |
+| W5 | Notifications | Done | 2026-10-14 | 2026-10-16 | | In-app and email (batched), preferences, due-date reminders, delivered after commit with an access re-check |
+| W6 | Backlog and sprints (Scrum) | Done | 2026-10-15 | 2026-10-16 | | Backlog, sprints, start and complete with carry-over, sprint report, burndown from daily snapshots, board type switch |
+| W7 | Live updates and hardening | Done | 2026-10-15 | 2026-10-16 | | Server-sent events over Redis pub/sub, route protection test, rate limits, demo Scrum space, browser tests for live updates and cross-workspace attempts |
+| W8 | Leftovers: keys, order, search, digest, S3, pricing | Done | 2026-10-15 | 2026-10-16 | | Old-key redirects, backlog order, virtualised list, search in comments and file names, daily summary, S3 driver, file cleanup on delete, upgrade notice, pricing rows |
+| W9 | Workflow rules and dependencies | Done | 2026-10-15 | 2026-10-16 | | Transition rules, resolution, blocked badges, filter and warning, checklists and templates |
+| W10 | Versions and components | Done | 2026-10-16 | 2026-10-16 | | Versions with release flow and notes, components with default assignee, pickers, filters, Releases tab |
+| W14 | Space documents | Done | 2026-10-16 | 2026-10-16 | | Folder library per space: nested folders, upload, download, rename, move, delete |
+| W11 | Flow and reports | Done | 2026-10-16 | 2026-10-16 | | Velocity, cumulative flow, cycle time, created vs resolved; computed from history |
+| W12 | Roadmap, time tracking, calendar | Done | 2026-10-16 | 2026-10-16 | | Timeline of epics and releases, time logs and estimates, due-date calendar |
+| W13 | Dashboards, parity sweep, hardening | Done | 2026-10-16 | 2026-10-16 | | Dashboards, JIRA-PARITY.md, shortcuts, rate limits, live events, demo seed, browser tests |
 
 ## Pricing track (runs alongside the phases, see `PRICING-GATES.md`)
 
@@ -57,6 +57,8 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 - The brief mentions SendGrid; the platform uses Brevo through `apps/api/src/email/`. Use the existing sender.
 
 ## Log (newest first)
+
+- 2026-10-16: The owner signed off W1 to W14. All phases are Done. Known failing browser tests that were already failing before W8 (six CRM specs, the demo-flow walk through the CRM page, one signed-out sign-up accessibility check) are not part of this module and stay on the list in `MISSING-FEATURES.md` section 5.
 
 - 2026-10-16: W13 built and set to Review; with it every planned phase (W1 to W14) is built. **Dashboards:** collection `dashboards`, `routes/dashboard.ts` (`GET`/`PUT`/`DELETE /me/dashboard`), web `/dashboard` with five tile types and move/remove buttons. **Hardening:** shortcuts `T`, `D`, `V` and the `?` list; live events refresh releases, documents, roadmap, calendar, reports and time logs; rate limits on reports, roadmap, calendar, work logs, version create and folder create; the route protection test covers all new routes. **Demo seed:** `seedWorkExtras` (versions, components, checklist and template, work logs, a blocker, a roadmap epic, a status history, folders) with `seed-demo.test.ts` (runs twice, same counts). **Browser tests:** `e2e/work-extended.spec.ts` (7: releases, time and roadmap and calendar, documents with a real mouse drag, dashboard, cross-workspace attempts, accessibility in light and dark). Accessibility fixes found: the roadmap "Today" label contrast and a missing role on the space loading placeholder. `JIRA-PARITY.md` written. Tests: `dashboard.test.ts` (2). Final checks: API 539 tests pass; full browser run 82 of 92 passed, the 10 failures being 8 already known before this work (6 CRM specs and the demo-flow walk need the CRM module on in the dev database, plus the signed-out sign-up accessibility check) and 2 caused by the new screens, both fixed in the tests (an "Add" button now matched twice in the item panel; the stale-drag test now takes the live stream down, because live updates keep the board fresh, which is why it stopped producing a conflict).
 
