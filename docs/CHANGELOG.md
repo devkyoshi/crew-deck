@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-16 - Flow reports (W11)
+
+- **Reports > Flow** (every space, Business plan): cumulative flow, created against resolved, cycle time with 50/85/95 percent lines, and velocity for Scrum spaces. Each chart has a table of numbers.
+- ADR-065.
+
 ## 2026-10-16 - Space documents (W14)
 
 - **Documents tab** in every space: create folders (nested), upload files by button or drag and drop, download, rename, move and delete. Everyone in the space can open them; members manage their own, space admins everything.

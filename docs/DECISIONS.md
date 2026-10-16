@@ -348,6 +348,12 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-065: Flow reports are computed from the existing history (W11)
+
+- No new collection: each card's category over time is rebuilt from its creation, the status changes in its activity history (which store the category at the time) and its resolved time. Reports therefore cover a space's whole history without a backfill. A status deleted with a replacement moves cards without an event, and deleted cards leave the history; both are small and accepted.
+- Cumulative flow and created against resolved use days in the workspace timezone. Cycle time runs from the first entry into an In progress category (creation if never) to resolution; only cards still in a Done category count. Velocity is the points planned at sprint start against points finished, for the last six completed sprints (Scrum only).
+- All four are one request, gated by the `advanced_reports` feature (Business and above); every chart has a data table and a text summary.
+
 ## ADR-064: Space documents are a folder library on the same file storage (W14)
 
 - Each space has a document library: nested folders (up to 8 levels, 500 per space, one name per level) and files that belong to the space, not to a work item. Everyone who can open the space can read and download; members add, rename, move and delete what they added; space admins manage everything. Only an admin may delete a folder that has things in it.

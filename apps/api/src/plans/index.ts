@@ -27,6 +27,7 @@ export const FEATURE_KEYS = [
   'shared_filters',
   'burndown_reports',
   'releases',
+  'advanced_reports',
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 

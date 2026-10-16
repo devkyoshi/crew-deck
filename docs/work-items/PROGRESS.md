@@ -26,7 +26,7 @@
 | W9 | Workflow rules and dependencies | Review | 2026-10-15 | | | Transition rules, resolution, blocked badges, filter and warning, checklists and templates |
 | W10 | Versions and components | Review | 2026-10-16 | | | Versions with release flow and notes, components with default assignee, pickers, filters, Releases tab |
 | W14 | Space documents | Review | 2026-10-16 | | | Folder library per space: nested folders, upload, download, rename, move, delete |
-| W11 | Flow and reports | Not started | | | | Velocity, cumulative flow, control chart, created vs resolved |
+| W11 | Flow and reports | Review | 2026-10-16 | | | Velocity, cumulative flow, cycle time, created vs resolved; computed from history |
 | W12 | Roadmap, time tracking, calendar | Not started | | | | Timeline of epics, worklogs, due-date calendar |
 | W13 | Dashboards, parity sweep, hardening | Not started | | | | Gadget dashboards, JIRA-PARITY.md, a11y, e2e |
 
@@ -57,6 +57,8 @@ See `DECISIONS-PENDING.md`. All eight open decisions have a chosen or assumed an
 - The brief mentions SendGrid; the platform uses Brevo through `apps/api/src/email/`. Use the existing sender.
 
 ## Log (newest first)
+
+- 2026-10-16: W11 built and set to Review. `work/flow.ts` (history rebuilt from creation, activity status changes and resolution), `routes/reports.ts` (`GET /spaces/:id/reports?days=`, `/reports/access`), feature `advanced_reports` (Business and up), web Reports > Flow (`flow-reports.tsx`) with SVG charts, legends and data tables; the Reports tab now exists in Kanban spaces too. Tests: `flow-reports.test.ts` (6, including hand-computed fixtures). Change from the plan: no `status_changes` collection (derived instead, ADR-065). Review list: on a Business workspace open Reports > Flow in a Kanban and a Scrum space; on a Free one see the upgrade note.
 
 - 2026-10-16: W14 (space documents, added at the owner's request) built and set to Review. **API:** collections `space_folders` and `space_files`, `routes/space-docs.ts` (`GET /spaces/:id/documents?folder=`, folders create, rename or move, delete; `POST /spaces/:id/files?folder=`, `PATCH`/`DELETE /space-files/:id`), shared `storage/receive.ts` used by item attachments too, `/files/:id` serves both, `storageBytes` counts both, `can()` actions `doc.add` and `doc.delete`. **Web:** Documents tab (`documents-view.tsx`) with breadcrumb, drag and drop upload with progress, rename, move and delete dialogs. Tests: `space-docs.test.ts` (7). Not done: online editing, versions of a file, search inside documents, per-folder permissions. Review list: open a space, Documents, create nested folders, upload by button and by dragging, rename and move, open it as a viewer (read only) and as another member (cannot delete someone else's file).
 

@@ -53,7 +53,7 @@ summary, S3 storage, upgrade notice). Known gaps now:
 - **CSV export** is capped at 5,000 rows.
 - **Notifications** have no push notifications; emails need a Brevo key.
 - **Workflow rules** apply to moving between statuses only; they do not yet require fields or comments on a move.
-- **Sprints:** no sprint velocity or cumulative flow reports yet (planned W11).
+- **Reports** do not yet split by assignee, label or epic, and cannot be exported.
 - **Live updates** refresh whole screens of a space; there are no "someone is editing" indicators.
 - **Space documents** are files only: no online editing, version history, search inside files or per-folder permissions.
 - **Uploads** are not virus-scanned beyond refusing programs and scripts.

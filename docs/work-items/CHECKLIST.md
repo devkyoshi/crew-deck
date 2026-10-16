@@ -200,10 +200,11 @@ Tick items (`[x]`) as they are finished and verified. Details for each line are 
 
 ## W11: Flow and reports
 
-- [ ] Status-change history collection and backfill
-- [ ] Velocity, cumulative flow, control chart, created vs resolved (with data tables)
-- [ ] Plan gate `advanced_reports`
-- [ ] Tests, docs, owner review
+- [x] Status history (derived from activity, no backfill needed)
+- [x] Velocity, cumulative flow, cycle time, created vs resolved (with data tables)
+- [x] Plan gate `advanced_reports`
+- [x] Tests, docs
+- [ ] Owner review and sign-off
 
 ## W12: Roadmap, time tracking, calendar
 

@@ -61,6 +61,7 @@ export const PLANS: PlanDoc[] = [
       'shared_filters',
       'burndown_reports',
       'releases',
+      'advanced_reports',
     ],
   },
   {
@@ -81,6 +82,7 @@ export const PLANS: PlanDoc[] = [
       'shared_filters',
       'burndown_reports',
       'releases',
+      'advanced_reports',
     ],
   },
 ];

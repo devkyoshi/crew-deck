@@ -401,7 +401,7 @@ Old-key redirects (`keyHistory`), backlog ordering (`backlogRank`), virtualised 
 - Collections `versions` (name, description, start and release dates, state unreleased, released, archived) and `components` (name, lead, default assignee); item fields `fixVersionIds`, `affectsVersionIds`, `componentIds`.
 - Release action lists open items and moves them to another version or none; release notes grouped by type; filters on board, list, search and CSV; default assignee on create. Plan gate `releases`.
 
-### W11: Flow and reports
+### W11: Flow and reports (built)
 
 - `status_changes` collection (item, from, to, at) fed by every status change, backfilled from `activity_events`.
 - Velocity (last six sprints), cumulative flow, control chart with cycle-time percentiles, created vs resolved; each with a data table. Plan gate `advanced_reports`.
