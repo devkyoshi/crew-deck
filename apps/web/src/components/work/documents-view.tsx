@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext,
   DragOverlay,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useDraggable,
@@ -187,6 +188,8 @@ export function DocumentsView() {
     >
       <DndContext
         sensors={sensors}
+        // The folder under the pointer is the target, wherever the dragged chip is drawn.
+        collisionDetection={pointerWithin}
         onDragStart={(e) => setDragging((e.active.data.current?.target as Target) ?? null)}
         onDragCancel={() => setDragging(null)}
         onDragEnd={onDragEnd}
@@ -331,15 +334,17 @@ export function DocumentsView() {
             </table>
           </div>
         )}
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {dragging ? (
-            <div className="bg-card flex items-center gap-2 rounded-lg border px-3 py-2 text-sm shadow-lg">
+            <div
+              aria-hidden
+              className="bg-card text-muted-foreground flex size-9 items-center justify-center rounded-lg border shadow-lg"
+            >
               {dragging.kind === 'folder' ? (
-                <Folder className="size-4 text-amber-600" aria-hidden />
+                <Folder className="size-5 text-amber-600" />
               ) : (
-                <FileIcon className="size-4" aria-hidden />
+                <FileIcon className="size-5" />
               )}
-              {dragging.item.name}
             </div>
           ) : null}
         </DragOverlay>
