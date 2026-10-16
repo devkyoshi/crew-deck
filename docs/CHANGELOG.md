@@ -3,6 +3,7 @@
 ## 2026-10-16 - Space documents (W14)
 
 - **Documents tab** in every space: create folders (nested), upload files by button or drag and drop, download, rename, move and delete. Everyone in the space can open them; members manage their own, space admins everything.
+- Drag a file or folder onto a folder (or onto the path at the top) to move it; drag files from your computer onto a folder to upload straight into it. "New subfolder" is in each folder's menu. "Move to…" stays in the menu for keyboard use.
 - Uses the workspace's file storage and plan limits (file size and total storage).
 - ADR-064.
 

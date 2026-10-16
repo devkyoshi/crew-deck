@@ -30,6 +30,13 @@ export type Priority = (typeof PRIORITIES)[number];
 export const STATUS_CATEGORIES = ['todo', 'in_progress', 'done'] as const;
 export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
 
+/** Why a finished item was finished. Set when it moves to a Done status; cleared when it moves back. */
+export const RESOLUTIONS = ['done', 'wont_do', 'duplicate', 'cannot_reproduce'] as const;
+export type Resolution = (typeof RESOLUTIONS)[number];
+
+/** Most entries a checklist on one item may have, and the most a template may have. */
+export const MAX_CHECKLIST = 50;
+
 export const BOARD_TYPES = ['kanban', 'scrum'] as const;
 export type BoardType = (typeof BOARD_TYPES)[number];
 
