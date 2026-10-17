@@ -16,7 +16,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Illustration } from '@/components/illustrations';
 import { LoadError } from '@/components/shared/load-error';
 import { PageHeader } from '@/components/shared/page-header';

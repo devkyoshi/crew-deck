@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Globe, Hash, Lock, Megaphone, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { CHANNEL_NAME_RE, GROUP_DM_MAX } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import {

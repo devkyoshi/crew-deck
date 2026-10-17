@@ -2,7 +2,7 @@
 
 import { useCallback, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
 import {
   AlertDialog,

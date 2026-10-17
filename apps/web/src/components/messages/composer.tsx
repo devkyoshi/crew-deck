@@ -32,7 +32,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   MAX_FILES_PER_MESSAGE,
   MAX_MESSAGE_CHARS,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, Layers, Lock, MessagesSquare, Home, ShieldAlert } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ImageUpload } from '@/components/shared/image-upload';
 import { Notice } from '@/components/shared/notice';

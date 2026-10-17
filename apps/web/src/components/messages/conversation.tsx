@@ -17,7 +17,7 @@ import {
   Boxes,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { AttachmentDTO, MessageDTO, PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

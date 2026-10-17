@@ -2,7 +2,7 @@
 
 import { Archive, Globe, Lock, Star } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { TONES, TonePill, type Tone } from '@/components/shared/pastel';
 import { api, ApiError, type SpaceRole, type SpaceVisibility } from '@/lib/api';

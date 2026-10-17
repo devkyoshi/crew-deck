@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyRound, LogOut, ShieldCheck } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { PasswordStrength, MIN_PASSWORD } from '@/components/auth/password-strength';
 import { Notice } from '@/components/shared/notice';
 import { useMe } from '@/components/shell/me-context';

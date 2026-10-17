@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, Flag, Lock } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { LockedButton } from '@/components/plans/locked-button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';

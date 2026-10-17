@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { api, ApiError, qs } from '@/lib/api';
 import type { BoardData, ChecklistEntry, Label, Resolution, Person, StatusColor, WorkItem, WorkStatus } from '@/lib/work';
 

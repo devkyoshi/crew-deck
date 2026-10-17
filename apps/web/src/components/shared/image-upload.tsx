@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ReactNode } from 'react';
 import { Camera, Loader2, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { ImageCropDialog } from './image-crop-dialog';
 import { cn } from '@/lib/utils';

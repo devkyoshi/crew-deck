@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { api, ApiError, type Member, type OrgRole } from '@/lib/api';
 
 const ERROR_TEXT: Record<string, string> = {

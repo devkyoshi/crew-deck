@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download, MessageSquare, ShieldAlert, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   RETENTION_MAX_DAYS,
   RETENTION_MIN_DAYS,

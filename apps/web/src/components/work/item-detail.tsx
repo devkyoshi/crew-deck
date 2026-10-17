@@ -18,7 +18,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   AlertDialog,
   AlertDialogAction,

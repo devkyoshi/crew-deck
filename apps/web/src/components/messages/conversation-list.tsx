@@ -42,7 +42,7 @@ import {
   Users,
   Boxes,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { SidebarSectionDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

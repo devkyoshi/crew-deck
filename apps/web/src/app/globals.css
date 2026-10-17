@@ -608,3 +608,9 @@
   transform: translateY(-2px);
   box-shadow: var(--elev-sm);
 }
+
+/* While a modal is open, pause the endless decorative animations behind it so the open animation stays smooth. */
+body:has([role='dialog'], [role='alertdialog'])
+  :is(.animate-float, .animate-shimmer, .ill-bob, .ill-twinkle, .ill-pop, .ill-draw) {
+  animation-play-state: paused;
+}

@@ -16,7 +16,7 @@ import {
   X,
   Boxes,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ACTIVITY_EVENT_LABELS, ACTIVITY_EVENT_TYPES } from '@crew-deck/shared';
 import {
   AlertDialog,

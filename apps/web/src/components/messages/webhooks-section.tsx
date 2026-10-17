@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Copy, Plus, Webhook } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { MAX_WEBHOOKS_PER_CHANNEL } from '@crew-deck/shared';
 import {
   AlertDialog,

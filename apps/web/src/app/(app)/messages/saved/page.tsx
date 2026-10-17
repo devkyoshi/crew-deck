@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Bookmark, BookmarkX } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';

@@ -26,7 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { SpaceFeature } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

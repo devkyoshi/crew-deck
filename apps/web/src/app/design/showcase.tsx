@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Inbox, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

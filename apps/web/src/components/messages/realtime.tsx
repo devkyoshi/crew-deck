@@ -12,7 +12,7 @@ import {
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { io, type Socket } from 'socket.io-client';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   C2S,
   S2C,

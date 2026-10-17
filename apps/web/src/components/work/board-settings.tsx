@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { STATUS_COLORS, type SpaceFeature, type StatusColor } from '@crew-deck/shared';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   AlertDialog,
   AlertDialogAction,

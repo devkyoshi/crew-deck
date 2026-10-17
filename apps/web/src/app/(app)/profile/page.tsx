@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bell, Moon, Palette, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ProfileForm, type ProfileValues } from '@/components/members/profile-form';
 import { SecurityPanel } from '@/components/members/security-panel';
 import { PageContainer } from '@/components/shared/page-container';

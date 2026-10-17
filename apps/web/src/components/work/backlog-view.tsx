@@ -14,7 +14,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { ArrowRightLeft, CalendarRange, GripVertical, Loader2, MoreHorizontal, Pencil, Play, Plus, Repeat, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
