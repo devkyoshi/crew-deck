@@ -63,7 +63,7 @@ import {
 } from '@/components/ui/table';
 import { RoleBadge, StatusChip } from '@/components/shared/badges';
 import { EmptyState } from '@/components/shared/empty-state';
-import { initials, useMe } from '@/components/shell/me-context';
+import { useMe } from '@/components/shell/me-context';
 import { api, qs, type Member, type OrgRole, type Page } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';

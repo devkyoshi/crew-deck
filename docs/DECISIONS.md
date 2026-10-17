@@ -348,6 +348,13 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-093: Temporary passwords are generated per person, and status is chosen from the profile menu
+
+- **Adding people:** an admin can email an invitation, copy a link, or create the account now. In the last case the API makes a random 14-character password for each new person (no look-alike characters), stores only its argon2 hash, returns it once to the admin, and marks the account `mustChangePassword`. The app holds that person on Profile > Security until they set their own; the temporary password stops working then. It is never emailed and there is no shared default password. Someone who already has a sign-in from another workspace joins without a password and keeps theirs.
+- **Passwords:** `POST /me/password` needs the current password (not for Google-only people), enforces the minimum length, is rate limited and audited, and ends the person's other sessions. Sessions are indexed per person in Redis so "sign out of other sessions" can find them.
+- **Presence:** the profile menu offers Available (automatic), Away and Do not disturb. A manual Away is a Redis key with a 12-hour expiry; Do not disturb already existed. Precedence is offline, then do not disturb, then manual away, then the connection state. Dots: green available, grey away or idle, red do not disturb, hollow ring offline. The custom status line moved from Messages to the same menu.
+- **Pictures:** profile photos and logos are cropped to a square in the browser (512 x 512) before upload; the server still checks the file's real type and size.
+
 ## ADR-092: One token system, a six-step type scale, and a rail + panel shell
 
 The web app's look is defined in one place, `apps/web/src/app/globals.css`, and components use tokens only.

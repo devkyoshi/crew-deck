@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-17 - Accounts: status menu, adding members, passwords, photo cropping
+
+- **Status in the profile menu:** Available, Away and Do not disturb (with durations) plus the custom status moved out of Messages into the avatar menu in the top bar. Other people see a green, grey or red dot (hollow ring when offline) on avatars in the people list, space headers and chat.
+- **Adding members:** "Invite people" now appears on Home, People, the Administration members page and the workspace switcher for admins, with three ways to add someone: email, copy a link, or create the account with a generated temporary password (shown once, CSV download, forced change at first sign-in). ADR-093.
+- **Profile:** tabs for Profile, Security (change password, sign out of other sessions) and Preferences (theme, notifications).
+- **Photos:** profile photos and workspace logos open a crop dialog (drag, zoom, keyboard) and save as 512 x 512 squares.
+
 ## 2026-10-16 - UI rework: design system, shell and calendar
 
 - **Design system:** new colour, type, radius, shadow and motion tokens (light and dark), Inter variable plus Geist Mono, and a six-step type scale. Every off-scale text size and hard-coded palette colour in the app moved onto the tokens. ADR-092.

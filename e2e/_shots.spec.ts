@@ -9,30 +9,32 @@ test('capture', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 860 });
   await signInAsOwner(page);
-  const shot = async (name: string, wait = 1800) => {
+  const shot = async (name: string, wait = 1500) => {
     await page.waitForTimeout(wait);
     await page.screenshot({ path: `${dir}/${name}.png` });
   };
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await shot('status-menu', 600);
+  await page.getByRole('menuitem', { name: 'Do not disturb' }).hover();
+  await shot('status-menu-dnd', 600);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
 
-  await shot('home');
-  // Hover the active rail item: the icon must stay visible.
-  await page.getByRole('link', { name: 'Home', exact: true }).first().hover();
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: `${dir}/rail-hover.png`, clip: { x: 0, y: 0, width: 420, height: 860 } });
+  await page.goto('/people');
+  await page.getByRole('button', { name: 'Invite people' }).click();
+  await page.getByLabel('Email addresses').fill('new.person@acme.test');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await shot('invite-method', 500);
+  await page.getByRole('radio', { name: /Create with a temporary password/ }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Back' }).click();
+  await shot('invite-method-password', 400);
+  await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: /Quick messages/ }).click();
-  await shot('quick-messages', 800);
-  await page.getByRole('button', { name: /^(#|[a-z0-9])/i }).filter({ hasText: /ago|No messages/ }).first().click();
-  await shot('quick-chat', 3000);
-
+  await page.goto('/profile?tab=security');
+  await shot('security');
   await page.goto('/profile');
-  await shot('profile');
-  await page.goto('/admin/settings/branding');
-  await shot('branding');
-  await page.goto('/dashboard');
-  await shot('dashboard', 3000);
-  await page.goto('/spaces/ENG/board');
-  await shot('board', 3000);
-  await page.goto('/spaces/ENG/settings');
-  await shot('space-settings', 2500);
+  const wide = Buffer.from('iVBORw0KGgo=', 'base64');
+  void wide;
 });

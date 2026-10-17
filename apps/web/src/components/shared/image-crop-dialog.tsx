@@ -138,7 +138,6 @@ export function ImageCropDialog({
             }}
           >
             {url && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 ref={img}
                 src={url}
