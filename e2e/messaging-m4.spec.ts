@@ -39,6 +39,7 @@ test('a space has a channel: members get it on their own, viewers can read but n
     await other.goto('/messages');
     // Created after the member opened Messages: it shows up without a reload.
     const s = await setupSpace(page);
+    await other.getByRole('tab', { name: /^Channels/ }).click();
     const row = other.getByRole('navigation', { name: 'Conversations' }).getByRole('link', { name: new RegExp(s.key.toLowerCase()) });
     // The server side first (the channel exists for them), then that it appears on its own.
     await expect

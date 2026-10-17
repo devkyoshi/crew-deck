@@ -56,12 +56,14 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center',
+        'animate-fade-up flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center',
         'in-data-[slot=card]:rounded-none in-data-[slot=card]:border-0 in-data-[slot=card]:py-6',
         'in-[td]:rounded-none in-[td]:border-0 in-[td]:py-6',
       )}
     >
-      <Illustration name={illustration ?? pick(title, icon)} />
+      <div className="animate-float">
+        <Illustration name={illustration ?? pick(title, icon)} />
+      </div>
       <div className="space-y-1">
         <h3 className="font-medium">{title}</h3>
         <p className="text-muted-foreground max-w-sm text-sm">{description}</p>

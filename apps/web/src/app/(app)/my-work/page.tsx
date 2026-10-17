@@ -4,6 +4,7 @@ import { Suspense, useMemo } from 'react';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
+import { ListSkeleton } from '@/components/shared/skeletons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FoundItems } from '@/components/work/found-items';
 import { ItemSheet, useUrlState } from '@/components/work/item-sheet';
@@ -47,7 +48,7 @@ function MyWork() {
       {items.isError ? (
         <LoadError what="your work" onRetry={() => items.refetch()} />
       ) : !items.data ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <ListSkeleton rows={5} />
       ) : groups.length === 0 ? (
         <EmptyState title="Nothing here" description={role === 'assigned' && state === 'open' ? 'You are all caught up.' : `No ${vocab.nounPlural} match.`} />
       ) : (

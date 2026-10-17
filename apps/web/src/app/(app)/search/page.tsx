@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
+import { LoadError } from '@/components/shared/load-error';
+import { ListSkeleton } from '@/components/shared/skeletons';
 import { Input } from '@/components/ui/input';
 import { FoundItems } from '@/components/work/found-items';
 import { ItemSheet, useUrlState } from '@/components/work/item-sheet';
@@ -39,8 +41,10 @@ function SearchResults() {
       </div>
       {!q ? (
         <EmptyState title="Search across your spaces" description="Results only include spaces you can open." />
+      ) : results.isError ? (
+        <LoadError what="search results" onRetry={() => results.refetch()} />
       ) : results.isPending ? (
-        <p className="text-muted-foreground text-sm">Searching…</p>
+        <ListSkeleton rows={4} />
       ) : results.data && results.data.items.length === 0 ? (
         <EmptyState title="No results" description={`Nothing matches “${q}”.`} />
       ) : (

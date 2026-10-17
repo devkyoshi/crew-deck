@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Check, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
+import { EmptyState } from '@/components/shared/empty-state';
+import { LoadError } from '@/components/shared/load-error';
+import { Stagger, StaggerItem } from '@/components/shared/motion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -51,10 +54,18 @@ export default function MyWorkspacesPage() {
             <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
+      ) : q.isError ? (
+        <LoadError what="your workspaces" onRetry={() => q.refetch()} />
+      ) : q.data?.items.length === 0 ? (
+        <EmptyState
+          illustration="spaces"
+          title="No workspaces yet"
+          description="Create a workspace to bring your team together."
+        />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2" aria-label="Workspaces">
+        <Stagger className="grid gap-3 sm:grid-cols-2">
           {q.data?.items.map((w) => (
-            <li key={w.id}>
+            <StaggerItem key={w.id}>
               <Card className="gap-3 p-4 shadow-none" data-testid={`workspace-${w.slug}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -76,9 +87,9 @@ export default function MyWorkspacesPage() {
                   <span className="text-muted-foreground text-xs">{ROLE_LABEL[w.orgRole] ?? w.orgRole}</span>
                 </div>
               </Card>
-            </li>
+            </StaggerItem>
           ))}
-        </ul>
+        </Stagger>
       )}
     </>
   );

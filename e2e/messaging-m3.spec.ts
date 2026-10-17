@@ -112,6 +112,7 @@ test('sections: create one, move a channel into it, reorder with the menu, and d
     await setupChannel(page, other, name);
     await page.goto('/messages');
     const nav = page.getByRole('navigation', { name: 'Conversations' });
+    await page.getByRole('tab', { name: /^Channels/ }).click();
     await expect(nav.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
 
     // Create the section from the channel's own menu and move it there in one go.
@@ -120,10 +121,11 @@ test('sections: create one, move a channel into it, reorder with the menu, and d
     await page.getByRole('menuitem', { name: /New section/ }).click();
     await page.getByRole('textbox', { name: 'Section name' }).fill(section);
     await page.getByRole('button', { name: 'Save' }).click();
+    // The channel now lives under the section on the Chats tab, not in the Channels list.
+    await expect(nav.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveCount(0);
+    await page.getByRole('tab', { name: /^Chats/ }).click();
     const heading = nav.getByRole('button', { name: new RegExp(`^${section}`) });
     await expect(heading).toBeVisible();
-    // The channel now lives under the section, not in the main Channels list.
-    await expect(nav.getByRole('button', { name: /^Channels/ })).toBeVisible();
     const inSection = page.locator('div.group\\/section', { has: page.getByRole('button', { name: new RegExp(`^${section}`) }) });
     await expect(inSection.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
 
@@ -135,6 +137,7 @@ test('sections: create one, move a channel into it, reorder with the menu, and d
     await nav.getByRole('button', { name: new RegExp(`Options for the ${section} section`) }).click();
     await page.getByRole('menuitem', { name: 'Delete section' }).click();
     await expect(nav.getByRole('button', { name: new RegExp(`^${section}`) })).toHaveCount(0);
+    await page.getByRole('tab', { name: /^Channels/ }).click();
     await expect(nav.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
   });
 });
@@ -148,9 +151,12 @@ test('starring a conversation puts it in a Starred section', async ({ page, brow
     await setupChannel(page, other, name);
     await page.goto('/messages');
     const nav = page.getByRole('navigation', { name: 'Conversations' });
+    await page.getByRole('tab', { name: /^Channels/ }).click();
     await nav.getByRole('link', { name: new RegExp(`^${name}`) }).hover();
     await nav.getByRole('button', { name: new RegExp(`Options for ${name}`) }).click();
     await page.getByRole('menuitem', { name: 'Star' }).click();
+    // Starred conversations sit on the Chats tab.
+    await page.getByRole('tab', { name: /^Chats/ }).click();
     await expect(nav.getByRole('button', { name: /^Starred/ })).toBeVisible();
     await nav.getByRole('link', { name: new RegExp(`^${name}`) }).hover();
     await nav.getByRole('button', { name: new RegExp(`Options for ${name}`) }).click();
@@ -221,6 +227,7 @@ test('keyboard: Alt+Shift+Down jumps to the next conversation with unread messag
     // The other person writes in the other channel and mentions nobody: only a plain unread dot.
     await apiCall(other, 'POST', `/channels/${loudRoom}/messages`, { clientMsgId: crypto.randomUUID().slice(0, 30), body: doc('look over here') });
     const nav = page.getByRole('navigation', { name: 'Conversations' });
+    await page.getByRole('tab', { name: /^Channels/ }).click();
     await expect(nav.getByLabel('Unread messages').first()).toBeVisible({ timeout: 8000 });
     await page.getByRole('log', { name: 'Messages' }).focus();
     await page.keyboard.press('Alt+Shift+ArrowDown');

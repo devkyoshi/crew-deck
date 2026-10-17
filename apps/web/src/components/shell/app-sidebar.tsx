@@ -225,6 +225,8 @@ export function AppSidebar() {
   );
 
   if (isMobile) return <Sidebar collapsible="offcanvas">{body}</Sidebar>;
+  // Messages has its own conversation list as the contextual panel; the rail already switches modules.
+  if (pathname.startsWith('/messages')) return null;
   return (
     <aside
       data-slot="sidebar"

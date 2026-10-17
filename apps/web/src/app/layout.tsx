@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist_Mono, Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { QueryProvider } from '@/components/query-provider';
+import { MotionProvider } from '@/components/shared/motion';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <QueryProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <MotionProvider>
+              <TooltipProvider>{children}</TooltipProvider>
+            </MotionProvider>
           </QueryProvider>
           <Toaster />
         </ThemeProvider>

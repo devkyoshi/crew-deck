@@ -15,7 +15,9 @@ import { Illustration } from '@/components/illustrations';
 import { WorkspaceScene } from '@/components/illustrations/workspace-scene';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/shared/stat-card';
-import { FadeIn, Stagger, StaggerItem } from '@/components/shared/motion';
+import { CountUp, FadeIn, Stagger, StaggerItem } from '@/components/shared/motion';
+import { LoadError } from '@/components/shared/load-error';
+import { ListSkeleton } from '@/components/shared/skeletons';
 import { TeamWidget } from '@/components/checkin/team-board';
 import { useToday } from '@/components/checkin/use-today';
 import { InviteDialog } from '@/components/members/invite-dialog';
@@ -133,7 +135,7 @@ export default function HomePage() {
             icon={ListTodo}
             tone="blue"
             label="Open items"
-            value={mine.data ? items.length : '–'}
+            value={mine.data ? <CountUp value={items.length} /> : '–'}
           />
         </StaggerItem>
         <StaggerItem>
@@ -141,7 +143,7 @@ export default function HomePage() {
             icon={CalendarClock}
             tone="amber"
             label="Due this week"
-            value={mine.data ? dueSoon : '–'}
+            value={mine.data ? <CountUp value={dueSoon} /> : '–'}
           />
         </StaggerItem>
         <StaggerItem>
@@ -149,11 +151,11 @@ export default function HomePage() {
             icon={AlertTriangle}
             tone="pink"
             label="Overdue"
-            value={mine.data ? overdue : '–'}
+            value={mine.data ? <CountUp value={overdue} /> : '–'}
           />
         </StaggerItem>
         <StaggerItem>
-          <StatCard icon={MessagesSquare} tone="violet" label="Unread chats" value={messages} />
+          <StatCard icon={MessagesSquare} tone="violet" label="Unread chats" value={<CountUp value={messages} />} />
         </StaggerItem>
       </Stagger>
 
@@ -168,7 +170,11 @@ export default function HomePage() {
             </Button>
           }
         >
-          {items.length === 0 ? (
+          {mine.isError ? (
+            <LoadError what="your work" onRetry={() => mine.refetch()} />
+          ) : !mine.data ? (
+            <ListSkeleton rows={4} className="rounded-none border-0 border-t" />
+          ) : items.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-6 pt-2 pb-8 text-center">
               <Illustration name="empty" />
               <p className="text-sm font-medium">Nothing here yet</p>

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { ProfileForm, type ProfileValues } from '@/components/members/profile-form';
 import { SecurityPanel } from '@/components/members/security-panel';
 import { PageHeader } from '@/components/shared/page-header';
+import { TabPanel } from '@/components/shared/motion';
 import { ImageUpload } from '@/components/shared/image-upload';
 import { RoleBadge } from '@/components/shared/badges';
 import { initials, useMe } from '@/components/shell/me-context';
@@ -115,7 +116,7 @@ export default function ProfilePage() {
         </TabsList>
 
         <TabsContent value="profile">
-          <div className="grid items-start gap-6 md:grid-cols-[18rem_minmax(0,1fr)]">
+          <TabPanel id="profile" className="grid items-start gap-6 md:grid-cols-[18rem_minmax(0,1fr)]">
             <Card className="gap-5 p-6">
               <ImageUpload
                 endpoint="/me/avatar"
@@ -157,19 +158,19 @@ export default function ProfilePage() {
                 />
               </CardContent>
             </Card>
-          </div>
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="security">
-          <div className="max-w-2xl">
+          <TabPanel id="security" className="max-w-2xl">
             <SecurityPanel forced={forced} />
-          </div>
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="preferences">
-          <div className="max-w-2xl">
+          <TabPanel id="preferences" className="max-w-2xl">
             <Preferences />
-          </div>
+          </TabPanel>
         </TabsContent>
       </Tabs>
     </div>

@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useSpace } from '@/components/spaces/space-context';
 import { ListView } from '@/components/work/list-view';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 export default function TicketsPage() {
   const space = useSpace();
@@ -16,7 +17,7 @@ export default function TicketsPage() {
     );
   }
   return (
-    <Suspense fallback={<p className="text-muted-foreground text-sm">Loading…</p>}>
+    <Suspense fallback={<ListSkeleton />}>
       <ListView ticketsOnly />
     </Suspense>
   );

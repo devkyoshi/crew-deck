@@ -37,10 +37,14 @@ function useCrumbs() {
 
 export function Topbar() {
   const crumbs = useCrumbs();
+  const pathname = usePathname();
   return (
     <header className="bg-background z-10 shrink-0 border-b px-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex h-12 w-full max-w-7xl items-center gap-1.5">
-        <SidebarTrigger aria-label="Toggle sidebar" />
+        <SidebarTrigger
+          aria-label="Toggle sidebar"
+          className={pathname.startsWith('/messages') ? 'md:hidden' : undefined}
+        />
         <Breadcrumb className="min-w-0 flex-1">
           <BreadcrumbList className="flex-nowrap text-sm">
             {crumbs.map((c, i) => (

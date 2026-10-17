@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -20,6 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   AtSign,
   Bookmark,
@@ -63,6 +64,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useHydrated } from '@/components/checkin/use-hydrated';
 import { useMe } from '@/components/shell/me-context';
 import { ApiError } from '@/lib/api';
@@ -118,7 +121,7 @@ export function ConversationListItem({
         href={href ?? `/messages/${channel.id}`}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'focus-visible:ring-ring/50 flex h-8 items-center gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-[3px]',
+          'focus-visible:ring-ring/50 flex h-9 items-center gap-2 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-2',
           active
             ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
             : 'hover:bg-muted/70',
@@ -165,7 +168,7 @@ export function ConversationListItem({
         )}
       </Link>
       {menu && (
-        <div className="absolute top-1 right-1 opacity-0 transition-opacity group-focus-within/item:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100 has-[[data-state=open]]:opacity-100">
+        <div className="absolute top-1.5 right-1 opacity-0 transition-opacity group-focus-within/item:opacity-100 group-hover/item:opacity-100 pointer-coarse:opacity-100 has-[[data-state=open]]:opacity-100">
           {menu}
         </div>
       )}
@@ -219,18 +222,18 @@ function Section({
     <Collapsible open={open} onOpenChange={setOpen} className="group/section">
       <div className="flex items-center gap-1 px-1">
         {handle}
-        <CollapsibleTrigger className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold tracking-wide uppercase outline-none focus-visible:ring-2">
+        <CollapsibleTrigger className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 py-1.5 text-xs font-medium outline-none focus-visible:ring-2">
           <ChevronRight
             className="size-3.5 shrink-0 transition-transform group-data-[state=open]/section:rotate-90"
             aria-hidden
           />
           <span className="truncate">{title}</span>
-          <span className="font-normal normal-case">{count}</span>
+          <span className="font-normal opacity-70">{count}</span>
         </CollapsibleTrigger>
         {action}
       </div>
       <CollapsibleContent>
-        <ul className="space-y-px px-1 pb-2">{children}</ul>
+        <ul className="space-y-px px-1 pb-3">{children}</ul>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -425,7 +428,8 @@ function SectionNameDialog({
 
 // ---- The list ---------------------------------------------------------------------------------------------------
 
-function TopLink({
+/** The four places outside a conversation: one icon each, so the list below gets the room. */
+function QuickLink({
   href,
   icon,
   label,
@@ -441,30 +445,106 @@ function TopLink({
   const pathname = usePathname();
   const active = pathname === href;
   return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'focus-visible:ring-ring/50 mx-1 flex h-8 items-center gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-[3px]',
-        active
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-          : 'text-muted-foreground hover:bg-muted/70',
-      )}
-    >
-      {icon}
-      <span className="flex-1">{label}</span>
-      {!!badge && badge > 0 && (
-        <span
-          className="bg-destructive text-white min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
-          aria-label={`${badge} unread`}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href={href}
+          onClick={onNavigate}
+          aria-current={active ? 'page' : undefined}
+          aria-label={badge ? `${label}, ${badge} unread` : label}
+          className={cn(
+            'focus-visible:ring-ring/50 relative flex h-8 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2',
+            active
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+          )}
         >
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
-    </Link>
+          {icon}
+          {!!badge && badge > 0 && (
+            <span
+              aria-hidden
+              className="bg-destructive absolute top-0.5 right-1.5 min-w-4 rounded-full px-1 text-center text-[10px] leading-4 font-semibold text-white tabular-nums"
+            >
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
+
+const ROW_H = 36;
+
+/** Every channel you are in, as a window onto the list: a few dozen rows exist at a time, not hundreds. */
+function ChannelsPanel({
+  rooms,
+  filter,
+  activeId,
+  item,
+  onBrowse,
+}: {
+  rooms: MyChannelDTO[];
+  filter: string;
+  activeId: string | null;
+  item: (c: MyChannelDTO, style?: CSSProperties) => ReactNode;
+  onBrowse: () => void;
+}) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const virt = useVirtualizer({
+    count: rooms.length,
+    getScrollElement: () => el,
+    estimateSize: () => ROW_H,
+    overscan: 10,
+    getItemKey: (i) => rooms[i]!.id,
+  });
+  // Opening the tab (or a link to a channel) brings the open channel into view.
+  const activeIndex = rooms.findIndex((c) => c.id === activeId);
+  useEffect(() => {
+    if (el && activeIndex >= 0) virt.scrollToIndex(activeIndex, { align: 'auto' });
+  }, [el, activeId]);
+  return (
+    <>
+      <div className="flex items-center justify-between px-3 pb-1">
+        <span className="text-muted-foreground text-xs font-medium">
+          Your channels <span className="font-normal opacity-70">{rooms.length}</span>
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Create or browse channels"
+          onClick={onBrowse}
+        >
+          <Plus />
+        </Button>
+      </div>
+      <div ref={setEl} className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+        {rooms.length === 0 ? (
+          <p className="text-muted-foreground px-2 py-1.5 text-label">
+            {filter ? 'No channels match.' : 'You are not in any channels yet.'}
+          </p>
+        ) : (
+          <ul style={{ height: virt.getTotalSize(), position: 'relative' }}>
+            {virt.getVirtualItems().map((v) =>
+              item(rooms[v.index]!, {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: ROW_H,
+                transform: `translateY(${v.start}px)`,
+              }),
+            )}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+}
+
+const isMuted = (c: MyChannelDTO) =>
+  c.notificationLevel === 'none' || (!!c.mutedUntil && new Date(c.mutedUntil) > new Date());
 
 export function ConversationList({
   activeId,
@@ -482,6 +562,7 @@ export function ConversationList({
   const readAll = useReadAll();
   const sectionApi = useSectionMutations();
   const [filter, setFilter] = useState('');
+  const [tab, setTabState] = useState<'chats' | 'channels'>('chats');
   const canCreate = useCanCreateChannel();
   const [dialog, setDialog] = useState<'new' | 'create' | 'browse' | null>(null);
   const [sectionDialog, setSectionDialog] = useState<
@@ -496,31 +577,61 @@ export function ConversationList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const { starred, rooms, dms, bySection } = useMemo(() => {
-    const all = (channels.data ?? []).filter(
-      (c) =>
-        !filter.trim() ||
-        conversationName(c, me).toLowerCase().includes(filter.trim().toLowerCase()),
-    );
+  const { starred, rooms, dms, bySection, roomIds, unreadChats, unreadRooms } = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const match = (c: MyChannelDTO) => !q || conversationName(c, me).toLowerCase().includes(q);
+    const base = channels.data ?? [];
     const known = new Set(sections.map((s) => s.id));
     const inSection = (c: MyChannelDTO) => !!c.sectionId && known.has(c.sectionId);
     const byName = (a: MyChannelDTO, b: MyChannelDTO) =>
       conversationName(a, me).localeCompare(conversationName(b, me));
     const recent = (a: MyChannelDTO, b: MyChannelDTO) =>
       (b.lastMessageAt ?? b.createdAt).localeCompare(a.lastMessageAt ?? a.createdAt);
-    const starred = all.filter((c) => c.isStarred).sort(byName);
+    // Where each conversation lives does not depend on the filter, so the tab dots do not either.
+    const isRoom = (c: MyChannelDTO) =>
+      !c.isStarred && !inSection(c) && (c.type === 'public' || c.type === 'private');
+    const unread = (c: MyChannelDTO) => c.unread > 0 && !isMuted(c);
+    const all = base.filter(match);
     const rest = all.filter((c) => !c.isStarred);
     const bySection = new Map<string, MyChannelDTO[]>();
     for (const c of rest.filter(inSection))
       bySection.set(c.sectionId!, [...(bySection.get(c.sectionId!) ?? []), c].sort(byName));
     const main = rest.filter((c) => !inSection(c));
     return {
-      starred,
+      starred: all.filter((c) => c.isStarred).sort(byName),
       bySection,
       rooms: main.filter((c) => c.type === 'public' || c.type === 'private').sort(byName),
       dms: main.filter((c) => c.type === 'dm' || c.type === 'group_dm').sort(recent),
+      roomIds: new Set(base.filter(isRoom).map((c) => c.id)),
+      unreadChats: base.filter((c) => !isRoom(c) && unread(c)).length,
+      unreadRooms: base.filter((c) => isRoom(c) && unread(c)).length,
     };
   }, [channels.data, filter, me, sections]);
+
+  // The tab you left on, and the tab that holds a conversation you open.
+  const setTab = (t: 'chats' | 'channels') => {
+    setTabState(t);
+    try {
+      localStorage.setItem('messages:tab', t);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('messages:tab');
+      if (v === 'chats' || v === 'channels') setTabState(v);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const synced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeId || synced.current === activeId || !channels.data) return;
+    synced.current = activeId;
+    setTabState(roomIds.has(activeId) ? 'channels' : 'chats');
+  }, [activeId, channels.data, roomIds]);
+  const chatsShown = starred.length + dms.length + [...bySection.values()].flat().length;
 
   // Who is online, for the dots next to direct messages.
   const dmPeople = useMemo(
@@ -539,8 +650,8 @@ export function ConversationList({
       { assign: { [channelId]: sectionId } },
       { onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not move it') },
     );
-  const item = (c: MyChannelDTO) => (
-    <li key={c.id} onClick={onNavigate}>
+  const item = (c: MyChannelDTO, style?: CSSProperties) => (
+    <li key={c.id} onClick={onNavigate} style={style}>
       <ConversationListItem
         channel={c}
         active={c.id === activeId}
@@ -627,166 +738,186 @@ export function ConversationList({
         </DropdownMenu>
       </div>
 
-      <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto p-1 pt-2">
-        <div className="mb-1 space-y-px">
-          <TopLink
+      <nav aria-label="Conversations" className="flex min-h-0 flex-1 flex-col">
+        <div className="grid grid-cols-4 gap-1 px-2 pt-2">
+          <QuickLink
             href="/messages/search"
             icon={<Search className="size-4" aria-hidden />}
             label="Search"
             onNavigate={onNavigate}
           />
-          <TopLink
+          <QuickLink
             href="/messages/threads"
             icon={<MessageSquare className="size-4" aria-hidden />}
             label="Threads"
             badge={threadUnread}
             onNavigate={onNavigate}
           />
-          <TopLink
+          <QuickLink
             href="/messages/activity"
             icon={<AtSign className="size-4" aria-hidden />}
             label="Mentions and reactions"
             onNavigate={onNavigate}
           />
-          <TopLink
+          <QuickLink
             href="/messages/saved"
             icon={<Bookmark className="size-4" aria-hidden />}
             label="Saved"
             onNavigate={onNavigate}
           />
         </div>
-        {channels.isLoading || !hydrated ? (
-          <div className="space-y-2 p-2" aria-hidden>
-            {[60, 44, 72, 52, 64, 40].map((w, i) => (
-              <Skeleton key={i} className="h-7 rounded-md" style={{ width: `${w + 20}%` }} />
-            ))}
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as 'chats' | 'channels')}
+          className="min-h-0 flex-1 gap-0"
+        >
+          <div className="px-2 pt-2 pb-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="chats">
+                Chats
+                {filter.trim() ? (
+                  <span className="text-muted-foreground text-xs font-normal">{chatsShown}</span>
+                ) : (
+                  unreadChats > 0 && (
+                    <span className="bg-primary size-1.5 rounded-full" aria-hidden />
+                  )
+                )}
+                {unreadChats > 0 && <span className="sr-only">, {unreadChats} unread</span>}
+              </TabsTrigger>
+              <TabsTrigger value="channels">
+                Channels
+                {filter.trim() ? (
+                  <span className="text-muted-foreground text-xs font-normal">{rooms.length}</span>
+                ) : (
+                  unreadRooms > 0 && (
+                    <span className="bg-primary size-1.5 rounded-full" aria-hidden />
+                  )
+                )}
+                {unreadRooms > 0 && <span className="sr-only">, {unreadRooms} unread</span>}
+              </TabsTrigger>
+            </TabsList>
           </div>
-        ) : channels.isError ? (
-          <div className="p-4 text-center text-sm">
-            <p className="text-muted-foreground mb-2">Could not load your conversations.</p>
-            <Button size="sm" variant="outline" onClick={() => void channels.refetch()}>
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <>
-            {starred.length > 0 && (
-              <Section id="starred" title="Starred" count={starred.length}>
-                {starred.map(item)}
-              </Section>
-            )}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext
-                items={sections.map((s) => s.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {sections.map((s, i) => (
-                  <SortableSection key={s.id} id={s.id}>
-                    {(handle) => (
-                      <Section
-                        id={`custom-${s.id}`}
-                        title={s.name}
-                        count={bySection.get(s.id)?.length ?? 0}
-                        handle={handle}
-                        action={
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                aria-label={`Options for the ${s.name} section`}
-                              >
-                                <MoreHorizontal />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onSelect={() => setSectionDialog({ mode: 'rename', section: s })}
-                              >
-                                <Pencil /> Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={i === 0}
-                                onSelect={() =>
-                                  sectionApi.order.mutate({
-                                    sections: arrayMove(
-                                      sections.map((x) => x.id),
-                                      i,
-                                      i - 1,
-                                    ),
-                                  })
-                                }
-                              >
-                                Move up
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={i === sections.length - 1}
-                                onSelect={() =>
-                                  sectionApi.order.mutate({
-                                    sections: arrayMove(
-                                      sections.map((x) => x.id),
-                                      i,
-                                      i + 1,
-                                    ),
-                                  })
-                                }
-                              >
-                                Move down
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onSelect={() =>
-                                  sectionApi.remove.mutate(s.id, {
-                                    onSuccess: () => toast.success('Section deleted'),
-                                    onError: () => toast.error('Could not delete it'),
-                                  })
-                                }
-                              >
-                                <Trash2 /> Delete section
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        }
-                      >
-                        {(bySection.get(s.id) ?? []).map(item)}
-                        {!bySection.get(s.id)?.length && (
-                          <li className="text-muted-foreground px-2 py-1.5 text-label">
-                            Empty. Use a conversation’s menu to move it here.
-                          </li>
-                        )}
-                      </Section>
-                    )}
-                  </SortableSection>
-                ))}
-              </SortableContext>
-            </DndContext>
-            <Section
-              id="channels"
-              title="Channels"
-              count={rooms.length}
-              action={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Create or browse channels"
-                  onClick={() => setDialog('browse')}
-                >
-                  <Plus />
-                </Button>
-              }
-            >
-              {rooms.map(item)}
-              {rooms.length === 0 && (
-                <li className="text-muted-foreground px-2 py-1.5 text-label">
-                  {filter ? 'No channels match.' : 'You are not in any channels yet.'}
-                </li>
+          {channels.isLoading || !hydrated ? (
+            <div className="space-y-2 p-3" aria-hidden>
+              {[60, 44, 72, 52, 64, 40].map((w, i) => (
+                <Skeleton key={i} className="h-7 rounded-md" style={{ width: `${w + 20}%` }} />
+              ))}
+            </div>
+          ) : channels.isError ? (
+            <div className="p-4 text-center text-sm">
+              <p className="text-muted-foreground mb-2">Could not load your conversations.</p>
+              <Button size="sm" variant="outline" onClick={() => void channels.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : tab === 'channels' ? (
+            <ChannelsPanel
+              rooms={rooms}
+              filter={filter}
+              activeId={activeId}
+              item={item}
+              onBrowse={() => setDialog('browse')}
+            />
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
+              {starred.length > 0 && (
+                <Section id="starred" title="Starred" count={starred.length}>
+                  {starred.map((c) => item(c))}
+                </Section>
               )}
-            </Section>
-            <Section
-              id="dms"
-              title="Direct messages"
-              count={dms.length}
-              action={
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onDragEnd}
+              >
+                <SortableContext
+                  items={sections.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {sections.map((s, i) => (
+                    <SortableSection key={s.id} id={s.id}>
+                      {(handle) => (
+                        <Section
+                          id={`custom-${s.id}`}
+                          title={s.name}
+                          count={bySection.get(s.id)?.length ?? 0}
+                          handle={handle}
+                          action={
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  aria-label={`Options for the ${s.name} section`}
+                                >
+                                  <MoreHorizontal />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onSelect={() => setSectionDialog({ mode: 'rename', section: s })}
+                                >
+                                  <Pencil /> Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={i === 0}
+                                  onSelect={() =>
+                                    sectionApi.order.mutate({
+                                      sections: arrayMove(
+                                        sections.map((x) => x.id),
+                                        i,
+                                        i - 1,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  Move up
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={i === sections.length - 1}
+                                  onSelect={() =>
+                                    sectionApi.order.mutate({
+                                      sections: arrayMove(
+                                        sections.map((x) => x.id),
+                                        i,
+                                        i + 1,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  Move down
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onSelect={() =>
+                                    sectionApi.remove.mutate(s.id, {
+                                      onSuccess: () => toast.success('Section deleted'),
+                                      onError: () => toast.error('Could not delete it'),
+                                    })
+                                  }
+                                >
+                                  <Trash2 /> Delete section
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          }
+                        >
+                          {(bySection.get(s.id) ?? []).map((c) => item(c))}
+                          {!bySection.get(s.id)?.length && (
+                            <li className="text-muted-foreground px-2 py-1.5 text-label">
+                              Empty. Use a conversation’s menu to move it here.
+                            </li>
+                          )}
+                        </Section>
+                      )}
+                    </SortableSection>
+                  ))}
+                </SortableContext>
+              </DndContext>
+              <div className="flex items-center gap-1 px-1">
+                <span className="text-muted-foreground flex-1 px-1 py-1.5 text-xs font-medium">
+                  Direct messages <span className="font-normal opacity-70">{dms.length}</span>
+                </span>
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -795,23 +926,24 @@ export function ConversationList({
                 >
                   <Plus />
                 </Button>
-              }
-            >
-              {dms.map(item)}
-              {dms.length === 0 && (
-                <li className="px-2 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setDialog('new')}
-                    className="text-muted-foreground hover:text-foreground text-left text-label underline-offset-2 hover:underline"
-                  >
-                    {filter ? 'No conversations match.' : 'Start a conversation'}
-                  </button>
-                </li>
-              )}
-            </Section>
-          </>
-        )}
+              </div>
+              <ul className="space-y-px px-1 pb-3">
+                {dms.map((c) => item(c))}
+                {dms.length === 0 && (
+                  <li className="px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDialog('new')}
+                      className="text-muted-foreground hover:text-foreground text-left text-label underline-offset-2 hover:underline"
+                    >
+                      {filter ? 'No conversations match.' : 'Start a conversation'}
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+        </Tabs>
       </nav>
 
       <NewMessageDialog open={dialog === 'new'} onOpenChange={(o) => setDialog(o ? 'new' : null)} />

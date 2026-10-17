@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadError } from '@/components/shared/load-error';
+import { ListSkeleton } from '@/components/shared/skeletons';
+import { TabPanel } from '@/components/shared/motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,13 +43,19 @@ export default function NotificationsPage() {
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="all">
-          <Inbox unreadOnly={false} />
+          <TabPanel id="all">
+            <Inbox unreadOnly={false} />
+          </TabPanel>
         </TabsContent>
         <TabsContent value="unread">
-          <Inbox unreadOnly />
+          <TabPanel id="unread">
+            <Inbox unreadOnly />
+          </TabPanel>
         </TabsContent>
         <TabsContent value="settings">
-          <Settings />
+          <TabPanel id="settings">
+            <Settings />
+          </TabPanel>
         </TabsContent>
       </Tabs>
     </div>
@@ -61,7 +69,7 @@ function Inbox({ unreadOnly }: { unreadOnly: boolean }) {
   // The bell may already hold this list; wait for hydration so the first render matches the server.
   const hydrated = useHydrated();
   if (list.isError) return <LoadError what="your notifications" onRetry={() => list.refetch()} />;
-  if (!list.data || !hydrated) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!list.data || !hydrated) return <ListSkeleton rows={5} />;
   const items = list.data.pages.flatMap((p) => p.items);
   const unread = list.data.pages[0]?.unreadCount ?? 0;
   return (
@@ -74,7 +82,9 @@ function Inbox({ unreadOnly }: { unreadOnly: boolean }) {
           variant="outline"
           size="sm"
           disabled={!unread || markRead.isPending}
-          onClick={() => markRead.mutate({ all: true })}
+          onClick={() =>
+            markRead.mutate({ all: true }, { onSuccess: () => toast.success('All caught up') })
+          }
         >
           <CheckCheck /> Mark all read
         </Button>
@@ -116,7 +126,7 @@ function Settings() {
   const prefs = usePreferences();
   const save = useSavePreferences();
   if (prefs.isError) return <LoadError what="your settings" onRetry={() => prefs.refetch()} />;
-  if (!prefs.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!prefs.data) return <ListSkeleton rows={4} />;
   const p = prefs.data.preferences;
   const set = (type: NotificationType, channel: 'inApp' | 'email', on: boolean) =>
     save.mutate(
