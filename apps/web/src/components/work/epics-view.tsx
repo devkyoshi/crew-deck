@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { ItemSheet, useOpenItem } from './item-sheet';
 import { useVocabulary } from './use-vocabulary';
 import { StatusChip, TypeIcon, UserAvatar } from './work-bits';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 /** The space's epics with how far along each one is, by count and by points. */
 export function EpicsView() {
@@ -27,7 +28,7 @@ export function EpicsView() {
   const epicLabel = vocab.typeLabel('epic');
 
   if (epics.isError) return <LoadError what={`the ${epicLabel.toLowerCase()}s`} onRetry={() => epics.refetch()} />;
-  if (!epics.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!epics.data) return <ListSkeleton rows={3} />;
   const list = epics.data.items;
 
   return (
@@ -121,7 +122,7 @@ function EpicRowView({ epic, spaceKey }: { epic: EpicRow; spaceKey: string }) {
       </div>
       {open && (
         <div className="border-t px-3 py-2">
-          {kids.isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
+          {kids.isPending && <ListSkeleton rows={3} />}
           {kids.data && kids.data.items.length === 0 && (
             <p className="text-muted-foreground text-sm">Nothing in this {vocab.typeLabel('epic').toLowerCase()} yet.</p>
           )}

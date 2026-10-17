@@ -146,13 +146,18 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
           <SidebarGroupLabel>{label}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const active =
                   item.href === '/' || item.href === '/crm'
                     ? pathname === item.href
                     : pathname.startsWith(item.href);
                 return (
-                  <SidebarMenuItem key={item.href}>
+                  // Fades in (staggered) so items that arrive late, like CRM, never pop into place.
+                  <SidebarMenuItem
+                    key={item.href}
+                    className="animate-fade-up"
+                    style={{ animationDelay: `${Math.min(index, 8) * 25}ms`, animationFillMode: 'backwards' }}
+                  >
                     <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
                       <Link href={item.href} aria-current={active ? 'page' : undefined}>
                         <item.icon strokeWidth={1.5} />

@@ -116,6 +116,7 @@ test.describe('on a phone', () => {
     await noSideScroll(page, 'the list');
     // Open the conversation from the list (channels have their own tab).
     await page.getByRole('tab', { name: /^Channels/ }).click();
+    await page.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
     await page.getByRole('navigation', { name: 'Conversations' }).getByRole('link', { name }).click();
     await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
     await noSideScroll(page, 'the conversation');

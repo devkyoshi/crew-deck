@@ -59,6 +59,7 @@ import { cn } from '@/lib/utils';
 import { ItemSheet, useOpenItem } from './item-sheet';
 import { useVocabulary } from './use-vocabulary';
 import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 const BACKLOG = 'backlog';
 /** Droppable id of a row, so dropping on a row can reorder (the draggable keeps the bare item id). */
@@ -91,7 +92,7 @@ export function BacklogView() {
       <LoadError what="the backlog" onRetry={() => data.refetch()} />
     );
   }
-  if (!data.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!data.data) return <ListSkeleton rows={3} />;
   const { sprints, backlog, permissions } = data.data;
   const targets = sprints.map((s) => ({ id: s.id, name: s.name }));
 

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
+import { useRecentSpaces } from '@/lib/recent-spaces';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -25,19 +26,31 @@ const titleCase = (s: string) => s.replace(/-/g, ' ').replace(/^\w/, (c) => c.to
 
 function useCrumbs() {
   const pathname = usePathname();
+  const recent = useRecentSpaces();
   if (pathname === '/') return [{ label: 'Home', href: '/' }];
   if (pathname.startsWith('/messages')) return [{ label: 'Messages', href: '/messages' }];
   const parts = pathname.split('/').filter(Boolean);
   return parts.map((part, i) => {
     const href = '/' + parts.slice(0, i + 1).join('/');
     const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(part);
-    return { label: findNavItem(href)?.title ?? (isId ? 'Details' : titleCase(part)), href };
+    // A space key (/spaces/ENG) reads better as the space's name when we know it.
+    const spaceName =
+      parts[i - 1] === 'spaces' ? recent.find((s) => s.key.toLowerCase() === part.toLowerCase())?.name : undefined;
+    return {
+      label: findNavItem(href)?.title ?? spaceName ?? (isId ? 'Details' : titleCase(part)),
+      href,
+    };
   });
 }
 
 export function Topbar() {
   const crumbs = useCrumbs();
   const pathname = usePathname();
+  // Each page shows its own name in the browser tab, e.g. "Board · Crew Deck".
+  const last = crumbs[crumbs.length - 1]?.label;
+  useEffect(() => {
+    if (last) document.title = `${last} · Crew Deck`;
+  }, [last, pathname]);
   return (
     <header className="bg-background z-10 shrink-0 border-b px-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex h-12 w-full max-w-7xl items-center gap-1.5">

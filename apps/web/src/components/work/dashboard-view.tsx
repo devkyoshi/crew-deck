@@ -285,7 +285,7 @@ const Note = ({ children }: { children: React.ReactNode }) => (
 function AssignedGadget() {
   const mine = useMyItems('assigned', 'open');
   if (mine.isError) return <LoadError what="your work" onRetry={() => void mine.refetch()} />;
-  if (!mine.data) return <Note>Loading…</Note>;
+  if (!mine.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   if (mine.data.items.length === 0) return <Note>Nothing is assigned to you.</Note>;
   return (
     <div className="space-y-2">
@@ -312,11 +312,11 @@ function FilterGadget({ filterId }: { filterId: string | null }) {
   });
   if (filters.isError || results.isError)
     return <Note>This filter is not available to you any more.</Note>;
-  if (!filters.data) return <Note>Loading…</Note>;
+  if (!filters.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   if (!filter) return <Note>This filter was deleted. Remove the tile or pick another.</Note>;
   if (!filter.spaceId)
     return <Note>“{filter.name}” is not tied to a space, so it cannot be shown here.</Note>;
-  if (!results.data) return <Note>Loading…</Note>;
+  if (!results.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-xs">
@@ -344,7 +344,7 @@ function SprintGadget({ space }: { space: string | null }) {
       </Note>
     );
   }
-  if (!backlog.data) return <Note>Loading…</Note>;
+  if (!backlog.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   const active = backlog.data.sprints.find((s) => s.state === 'active');
   if (!active) return <Note>No sprint is running in this space.</Note>;
   const s = active.summary;
@@ -380,7 +380,7 @@ function VersionsGadget({ space }: { space: string | null }) {
   const versions = useVersions(space ?? '');
   if (!space) return <Note>Choose a space.</Note>;
   if (versions.isError) return <Note>Could not load the releases.</Note>;
-  if (!versions.data) return <Note>Loading…</Note>;
+  if (!versions.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   const open = versions.data.items.filter((v) => v.state === 'unreleased');
   if (open.length === 0) return <Note>No open releases in this space.</Note>;
   return (
@@ -423,7 +423,7 @@ function FlowGadget({ space }: { space: string | null }) {
   if (report.error instanceof ApiError && report.error.status === 402)
     return <Note>Flow reports are part of the Business plan.</Note>;
   if (report.isError) return <Note>Could not load the numbers.</Note>;
-  if (!report.data) return <Note>Loading…</Note>;
+  if (!report.data) return <Skeleton className="h-24 w-full rounded-lg" />;
   const rows = report.data.throughput;
   const created = rows.reduce((s, r) => s + r.created, 0);
   const resolved = rows.reduce((s, r) => s + r.resolved, 0);

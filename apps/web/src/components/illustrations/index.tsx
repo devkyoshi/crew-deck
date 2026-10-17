@@ -17,7 +17,10 @@ export type IllustrationName =
   | 'success'
   | 'chart'
   | 'calendar'
-  | 'build';
+  | 'build'
+  | 'welcome'
+  | 'caughtup'
+  | 'offline';
 
 const SOFT = 'var(--accent)';
 const LINE = 'var(--muted-foreground)';
@@ -46,13 +49,13 @@ const ART: Record<IllustrationName, ReactNode> = {
         {...stroke}
       />
       <path d="M36 52h16a8 8 0 0 0 16 0h16" stroke={MAIN} {...stroke} />
-      <path d="M60 24v6M48 27l3 5M72 27l-3 5" stroke={MAIN} {...stroke} opacity="0.6" />
+      <path d="M60 24v6M48 27l3 5M72 27l-3 5" stroke={MAIN} {...stroke} className="ill-twinkle" />
     </Frame>
   ),
   search: (
     <Frame>
       <circle cx="54" cy="42" r="15" fill={CARD} stroke={LINE} {...stroke} />
-      <path d="m65 53 14 14" stroke={MAIN} {...stroke} strokeWidth={3} />
+      <path d="m65 53 14 14" stroke={MAIN} {...stroke} strokeWidth={3} className="ill-bob" />
       <path d="M48 42h12M48 47h7" stroke={LINE} {...stroke} opacity="0.6" />
     </Frame>
   ),
@@ -87,7 +90,7 @@ const ART: Record<IllustrationName, ReactNode> = {
     <Frame>
       <rect x="40" y="46" width="40" height="28" rx="6" fill={CARD} stroke={LINE} {...stroke} />
       <path d="M48 46v-6a12 12 0 0 1 24 0v6" stroke={MAIN} {...stroke} />
-      <circle cx="60" cy="58" r="3" fill={MAIN} />
+      <circle cx="60" cy="58" r="3" fill={MAIN} className="ill-pop" />
       <path d="M60 61v5" stroke={MAIN} {...stroke} />
     </Frame>
   ),
@@ -104,19 +107,19 @@ const ART: Record<IllustrationName, ReactNode> = {
     <Frame>
       <path d="M60 28 86 70H34L60 28Z" fill={CARD} stroke={LINE} {...stroke} />
       <path d="M60 44v12" stroke={MAIN} {...stroke} strokeWidth={3} />
-      <circle cx="60" cy="63" r="1.8" fill={MAIN} />
+      <circle cx="60" cy="63" r="1.8" fill={MAIN} className="ill-twinkle" />
     </Frame>
   ),
   success: (
     <Frame>
       <circle cx="60" cy="48" r="22" fill={CARD} stroke={LINE} {...stroke} />
-      <path d="m49 49 8 8 15-17" stroke={MAIN} {...stroke} strokeWidth={3.5} />
+      <path d="m49 49 8 8 15-17" stroke={MAIN} {...stroke} strokeWidth={3.5} pathLength={1} className="ill-draw" />
     </Frame>
   ),
   chart: (
     <Frame>
       <rect x="32" y="30" width="56" height="42" rx="6" fill={CARD} stroke={LINE} {...stroke} />
-      <path d="M42 62V52M54 62V44M66 62V50M78 62V38" stroke={MAIN} {...stroke} strokeWidth={4} />
+      <path d="M42 62V52M54 62V44M66 62V50M78 62V38" stroke={MAIN} {...stroke} strokeWidth={4} pathLength={1} className="ill-draw" />
     </Frame>
   ),
   calendar: (
@@ -135,6 +138,31 @@ const ART: Record<IllustrationName, ReactNode> = {
         {...stroke}
       />
       <path d="M36 70l8-2-6-6-2 8Z" fill={CARD} stroke={LINE} {...stroke} />
+    </Frame>
+  ),
+  welcome: (
+    <Frame>
+      <path d="M38 70 52 36l22 22Z" fill={CARD} stroke={LINE} {...stroke} />
+      <path d="M52 36 74 58" stroke={MAIN} {...stroke} />
+      <path d="M80 30l2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill={MAIN} className="ill-twinkle" />
+      <circle cx="84" cy="58" r="2.5" fill={MAIN} className="ill-twinkle ill-twinkle-2" />
+      <circle cx="44" cy="30" r="2.5" fill={LINE} className="ill-twinkle ill-twinkle-3" />
+      <path d="M70 28c4 2 6 6 5 10" stroke={MAIN} {...stroke} className="ill-bob" />
+    </Frame>
+  ),
+  caughtup: (
+    <Frame>
+      <circle cx="60" cy="48" r="22" fill={CARD} stroke={LINE} {...stroke} />
+      <path d="m49 49 8 8 15-17" stroke={MAIN} {...stroke} strokeWidth={3.5} pathLength={1} className="ill-draw" />
+      <path d="M90 28l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6Z" fill={MAIN} className="ill-twinkle" />
+      <path d="M30 56l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2Z" fill={MAIN} className="ill-twinkle ill-twinkle-2" />
+    </Frame>
+  ),
+  offline: (
+    <Frame>
+      <path d="M40 52a28 28 0 0 1 40 0M47 59a18 18 0 0 1 26 0" stroke={LINE} {...stroke} />
+      <circle cx="60" cy="67" r="3" fill={MAIN} className="ill-twinkle" />
+      <path d="M38 34 82 78" stroke={MAIN} {...stroke} strokeWidth={3} />
     </Frame>
   ),
 };

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ImageUpload } from '@/components/shared/image-upload';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
+import { SaveIndicator, useSaveState } from '@/components/shared/save-indicator';
 import { useIsAdmin, useMe } from '@/components/shell/me-context';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
@@ -96,6 +97,7 @@ export default function BrandingPage() {
   const [lock, setLock] = useState(me.org.domainRestricted);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const saveState = useSaveState();
 
   if (!isAdmin) {
     return (
@@ -118,11 +120,14 @@ export default function BrandingPage() {
     if (Object.keys(body).length === 0) return toast.message('Nothing to save');
     setBusy(true);
     setErrors({});
+    saveState.markSaving();
     try {
       await api('/settings/branding', { method: 'PUT', body });
-      toast.success('Saved');
+      saveState.markSaved();
+      toast.success('Branding saved');
       router.refresh();
     } catch (err) {
+      saveState.markFailed();
       if (err instanceof ApiError && err.fields) setErrors(err.fields);
       else toast.error(err instanceof ApiError ? err.message : 'Could not save');
     } finally {
@@ -136,7 +141,7 @@ export default function BrandingPage() {
         title="Branding and access"
         description="How your workspace looks, and who can be invited."
       />
-      <form onSubmit={save} className="space-y-6" noValidate>
+      <form onSubmit={save} onChange={saveState.markDirty} className="space-y-6" noValidate>
         <section className="bg-card space-y-5 rounded-xl border p-6">
           <h2 className="text-heading">Workspace</h2>
           <Field label="Workspace name" htmlFor="brand-name" error={errors.name}>
@@ -249,9 +254,12 @@ export default function BrandingPage() {
           {!canLock && <Notice variant="info">On your plan, you can invite anyone by email.</Notice>}
         </section>
 
-        <Button type="submit" disabled={busy || (!canName && !canLook && !canLock)}>
-          {busy ? 'Saving…' : 'Save changes'}
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button type="submit" disabled={busy || (!canName && !canLook && !canLock)}>
+            {busy ? 'Saving…' : 'Save changes'}
+          </Button>
+          <SaveIndicator state={saveState.state} />
+        </div>
       </form>
     </div>
   );

@@ -113,6 +113,7 @@ test('sections: create one, move a channel into it, reorder with the menu, and d
     await page.goto('/messages');
     const nav = page.getByRole('navigation', { name: 'Conversations' });
     await page.getByRole('tab', { name: /^Channels/ }).click();
+    await page.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
     await expect(nav.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
 
     // Create the section from the channel's own menu and move it there in one go.
@@ -138,6 +139,7 @@ test('sections: create one, move a channel into it, reorder with the menu, and d
     await page.getByRole('menuitem', { name: 'Delete section' }).click();
     await expect(nav.getByRole('button', { name: new RegExp(`^${section}`) })).toHaveCount(0);
     await page.getByRole('tab', { name: /^Channels/ }).click();
+    await page.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
     await expect(nav.getByRole('link', { name: new RegExp(`^${name}`) })).toBeVisible();
   });
 });
@@ -152,6 +154,7 @@ test('starring a conversation puts it in a Starred section', async ({ page, brow
     await page.goto('/messages');
     const nav = page.getByRole('navigation', { name: 'Conversations' });
     await page.getByRole('tab', { name: /^Channels/ }).click();
+    await page.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
     await nav.getByRole('link', { name: new RegExp(`^${name}`) }).hover();
     await nav.getByRole('button', { name: new RegExp(`Options for ${name}`) }).click();
     await page.getByRole('menuitem', { name: 'Star' }).click();
@@ -228,7 +231,8 @@ test('keyboard: Alt+Shift+Down jumps to the next conversation with unread messag
     await apiCall(other, 'POST', `/channels/${loudRoom}/messages`, { clientMsgId: crypto.randomUUID().slice(0, 30), body: doc('look over here') });
     const nav = page.getByRole('navigation', { name: 'Conversations' });
     await page.getByRole('tab', { name: /^Channels/ }).click();
-    await expect(nav.getByLabel('Unread messages').first()).toBeVisible({ timeout: 8000 });
+    // The list is a window onto hundreds of channels, so the unread dot shows on the tab.
+    await expect(page.getByRole('tab', { name: /Channels.*unread/ })).toBeVisible({ timeout: 8000 });
     await page.getByRole('log', { name: 'Messages' }).focus();
     await page.keyboard.press('Alt+Shift+ArrowDown');
     await expect(page).toHaveURL(/\/messages\/[0-9a-f-]{36}/);

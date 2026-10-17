@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { api, ApiError } from '@/lib/api';
 import { useVocabulary } from './use-vocabulary';
+import { PageSkeleton } from '@/components/shared/skeletons';
 
 interface FlowData {
   days: number;
@@ -73,7 +74,7 @@ export function FlowReports() {
   });
 
   if (access.isError) return <LoadError what="the reports" onRetry={() => void access.refetch()} />;
-  if (!access.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!access.data) return <PageSkeleton />;
   if (!access.data.enabled) {
     return (
       <EmptyState
@@ -89,7 +90,7 @@ export function FlowReports() {
       <LoadError what="the reports" onRetry={() => void data.refetch()} />
     );
   }
-  if (!data.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!data.data) return <PageSkeleton />;
   const d = data.data;
 
   return (

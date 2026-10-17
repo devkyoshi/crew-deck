@@ -4,6 +4,9 @@ import { Illustration, type IllustrationName } from '@/components/illustrations'
 import { cn } from '@/lib/utils';
 
 const BY_TITLE: [RegExp, IllustrationName][] = [
+  [/caught up|nothing unread/i, 'caughtup'],
+  [/offline|no connection/i, 'offline'],
+  [/welcome|get started/i, 'welcome'],
   [/could not load|something went wrong/i, 'error'],
   [/admins only|admin only|don.t have access|switched off/i, 'lock'],
   [/not found/i, 'notfound'],

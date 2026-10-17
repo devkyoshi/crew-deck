@@ -53,6 +53,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AssigneePicker } from './work-pickers';
 import { UserAvatar } from './work-bits';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -74,7 +75,7 @@ export function ReleasesView() {
   const [showArchived, setShowArchived] = useState(false);
 
   if (versions.isError) return <LoadError what="the releases" onRetry={() => void versions.refetch()} />;
-  if (!versions.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!versions.data) return <ListSkeleton rows={3} />;
   const { items, permissions, feature } = versions.data;
   const visible = items.filter((v) => showArchived || v.state !== 'archived');
   const hasArchived = items.some((v) => v.state === 'archived');
@@ -390,7 +391,7 @@ function NotesDialog({ version, onClose }: { version: Version | null; onClose: (
         {notes.isError ? (
           <LoadError what="the release notes" onRetry={() => void notes.refetch()} />
         ) : !notes.data ? (
-          <p className="text-muted-foreground text-sm">Loading…</p>
+          <ListSkeleton rows={3} />
         ) : (
           <div className="space-y-4 text-sm">
             {notes.data.groups.length === 0 && <p className="text-muted-foreground">Nothing finished in this version yet.</p>}

@@ -80,6 +80,7 @@ import {
 import { toastError } from '@/lib/work-api';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './work-bits';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 const sizeText = (n: number) =>
   n < 1024
@@ -150,7 +151,7 @@ export function DocumentsView() {
       <LoadError what="the documents" onRetry={() => void docs.refetch()} />
     );
   }
-  if (!docs.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!docs.data) return <ListSkeleton rows={3} />;
   const { path, folders, files, permissions, maxFileMb } = docs.data;
   const empty = folders.length === 0 && files.length === 0;
 

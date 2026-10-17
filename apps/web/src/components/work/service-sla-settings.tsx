@@ -10,6 +10,7 @@ import { LoadError } from '@/components/shared/load-error';
 import { useSaveSla, useSla, type SlaPolicy } from '@/lib/sla-api';
 import { PRIORITY_META } from '@/lib/work';
 import { toastError } from '@/lib/work-api';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 /** Targets are typed in hours (decimals allowed) and stored as whole minutes. */
 const toHours = (minutes: number) => String(Math.round((minutes / 60) * 100) / 100);
@@ -37,7 +38,7 @@ export function ServiceSlaSettings({ spaceKey }: { spaceKey: string }) {
   }, [sla.data]);
 
   if (sla.isError) return <LoadError what="the response targets" onRetry={() => void sla.refetch()} />;
-  if (!sla.data || !draft) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!sla.data || !draft) return <ListSkeleton rows={3} />;
   const canManage = sla.data.permissions.manage;
 
   const valid = PRIORITIES.every((k) => {

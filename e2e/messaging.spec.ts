@@ -9,6 +9,7 @@ async function openChannel(page: Page, name: string) {
   await page.goto('/messages');
   // Channels live on their own tab of the sidebar.
   await page.getByRole('tab', { name: /^Channels/ }).click();
+  await page.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
   await page.getByRole('navigation', { name: 'Conversations' }).getByRole('link', { name: new RegExp(`^${name}`) }).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
 }

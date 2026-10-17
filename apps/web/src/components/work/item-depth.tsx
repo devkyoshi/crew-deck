@@ -69,6 +69,7 @@ import { cn } from '@/lib/utils';
 import { useVocabulary } from './use-vocabulary';
 import { StatusChip, TypeIcon, UserAvatar } from './work-bits';
 import { ItemPicker } from './work-pickers';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 const sizeText = (n: number) =>
@@ -521,7 +522,7 @@ function Comments({ item, composer }: { item: WorkItem; composer: React.RefObjec
   }
 
   if (comments.isError) return <LoadError what="comments" onRetry={() => comments.refetch()} />;
-  if (!comments.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!comments.data) return <ListSkeleton rows={3} />;
   const list = comments.data.items;
   return (
     <div className="space-y-4">
@@ -730,7 +731,7 @@ function Activity({ item, onOpenItem: _onOpenItem }: { item: WorkItem; onOpenIte
   const vocab = useVocabulary();
   const activity = useActivity(item.id);
   if (activity.isError) return <LoadError what="the activity" onRetry={() => activity.refetch()} />;
-  if (!activity.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!activity.data) return <ListSkeleton rows={3} />;
   const events = activity.data.pages.flatMap((p) => p.items);
   return (
     <div className="space-y-3">
@@ -760,7 +761,7 @@ function Watchers({ itemId }: { itemId: string }) {
   const watchers = useWatchers(itemId);
   const toggle = useToggleWatch(itemId);
   if (watchers.isError) return <LoadError what="watchers" onRetry={() => watchers.refetch()} />;
-  if (!watchers.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!watchers.data) return <ListSkeleton rows={3} />;
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-sm">

@@ -30,6 +30,7 @@ import { toastError } from '@/lib/work-api';
 import { cn } from '@/lib/utils';
 import { ItemSheet, useOpenItem } from './item-sheet';
 import { useVocabulary } from './use-vocabulary';
+import { PageSkeleton } from '@/components/shared/skeletons';
 
 const DAY = 86_400_000;
 const ZOOMS = {
@@ -94,7 +95,7 @@ export function RoadmapView() {
 
   if (roadmap.isError)
     return <LoadError what="the roadmap" onRetry={() => void roadmap.refetch()} />;
-  if (!data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!data) return <PageSkeleton />;
   if (!data.enabled) {
     return (
       <EmptyState

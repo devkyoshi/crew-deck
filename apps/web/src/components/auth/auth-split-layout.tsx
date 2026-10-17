@@ -166,7 +166,7 @@ export function AuthSplitLayout({
               <span className="text-sm font-semibold tracking-tight">Crew Deck</span>
             </Link>
             {top && (
-              <span className="text-xs">
+              <span className="animate-fade-in text-xs">
                 {top.text}{' '}
                 <Link href={top.href} className="font-medium underline underline-offset-4">
                   {top.label}

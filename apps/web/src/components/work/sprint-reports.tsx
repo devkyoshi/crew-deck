@@ -12,6 +12,7 @@ import { dateRange, useBurndown, useSprintReport, useSprints, type Burndown } fr
 import { FoundItems } from './found-items';
 import { ItemSheet } from './item-sheet';
 import { useVocabulary } from './use-vocabulary';
+import { PageSkeleton } from '@/components/shared/skeletons';
 
 /** Sprint reports: the burndown and what got done, for any started sprint of the space. */
 export function SprintReports() {
@@ -27,7 +28,7 @@ export function SprintReports() {
   const burndown = useBurndown(id, true);
 
   if (sprints.isError) return <LoadError what="the sprints" onRetry={() => sprints.refetch()} />;
-  if (!sprints.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!sprints.data) return <PageSkeleton />;
   if (started.length === 0) {
     return <EmptyState title="No sprint reports yet" description="Reports appear once a sprint has started. Plan and start one from the backlog." />;
   }
@@ -64,7 +65,7 @@ export function SprintReports() {
         ) : burndown.isError ? (
           <LoadError what="the burndown" onRetry={() => burndown.refetch()} />
         ) : (
-          <p className="text-muted-foreground text-sm">Loading…</p>
+          <PageSkeleton />
         )}
       </section>
 

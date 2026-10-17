@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { suggestedUsageFor, usageNeedsCrm, workTypesOf, type WorkType } from '@crew-deck/shared';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
+import { SaveIndicator, useSaveState } from '@/components/shared/save-indicator';
 import { useIsAdmin, useMe } from '@/components/shell/me-context';
 import { Button } from '@/components/ui/button';
 import { UsagePicker, WorkTypeMultiPicker } from '@/components/workspace/work-type-picker';
@@ -27,6 +28,7 @@ export default function WorkspacePurposePage() {
   });
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
+  const saveState = useSaveState();
 
   if (!isAdmin) {
     return (
@@ -42,12 +44,15 @@ export default function WorkspacePurposePage() {
     e.preventDefault();
     if (workTypes.length === 0) return toast.error('Choose at least one kind of work first');
     setBusy(true);
+    saveState.markSaving();
     try {
       await api('/settings/workspace', { method: 'PUT', body: { workTypes, usage } });
-      toast.success('Saved');
+      saveState.markSaved();
+      toast.success('Workspace settings saved');
       await qc.invalidateQueries({ queryKey: ['crm-access'] });
       router.refresh();
     } catch (err) {
+      saveState.markFailed();
       toast.error(err instanceof ApiError ? err.message : 'Could not save');
     } finally {
       setBusy(false);
@@ -65,6 +70,7 @@ export default function WorkspacePurposePage() {
         <WorkTypeMultiPicker
           value={workTypes}
           onChange={(types) => {
+            saveState.markDirty();
             setWorkTypes(types);
             setUsage(suggestedUsageFor(types));
           }}
@@ -73,10 +79,19 @@ export default function WorkspacePurposePage() {
       {workTypes.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-semibold">How does your team plan to use it?</h2>
-          <UsagePicker types={workTypes} value={usage} onChange={setUsage} showAll />
+          <UsagePicker
+            types={workTypes}
+            value={usage}
+            onChange={(v) => {
+              saveState.markDirty();
+              setUsage(v);
+            }}
+            showAll
+          />
         </section>
       )}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-4">
+        <SaveIndicator state={saveState.state} />
         <Button type="submit" disabled={busy || workTypes.length === 0}>
           {busy ? 'Saving…' : 'Save'}
         </Button>

@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Illustration } from '@/components/illustrations';
+import { Celebrate } from '@/components/shared/celebrate';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ function Form() {
     return (
       <Card className="max-w-xl">
         <CardContent className="flex flex-col items-center gap-3 py-6 text-center">
-          <Illustration name="success" />
+          <Celebrate />
           <div className="font-medium">Request sent</div>
           <p className="text-muted-foreground max-w-sm text-sm">
             If that space exists and is private, its admins have been asked to review your request.

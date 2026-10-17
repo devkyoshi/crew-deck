@@ -121,6 +121,7 @@ test('mentions: pick a person with @, and they see a mention badge while elsewhe
 
     // A mention badge on the channel in the other person's list, without a reload.
     await other.getByRole('tab', { name: /^Channels/ }).click();
+    await other.getByRole('textbox', { name: 'Find a conversation' }).fill(name);
     const row = other.getByRole('navigation', { name: 'Conversations' }).getByRole('link', { name: new RegExp(name) });
     await expect(row.getByLabel('1 unread mentions')).toBeVisible({ timeout: 8000 });
     await row.click();

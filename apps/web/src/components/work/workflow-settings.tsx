@@ -17,6 +17,7 @@ import {
   useWorkflow,
   type Workflow,
 } from '@/lib/workflow-api';
+import { ListSkeleton } from '@/components/shared/skeletons';
 
 /**
  * Which status may follow which. Off by default (anything can move anywhere). Turning it on shows a
@@ -35,7 +36,7 @@ export function WorkflowSettings({ spaceKey }: { spaceKey: string }) {
   if (workflow.isError || statuses.isError) {
     return <LoadError what="the workflow rules" onRetry={() => void workflow.refetch()} />;
   }
-  if (!workflow.data || !statuses.data || !draft) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!workflow.data || !statuses.data || !draft) return <ListSkeleton rows={3} />;
   const list = statuses.data.items;
   const canManage = workflow.data.permissions.manage;
 
@@ -135,7 +136,7 @@ export function ChecklistTemplates({ spaceKey }: { spaceKey: string }) {
   const [name, setName] = useState('');
   const [entries, setEntries] = useState('');
   if (templates.isError) return <LoadError what="the checklists" onRetry={() => void templates.refetch()} />;
-  if (!templates.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!templates.data) return <ListSkeleton rows={3} />;
   const canManage = templates.data.permissions.manage;
   const lines = entries
     .split('\n')
