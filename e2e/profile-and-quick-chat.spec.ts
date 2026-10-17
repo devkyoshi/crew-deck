@@ -12,6 +12,7 @@ test('profile photo: upload shows in the rail and top bar, remove brings back in
   await page.goto('/profile');
   await expect(page.locator('form[data-ready]')).toBeVisible();
   await page.getByLabel('Profile photo file').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG });
+  await page.getByRole('dialog', { name: /Crop your profile photo/ }).getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByText('Profile photo updated')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Profile' }).locator('img')).toHaveAttribute('src', /\/api\/v1\/avatars\//);
   await expect(page.getByRole('button', { name: 'Account menu' }).locator('img')).toHaveAttribute('src', /\/api\/v1\/avatars\//);
@@ -24,8 +25,8 @@ test('profile photo: upload shows in the rail and top bar, remove brings back in
 test('a file that is not a picture is refused', async ({ page }) => {
   await signInAsOwner(page);
   await page.goto('/profile');
-  await page.getByLabel('Profile photo file').setInputFiles({ name: 'x.png', mimeType: 'image/png', buffer: Buffer.from('<svg/>') });
-  await expect(page.getByText(/PNG, JPG or WebP/).first()).toBeVisible();
+  await page.getByLabel('Profile photo file').setInputFiles({ name: 'x.txt', mimeType: 'text/plain', buffer: Buffer.from('<svg/>') });
+  await expect(page.getByText(/Use a PNG, JPG or WebP picture/)).toBeVisible();
 });
 
 test('quick messages: the top bar lists conversations and opens a chat window', async ({ page }) => {

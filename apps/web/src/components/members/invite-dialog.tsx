@@ -1,8 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, Copy, FolderKanban, Info, Plus, UserPlus } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Download,
+  FolderKanban,
+  Info,
+  KeyRound,
+  Link2,
+  Mail,
+  Plus,
+  UserPlus,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -29,14 +41,46 @@ import { GroupPicker, type PickedGroup } from '@/components/shared/pickers';
 import { RoleBadge } from '@/components/shared/badges';
 import { Stepper } from '@/components/shared/stepper';
 import { useMe } from '@/components/shell/me-context';
-import { api, type InviteResponse, type InviteResultStatus, type OrgRole } from '@/lib/api';
+import {
+  api,
+  type InviteMode,
+  type InviteResponse,
+  type InviteResultStatus,
+  type OrgRole,
+} from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { errorText } from './use-member-actions';
 
 const STEPS = ['People', 'Access', 'Review'];
 const emailSchema = z.string().email();
 
+const METHODS: { id: InviteMode; icon: typeof Mail; title: string; text: string; action: string }[] = [
+  {
+    id: 'email',
+    icon: Mail,
+    title: 'Email an invitation',
+    text: 'They get a link by email and choose their own password.',
+    action: 'invitation',
+  },
+  {
+    id: 'link',
+    icon: Link2,
+    title: 'Copy an invite link',
+    text: 'Nothing is emailed. You share the link yourself.',
+    action: 'link',
+  },
+  {
+    id: 'password',
+    icon: KeyRound,
+    title: 'Create with a temporary password',
+    text: 'The account exists now. They must change the password when they first sign in.',
+    action: 'account',
+  },
+];
+
 const RESULT_TEXT: Record<InviteResultStatus, { label: string; ok: boolean }> = {
   invited: { label: 'Invited', ok: true },
+  created: { label: 'Account created', ok: true },
   already_member: { label: 'Already a member', ok: false },
   deactivated_member: { label: 'Deactivated member: reactivate them instead', ok: false },
   already_invited: { label: 'Already has a pending invite', ok: false },
@@ -74,7 +118,26 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function InviteDialog() {
+/** One CSV row per person; the passwords exist only on this screen, so this is the one chance to keep them. */
+function downloadCredentials(response: InviteResponse, slug: string) {
+  const rows = response.results
+    .filter((r) => r.temporaryPassword)
+    .map((r) => `${r.email},${r.temporaryPassword}`);
+  const blob = new Blob([`email,temporary_password\n${rows.join('\n')}\n`], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${slug}-new-members.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+export function InviteDialog({
+  variant = 'default',
+  size = 'default',
+}: {
+  variant?: 'default' | 'outline' | 'soft';
+  size?: 'default' | 'sm';
+} = {}) {
   const me = useMe();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -84,6 +147,10 @@ export function InviteDialog() {
   const [touched, setTouched] = useState(false);
   const [groups, setGroups] = useState<PickedGroup[]>([]);
   const [response, setResponse] = useState<InviteResponse | null>(null);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('invite') === '1') setOpen(true);
+  }, []);
+  const [mode, setMode] = useState<InviteMode>('email');
 
   const emails = useMemo(() => parseEmails(text), [text]);
   const domain = me.org.domain.toLowerCase();
@@ -103,12 +170,12 @@ export function InviteDialog() {
   const send = useMutation({
     mutationFn: () =>
       api<InviteResponse>('/invitations', {
-        body: { emails, orgRole: role, groupIds: groups.map((g) => g.id) },
+        body: { emails, orgRole: role, groupIds: groups.map((g) => g.id), mode },
       }),
     onSuccess: (r) => {
       setResponse(r);
       qc.invalidateQueries({ queryKey: ['invitations'] });
-      const n = r.results.filter((x) => x.status === 'invited').length;
+      const n = r.results.filter((x) => x.status === 'invited' || x.status === 'created').length;
       if (n > 0 && r.emailDelivery) toast.success(`${n} invitation${n === 1 ? '' : 's'} sent`);
     },
     onError: (e) => toast.error(errorText(e)),
@@ -118,6 +185,7 @@ export function InviteDialog() {
     setStep(0);
     setText('');
     setRole('member');
+    setMode('email');
     setGroups([]);
     setTouched(false);
     setResponse(null);
@@ -143,7 +211,7 @@ export function InviteDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        <Button variant={variant} size={size}>
           <Plus /> Invite people
         </Button>
       </DialogTrigger>
@@ -152,18 +220,28 @@ export function InviteDialog() {
           <DialogTitle>Invite people to {me.org.name}</DialogTitle>
           <DialogDescription>
             {response
-              ? 'Here is how each invitation went.'
-              : 'They will get an email with a link to join.'}
+              ? 'Here is how each one went.'
+              : 'Add people by email, share a link, or create their account with a temporary password.'}
           </DialogDescription>
         </DialogHeader>
 
         {response ? (
           <div className="space-y-3">
-            {!response.emailDelivery && (
-              <div className="bg-accent text-accent-foreground flex gap-2 rounded-lg p-3 text-sm">
+            {response.mode === 'password' ? (
+              <div className="bg-warning-soft text-warning-soft-foreground flex gap-2 rounded-lg p-3 text-sm">
                 <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-                Email delivery is not set up, so nothing was emailed. Share each link yourself.
+                These passwords are shown only now and are not stored anywhere readable. Copy them
+                before you close this window. Each person must choose their own at first sign-in.
               </div>
+            ) : (
+              !response.emailDelivery && (
+                <div className="bg-accent text-accent-foreground flex gap-2 rounded-lg p-3 text-sm">
+                  <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {response.mode === 'link'
+                    ? 'Nothing was emailed. Share each link yourself.'
+                    : 'Email delivery is not set up, so nothing was emailed. Share each link yourself.'}
+                </div>
+              )
             )}
             <ul className="divide-y rounded-lg border">
               {response.results.map((r) => {
@@ -194,11 +272,38 @@ export function InviteDialog() {
                         className="bg-muted text-muted-foreground w-full rounded-lg px-2.5 py-1.5 font-mono text-xs"
                       />
                     )}
+                    {r.temporaryPassword && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          readOnly
+                          value={r.temporaryPassword}
+                          aria-label={`Temporary password for ${r.email}`}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="bg-muted w-full rounded-lg px-2.5 py-1.5 font-mono text-sm tracking-wide"
+                        />
+                        <CopyButton text={r.temporaryPassword} />
+                      </div>
+                    )}
+                    {r.status === 'created' && !r.temporaryPassword && (
+                      <p className="text-muted-foreground text-xs">
+                        They already have a sign-in from another workspace, so they keep their password.
+                      </p>
+                    )}
                   </li>
                 );
               })}
             </ul>
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:justify-between">
+              {response.results.some((r) => r.temporaryPassword) ? (
+                <Button
+                  variant="outline"
+                  onClick={() => downloadCredentials(response, me.org.slug)}
+                >
+                  <Download /> Download as CSV
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button onClick={() => setOpen(false)}>Done</Button>
             </DialogFooter>
           </div>
@@ -260,6 +365,30 @@ export function InviteDialog() {
             {step === 1 && (
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <Label id="invite-method">How should they join?</Label>
+                  <div role="radiogroup" aria-labelledby="invite-method" className="grid gap-2">
+                    {METHODS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={mode === m.id}
+                        onClick={() => setMode(m.id)}
+                        className={cn(
+                          'hover:bg-accent/60 flex items-start gap-3 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          mode === m.id && 'border-foreground ring-foreground ring-1',
+                        )}
+                      >
+                        <m.icon className="mt-0.5 size-4 shrink-0" strokeWidth={1.5} aria-hidden />
+                        <span>
+                          <span className="block text-sm font-medium">{m.title}</span>
+                          <span className="text-muted-foreground block text-xs">{m.text}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
                   <Label>Groups to join</Label>
                   <GroupPicker value={groups} onChange={setGroups} label="Groups to join" />
                   <p className="text-muted-foreground text-xs">
@@ -301,8 +430,9 @@ export function InviteDialog() {
                   </div>
                 )}
                 <p className="text-muted-foreground text-xs">
-                  Invitations expire after 7 days. You can resend or revoke them from the Pending
-                  invites tab.
+                  {mode === 'password'
+                    ? 'Accounts are created straight away. You will see each temporary password once.'
+                    : 'Invitations expire after 7 days. You can resend or revoke them from the Pending invites tab.'}
                 </p>
               </div>
             )}
@@ -324,8 +454,8 @@ export function InviteDialog() {
                 <Button type="button" disabled={send.isPending} onClick={() => send.mutate()}>
                   <UserPlus />
                   {send.isPending
-                    ? 'Sending…'
-                    : `Send ${emails.length} invitation${emails.length === 1 ? '' : 's'}`}
+                    ? 'Working…'
+                    : `${mode === 'email' ? 'Send' : 'Create'} ${emails.length} ${METHODS.find((m) => m.id === mode)!.action}${emails.length === 1 ? '' : 's'}`}
                 </Button>
               )}
             </DialogFooter>

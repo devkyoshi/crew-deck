@@ -19,6 +19,10 @@ export interface Me {
     avatarUrl: string | null;
     jobTitle: string | null;
     timezone: string;
+    /** True when an admin made the account with a temporary password the person still has to replace. */
+    mustChangePassword?: boolean;
+    /** False for people who only sign in with Google. */
+    hasPassword?: boolean;
   };
   org: {
     id: string;
@@ -127,11 +131,26 @@ export interface Invitation {
 }
 
 export type InviteResultStatus =
-  'invited' | 'already_member' | 'deactivated_member' | 'already_invited' | 'invalid_domain';
+  | 'invited'
+  | 'created'
+  | 'already_member'
+  | 'deactivated_member'
+  | 'already_invited'
+  | 'invalid_domain';
+
+export type InviteMode = 'email' | 'link' | 'password';
 
 export interface InviteResponse {
-  results: { email: string; status: InviteResultStatus; invitationId?: string; link?: string }[];
+  results: {
+    email: string;
+    status: InviteResultStatus;
+    invitationId?: string;
+    link?: string;
+    /** Shown once, only when the account was created with a temporary password. */
+    temporaryPassword?: string;
+  }[];
   emailDelivery: boolean;
+  mode?: InviteMode;
 }
 
 export const qs = (params: Record<string, string | number | undefined | null>) => {

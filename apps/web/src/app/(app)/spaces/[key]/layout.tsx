@@ -30,7 +30,8 @@ import { toast } from 'sonner';
 import type { SpaceFeature } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PersonAvatar } from '@/components/messages/person-avatar';
+import { useTrackPeople } from '@/components/messages/profile-popover';
 import { Pill } from '@/components/shared/pill';
 import { PropertyList, PropertyRow } from '@/components/shared/property-row';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -81,6 +82,8 @@ export default function SpaceLayout({
   });
 
   const space = query.data;
+  // Presence dots for the members shown in the header (a hook, so it runs before any early return).
+  useTrackPeople((space?.members ?? []).filter((m) => m.type === 'user').slice(0, 4).map((m) => m.id));
   // Live updates for everything in this space (board, list, backlog, open items).
   const live = useLiveSpace(space?.key);
   useEffect(() => {
@@ -230,12 +233,10 @@ export default function SpaceLayout({
                   key={m.id}
                   className="bg-muted inline-flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm"
                 >
-                  <Avatar className="size-6">
-                    {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
-                    <AvatarFallback className="bg-background text-xs font-semibold">
-                      {(m.name ?? m.email ?? '?').slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  <PersonAvatar
+                    size="sm"
+                    person={{ id: m.id, name: m.name, email: m.email ?? '', avatarUrl: m.avatarUrl ?? null }}
+                  />
                   {m.name ?? m.email}
                   {m.role === 'admin' && (
                     <Star

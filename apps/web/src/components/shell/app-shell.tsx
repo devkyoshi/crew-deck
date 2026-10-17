@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { RealtimeProvider } from '@/components/messages/realtime';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Me } from '@/lib/api';
@@ -14,7 +14,14 @@ import { Topbar } from './topbar';
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   // Messages fills the screen below the top bar instead of sitting in the padded page column.
-  const fullBleed = usePathname().startsWith('/messages');
+  const pathname = usePathname();
+  const router = useRouter();
+  const fullBleed = pathname.startsWith('/messages');
+  // A temporary password has to be replaced before anything else: the profile Security tab is the only way on.
+  const mustChange = me.user.mustChangePassword === true;
+  useEffect(() => {
+    if (mustChange && pathname !== '/profile') router.replace('/profile?tab=security');
+  }, [mustChange, pathname, router]);
   return (
     <MeProvider me={me}>
       <RealtimeProvider>

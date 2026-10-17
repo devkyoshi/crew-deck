@@ -36,7 +36,7 @@ import {
   sendMessage,
 } from '../messaging/messages.js';
 import { Presence } from '../messaging/presence.js';
-import { setCustomStatus, setDoNotDisturb } from '../messaging/me.js';
+import { setCustomStatus, setDoNotDisturb, setPresenceMode } from '../messaging/me.js';
 import { markAllRead, markUnread, myUnreads, setRead } from '../messaging/read-state.js';
 import type { Redis } from 'ioredis';
 import { MAX_FILES_PER_MESSAGE } from '@crew-deck/shared';
@@ -655,6 +655,26 @@ export async function messagingRoutes(app: FastifyInstance, deps: MessagingDeps)
       await setCustomStatus(ctx, actor, req.body);
       return { ok: true };
     },
+  );
+
+  // Available, Away or Do not disturb, as chosen from the profile menu.
+  r.put(
+    '/me/presence',
+    {
+      ...pre,
+      schema: {
+        body: z.object({
+          mode: z.enum(['auto', 'away', 'dnd']),
+          minutes: z
+            .number()
+            .int()
+            .min(1)
+            .max(60 * 24 * 7)
+            .optional(),
+        }),
+      },
+    },
+    async (req) => setPresenceMode(ctx, actorOf(req), req.body.mode, req.body.minutes),
   );
 
   r.put(

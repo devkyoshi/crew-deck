@@ -5,7 +5,12 @@ import type { OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
-import { emailMatchesOrg, findPendingInvitation, lookupUserByEmail } from '../auth/service.js';
+import {
+  createMemberWithTemporaryPassword,
+  emailMatchesOrg,
+  findPendingInvitation,
+  lookupUserByEmail,
+} from '../auth/service.js';
 import { emailEnabled } from '../config.js';
 import { withTenant, withTenantTx } from '../db/client.js';
 import type { InvitationDoc } from '../db/types.js';
@@ -42,8 +47,15 @@ function statusFilter(status: InviteStatus, now = new Date()): Record<string, un
 type InviteResult = {
   email: string;
   status:
-    'invited' | 'already_member' | 'deactivated_member' | 'already_invited' | 'invalid_domain';
+    | 'invited'
+    | 'created'
+    | 'already_member'
+    | 'deactivated_member'
+    | 'already_invited'
+    | 'invalid_domain';
   invitationId?: string;
+  /** Mode "password": shown to the admin once and never stored. Absent for people who already had a sign-in. */
+  temporaryPassword?: string;
   /** Only present when email delivery is not configured, so an admin can share it by hand. */
   link?: string;
 };
@@ -110,6 +122,11 @@ export async function invitationRoutes(
           orgRole: z.enum(['admin', 'member', 'owner']).default('member'),
           /** Groups the person joins automatically when they accept. */
           groupIds: z.array(z.string().uuid()).max(20).default([]),
+          /**
+           * email: send the invitation link by mail (default). link: make the link and show it, send nothing.
+           * password: create the account now with a temporary password the person must change.
+           */
+          mode: z.enum(['email', 'link', 'password']).default('email'),
         }),
       },
     },
@@ -122,6 +139,9 @@ export async function invitationRoutes(
       const org = req.org!;
       const expiresAt = new Date(Date.now() + config.INVITE_TTL_DAYS * DAY_MS);
       const jobs: Parameters<EnqueueInviteEmail>[0][] = [];
+      const mode = req.body.mode;
+
+      if (mode === 'password') return createWithPasswords();
 
       const results = await withTenantTx(db, actor.orgId, async (t) => {
         // A retried transaction must not queue the same mail twice.
@@ -179,19 +199,22 @@ export async function invitationRoutes(
             },
           });
           const link = linkFor(org.slug, token);
-          jobs.push({
-            orgId: actor.orgId,
-            to: addr,
-            link,
-            orgName: org.name,
-            inviterName: req.user!.name ?? req.user!.email,
-            expiresInDays: config.INVITE_TTL_DAYS,
-          });
+          if (mode === 'email') {
+            jobs.push({
+              orgId: actor.orgId,
+              to: addr,
+              link,
+              orgName: org.name,
+              inviterName: req.user!.name ?? req.user!.email,
+              expiresInDays: config.INVITE_TTL_DAYS,
+            });
+          }
           out.push({
             email: addr,
             status: 'invited',
             invitationId: row.id,
-            ...(deliverable ? {} : { link }),
+            // Link mode always shows the link; email mode only when mail cannot be sent.
+            ...(mode === 'link' || !deliverable ? { link } : {}),
           });
         }
         return out;
@@ -199,7 +222,58 @@ export async function invitationRoutes(
 
       // Queue after commit so a rolled-back batch never sends mail.
       for (const job of jobs) await deps.enqueueInviteEmail(job);
-      return { results, emailDelivery: deliverable };
+      return { results, emailDelivery: deliverable && mode === 'email', mode };
+
+      /** Mode "password": the same checks, then the account exists straight away. */
+      async function createWithPasswords() {
+        const groupIds = [...new Set(req.body.groupIds)];
+        const { plan, restricted, seats } = await withTenantTx(db, actor.orgId, async (t) => {
+          const p = await loadPlan(t, actor.orgId);
+          if (groupIds.length && (await t.groups.count({ id: { $in: groupIds } })) !== groupIds.length) {
+            throw new AppError(400, 'invalid_groups', 'One of the selected groups does not exist');
+          }
+          return {
+            plan: p,
+            restricted: org.domain_restricted && hasFeature(p, 'domain_lock'),
+            seats: await countSeats(t, actor.orgId),
+          };
+        });
+        let seatsUsed = seats;
+        const out: InviteResult[] = [];
+        for (const addr of emails) {
+          if (restricted && !emailMatchesOrg(addr, org)) {
+            out.push({ email: addr, status: 'invalid_domain' });
+            continue;
+          }
+          const member = await lookupUserByEmail(db, actor.orgId, addr);
+          if (member) {
+            out.push({
+              email: addr,
+              status: member.status === 'deactivated' ? 'deactivated_member' : 'already_member',
+            });
+            continue;
+          }
+          const pending = await findPendingInvitation(db, actor.orgId, addr);
+          if (pending) {
+            out.push({ email: addr, status: 'already_invited', invitationId: pending.id });
+            continue;
+          }
+          assertWithinLimit(plan, 'seats', seatsUsed);
+          seatsUsed++;
+          const made = await createMemberWithTemporaryPassword(db, org, {
+            email: addr,
+            role: req.body.orgRole as OrgRole,
+            groupIds,
+            invitedBy: actor.userId,
+          });
+          out.push({
+            email: addr,
+            status: 'created',
+            ...(made.temporaryPassword ? { temporaryPassword: made.temporaryPassword } : {}),
+          });
+        }
+        return { results: out, emailDelivery: false, mode };
+      }
     },
   );
 

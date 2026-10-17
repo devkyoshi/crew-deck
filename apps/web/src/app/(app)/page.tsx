@@ -18,7 +18,8 @@ import { StatCard } from '@/components/shared/stat-card';
 import { FadeIn, Stagger, StaggerItem } from '@/components/shared/motion';
 import { TeamWidget } from '@/components/checkin/team-board';
 import { useToday } from '@/components/checkin/use-today';
-import { useMe } from '@/components/shell/me-context';
+import { InviteDialog } from '@/components/members/invite-dialog';
+import { useIsAdmin, useMe } from '@/components/shell/me-context';
 import { SpaceIcon } from '@/components/spaces/space-bits';
 import { DueDate, StatusChip, TypeIcon } from '@/components/work/work-bits';
 import { useUnreadSummary } from '@/lib/messaging-api';
@@ -49,6 +50,7 @@ function Panel({
 
 export default function HomePage() {
   const { user, org } = useMe();
+  const isAdmin = useIsAdmin();
   const first = user.name?.split(' ')[0] ?? 'there';
   const checkinOn = useToday().data?.enabled === true;
   const mine = useMyItems('assigned', 'open');
@@ -117,6 +119,7 @@ export default function HomePage() {
                     <UsersRound /> Groups
                   </Link>
                 </Button>
+                {isAdmin && <InviteDialog variant="soft" size="sm" />}
               </div>
             </div>
             <WorkspaceScene className="hidden md:block" />

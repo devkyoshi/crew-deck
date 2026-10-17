@@ -6,14 +6,15 @@ import { initials } from '@/components/shell/me-context';
 import { cn } from '@/lib/utils';
 import { useMessaging } from './store';
 
+/** Green is available, red is do not disturb, grey is away or idle, and a hollow ring is offline. */
 const DOT: Record<PresenceState, string> = {
   online: 'bg-success',
-  away: 'bg-warning',
+  away: 'bg-muted-foreground',
   dnd: 'bg-danger',
-  offline: 'bg-muted-foreground/50',
+  offline: 'bg-background border-muted-foreground/60 border-[1.5px]',
 };
 export const PRESENCE_LABEL: Record<PresenceState, string> = {
-  online: 'Online',
+  online: 'Available',
   away: 'Away',
   dnd: 'Do not disturb',
   offline: 'Offline',

@@ -735,6 +735,7 @@ export function useSectionMutations() {
 
 /** Do not disturb for some minutes (or off), and my custom status. */
 export function useStatusMutations() {
+  const qc = useQueryClient();
   return {
     dnd: useMutation({
       mutationFn: (minutes: number | null) =>
@@ -746,8 +747,18 @@ export function useStatusMutations() {
         text: string | null;
         expiresAt?: string | null;
       }) => api<{ ok: boolean }>('/me/status', { method: 'PUT', body }),
+      // Everything that shows a status line (the profile menu, cards, lists) reads it again.
+      onSuccess: () => void qc.invalidateQueries({ queryKey: ['messaging', 'presence'] }),
     }),
   };
+}
+
+/** Available, Away or Do not disturb (for some minutes), chosen from the profile menu. */
+export function usePresenceMode() {
+  return useMutation({
+    mutationFn: (v: { mode: 'auto' | 'away' | 'dnd'; minutes?: number }) =>
+      api<{ state: PresenceState; until: string | null }>('/me/presence', { method: 'PUT', body: v }),
+  });
 }
 
 // ---- Platform integration (M4) ------------------------------------------------------------------------------

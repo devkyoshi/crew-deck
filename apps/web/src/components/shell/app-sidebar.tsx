@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Check, ChevronsUpDown, Layers, LayoutGrid, Plus, Search } from 'lucide-react';
+import { Check, ChevronsUpDown, Layers, LayoutGrid, Plus, Search, UserPlus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,7 @@ import { SpacesNav } from './spaces-nav';
 
 function TenantSwitcher() {
   const { org, orgs } = useMe();
+  const isAdmin = useIsAdmin();
 
   // Opens the other workspace already signed in (no second sign-in).
   const switchTo = (slug: string) => void openWorkspace(slug);
@@ -97,6 +98,13 @@ function TenantSwitcher() {
                 <LayoutGrid className="size-4" aria-hidden /> All workspaces
               </Link>
             </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem asChild>
+                <Link href="/admin/members?invite=1">
+                  <UserPlus className="size-4" aria-hidden /> Invite people
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link href="/my-workspaces/new">
                 <Plus className="size-4" aria-hidden /> Create a workspace

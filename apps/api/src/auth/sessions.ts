@@ -15,6 +15,10 @@ export class SessionStore {
     private ttl: number,
   ) {}
 
+  private indexKey(orgId: string, userId: string) {
+    return orgKey(orgId, 'usess', userId);
+  }
+
   private key(orgId: string, sid: string) {
     return orgKey(orgId, 'sess', sha256(sid));
   }
@@ -33,6 +37,11 @@ export class SessionStore {
       ? { userId, impersonatedBy: opts.impersonatedBy }
       : { userId };
     await this.redis.set(this.key(orgId, sid), JSON.stringify(value), 'EX', opts.ttl ?? this.ttl);
+    // An index of the person's sessions, so "sign out everywhere else" can find them.
+    if (!opts.impersonatedBy) {
+      const idx = this.indexKey(orgId, userId);
+      await this.redis.multi().sadd(idx, sha256(sid)).expire(idx, this.ttl).exec();
+    }
     return sid;
   }
 
@@ -45,6 +54,19 @@ export class SessionStore {
     const session = JSON.parse(raw) as { userId: string; impersonatedBy?: string };
     if (!session.impersonatedBy) await this.redis.expire(this.key(orgId, sid), this.ttl);
     return session;
+  }
+
+  /** Ends every session of this person except the one named. Returns how many were ended. */
+  async destroyOthers(orgId: string, userId: string, keepSid: string | null) {
+    const idx = this.indexKey(orgId, userId);
+    const keep = keepSid ? sha256(keepSid) : null;
+    let ended = 0;
+    for (const h of await this.redis.smembers(idx)) {
+      if (h === keep) continue;
+      ended += await this.redis.del(orgKey(orgId, 'sess', h));
+      await this.redis.srem(idx, h);
+    }
+    return ended;
   }
 
   async destroy(orgId: string, sid: string) {

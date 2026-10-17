@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { ApiError } from '@/lib/api';
 import { useStatusMutations } from '@/lib/messaging-api';
-import { EmojiPickerButton } from './emoji-picker';
+import { EmojiPickerButton } from '@/components/messages/emoji-picker';
 
 const EXPIRY: { value: string; label: string; minutes: number | null }[] = [
   { value: 'never', label: 'Do not clear', minutes: null },

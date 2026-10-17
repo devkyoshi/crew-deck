@@ -5,6 +5,8 @@ import { orgRoleSchema, type OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { actorOf } from '../auth/actor.js';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
+import { hashPassword } from '../auth/password.js';
+import { generateTemporaryPassword } from '../auth/service.js';
 import { timezoneSchema } from '../auth/routes.js';
 import { withTenant, withTenantTx, type TenantDb } from '../db/client.js';
 import type { MembershipDoc, UserDoc } from '../db/types.js';
@@ -341,6 +343,40 @@ export async function memberRoutes(app: FastifyInstance, deps: AuthDeps & { even
     { preHandler: requireAuth, schema: { params: idParam } },
     async (req) => setActive(req.params.id, req, true),
   );
+  // A new temporary password, only for someone who has not signed in since being created with one.
+  r.post(
+    '/members/:id/reset-password',
+    { preHandler: requireAuth, schema: { params: idParam } },
+    async (req) => {
+      const actor = actorOf(req);
+      if (!can(actor, 'member.invite')) throw forbidden();
+      const userId = req.params.id;
+      const temporaryPassword = generateTemporaryPassword();
+      const passwordHash = await hashPassword(temporaryPassword);
+      await withTenantTx(deps.db, actor.orgId, async (t) => {
+        const target = await loadTarget(t, userId);
+        if (target.orgRole === 'owner' && actor.orgRole !== 'owner') throw forbidden();
+        const user = (await t.users([userId])).get(userId);
+        if (!user?.mustChangePassword || user.lastLoginAt) {
+          throw new AppError(
+            409,
+            'not_resettable',
+            'Only people who have not signed in yet can get a new temporary password',
+          );
+        }
+        await t.updateUser(userId, { passwordHash, mustChangePassword: true });
+        await writeAudit(t, {
+          orgId: actor.orgId,
+          actorId: actor.userId,
+          action: 'member.password_reset',
+          targetType: 'member',
+          targetId: userId,
+        });
+      });
+      return { temporaryPassword };
+    },
+  );
+
   r.post(
     '/members/:id/reactivate',
     { preHandler: requireAuth, schema: { params: idParam } },

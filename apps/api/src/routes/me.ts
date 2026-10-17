@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { makeRequireAuth, type AuthDeps } from '../auth/plugin.js';
 import { timezoneSchema } from '../auth/routes.js';
 import { listUserOrgs, loadAuthUser } from '../auth/service.js';
+import { writeAudit } from '../audit/service.js';
+import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from '../auth/password.js';
 import { withTenant } from '../db/client.js';
+import { AppError } from '../lib/errors.js';
 import { loadMessagingSettings } from '../messaging/settings.js';
 import { loadPlan } from '../plans/index.js';
 import { ADMIN_ACTIONS, can } from '../permissions/can.js';
@@ -41,6 +44,8 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
         avatarUrl: user.avatarUrl,
         jobTitle: user.jobTitle,
         timezone: user.timezone,
+        mustChangePassword: user.mustChangePassword,
+        hasPassword: user.hasPassword,
       },
       org: {
         id: org.id,
@@ -96,4 +101,61 @@ export async function meRoutes(app: FastifyInstance, deps: AuthDeps) {
       return profile(req);
     },
   );
+
+  // ---- Password ---------------------------------------------------------------------------------------
+
+  const tooShort = `Use at least ${MIN_PASSWORD_LENGTH} characters`;
+  r.post(
+    '/me/password',
+    {
+      preHandler: requireAuth,
+      config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+      schema: {
+        body: z.object({
+          /** Not needed when the person has no password yet (they signed in with Google). */
+          current: z.string().max(200).optional(),
+          next: z.string().min(MIN_PASSWORD_LENGTH, tooShort).max(200),
+          /** Also end every other signed-in session of this person. */
+          signOutOthers: z.boolean().default(true),
+        }),
+      },
+    },
+    async (req) => {
+      const user = req.user!;
+      const orgId = req.org!.id;
+      const stored = (await withTenant(deps.db, orgId, (t) => t.users([user.id]))).get(user.id)?.passwordHash;
+      if (stored) {
+        if (!req.body.current || !(await verifyPassword(stored, req.body.current))) {
+          throw new AppError(422, 'validation_error', 'That is not your current password', {
+            current: 'That is not your current password',
+          });
+        }
+        if (req.body.current === req.body.next) {
+          throw new AppError(422, 'validation_error', 'Choose a different password', {
+            next: 'Choose a different password',
+          });
+        }
+      }
+      const passwordHash = await hashPassword(req.body.next);
+      await withTenant(deps.db, orgId, async (t) => {
+        await t.updateUser(user.id, { passwordHash, mustChangePassword: false });
+        await writeAudit(t, {
+          orgId,
+          actorId: user.id,
+          action: 'member.password_changed',
+          targetType: 'member',
+          targetId: user.id,
+        });
+      });
+      const ended = req.body.signOutOthers
+        ? await deps.sessions.destroyOthers(orgId, user.id, req.sessionId ?? null)
+        : 0;
+      req.user = (await loadAuthUser(deps.db, orgId, user.id)) ?? user;
+      return { ok: true, signedOutElsewhere: ended };
+    },
+  );
+
+  r.post('/me/sessions/sign-out-others', { preHandler: requireAuth }, async (req) => ({
+    ended: await deps.sessions.destroyOthers(req.org!.id, req.user!.id, req.sessionId ?? null),
+  }));
 }

@@ -223,12 +223,13 @@ export async function signInAs(
   app: ReturnType<typeof makeApp>['app'],
   slug: string,
   user: { id: string; email: string },
+  password = PASSWORD,
 ) {
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: { host: hostFor(slug) },
-    payload: { email: user.email, password: PASSWORD },
+    payload: { email: user.email, password },
   });
   const cookie = sessionCookie(res);
   if (!cookie) throw new Error(`sign-in failed for ${user.email}: ${res.statusCode} ${res.body}`);

@@ -73,7 +73,6 @@ import {
   useReadAll,
   useSectionMutations,
   useSections,
-  useStatusMutations,
   useThreadsList,
   useUpdateMyMembership,
   type MyChannelDTO,
@@ -82,7 +81,6 @@ import {
 import { cn } from '@/lib/utils';
 import { BrowseChannelsDialog, CreateChannelDialog, NewMessageDialog } from './dialogs';
 import { PersonAvatar } from './person-avatar';
-import { StatusDialog } from './status-dialog';
 import { CheckinPill, useCheckinOf, useTrackPeople } from './profile-popover';
 
 /** A quiet "Remote" / "Onsite" word next to a person's name, when they are in today. */
@@ -484,10 +482,9 @@ export function ConversationList({
   const hydrated = useHydrated();
   const readAll = useReadAll();
   const sectionApi = useSectionMutations();
-  const { dnd } = useStatusMutations();
   const [filter, setFilter] = useState('');
   const canCreate = useCanCreateChannel();
-  const [dialog, setDialog] = useState<'new' | 'create' | 'browse' | 'status' | null>(null);
+  const [dialog, setDialog] = useState<'new' | 'create' | 'browse' | null>(null);
   const [sectionDialog, setSectionDialog] = useState<
     { mode: 'create'; assign?: string } | { mode: 'rename'; section: SidebarSectionDTO } | null
   >(null);
@@ -571,18 +568,6 @@ export function ConversationList({
     );
   };
 
-  const setDnd = (minutes: number | null) =>
-    dnd.mutate(minutes, {
-      onSuccess: () => toast.success(minutes ? 'Do not disturb is on' : 'Do not disturb is off'),
-      onError: () => toast.error('Could not change that'),
-    });
-  const untilTomorrow = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(8, 0, 0, 0);
-    return Math.max(1, Math.round((d.getTime() - Date.now()) / 60_000));
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-1 border-b p-2">
@@ -636,24 +621,9 @@ export function ConversationList({
               <MailPlus /> Mark all as read
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setDialog('status')}>
-              <Smile /> Set a status…
-            </DropdownMenuItem>
-            <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Do not disturb
+            <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+              Status and do not disturb are in the profile menu at the top right.
             </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => setDnd(30)}>
-              <Moon /> For 30 minutes
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setDnd(60)}>
-              <Moon /> For 1 hour
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setDnd(untilTomorrow())}>
-              <Moon /> Until tomorrow morning
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setDnd(null)}>
-              <Moon /> Turn off
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -857,10 +827,6 @@ export function ConversationList({
       <BrowseChannelsDialog
         open={dialog === 'browse'}
         onOpenChange={(o) => setDialog(o ? 'browse' : null)}
-      />
-      <StatusDialog
-        open={dialog === 'status'}
-        onOpenChange={(o) => setDialog(o ? 'status' : null)}
       />
       <SectionNameDialog
         open={!!sectionDialog}

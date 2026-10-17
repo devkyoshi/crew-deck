@@ -39,3 +39,21 @@ export async function setDoNotDisturb(ctx: MessagingCtx, actor: Actor, minutes: 
   announcePresence(ctx, actor.orgId, actor.userId, change);
   return presence.dndUntil(actor.orgId, actor.userId);
 }
+
+/** Available (automatic), Away, or Do not disturb (for `minutes`, default an hour). */
+export async function setPresenceMode(
+  ctx: MessagingCtx,
+  actor: Actor,
+  mode: 'auto' | 'away' | 'dnd',
+  minutes?: number,
+) {
+  const presence = presenceOf(ctx);
+  const change =
+    mode === 'dnd'
+      ? await presence.setDnd(actor.orgId, actor.userId, minutes ?? 60)
+      : mode === 'away'
+        ? await presence.setAway(actor.orgId, actor.userId, true)
+        : await presence.setAway(actor.orgId, actor.userId, false);
+  announcePresence(ctx, actor.orgId, actor.userId, change);
+  return { state: change.after, until: await presence.dndUntil(actor.orgId, actor.userId) };
+}

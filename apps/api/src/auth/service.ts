@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { workTypesOf, type OrgRole } from '@crew-deck/shared';
 import { writeAudit } from '../audit/service.js';
 import { withTenant, type Db } from '../db/client.js';
@@ -48,6 +48,10 @@ export interface AuthUser {
   status: 'invited' | 'active' | 'deactivated';
   orgRole: OrgRole;
   crmRole: 'none' | 'viewer' | 'member' | 'admin';
+  /** True when the person must choose a new password before using the app. */
+  mustChangePassword: boolean;
+  /** False for people who only ever signed in with Google. */
+  hasPassword: boolean;
 }
 
 export const emailDomain = (email: string) => email.split('@')[1]?.toLowerCase() ?? '';
@@ -127,6 +131,8 @@ export async function loadAuthUser(
     status: m.status === 'deactivated' ? 'deactivated' : u.status,
     orgRole: m.orgRole,
     crmRole: m.crmRole,
+    mustChangePassword: u.mustChangePassword === true,
+    hasPassword: !!u.passwordHash,
   };
 }
 
@@ -284,5 +290,75 @@ export async function acceptInvitation(
       },
     });
     return userId;
+  });
+}
+
+// No 0/O/1/l/I: a temporary password is read aloud and typed by hand.
+const TEMP_LOWER = 'abcdefghjkmnpqrstuvwxyz';
+const TEMP_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const TEMP_DIGITS = '23456789';
+
+/** A random 14-character password with a lower-case letter, an upper-case letter and a digit. */
+export function generateTemporaryPassword() {
+  const all = TEMP_LOWER + TEMP_UPPER + TEMP_DIGITS;
+  const pick = (set: string) => set[randomInt(set.length)]!;
+  const chars = [pick(TEMP_LOWER), pick(TEMP_UPPER), pick(TEMP_DIGITS)];
+  while (chars.length < 14) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+  }
+  return chars.join('');
+}
+
+/**
+ * Creates the account right away with a temporary password the admin hands over. The person must pick
+ * their own at first sign-in (`mustChangePassword`). Someone who already has a sign-in from another
+ * workspace just joins this one: their credentials are never overwritten and no password is returned.
+ */
+export async function createMemberWithTemporaryPassword(
+  db: Db,
+  org: Org,
+  input: { email: string; role: OrgRole; groupIds: string[]; invitedBy: string },
+): Promise<{ userId: string; temporaryPassword: string | null }> {
+  const email = input.email.toLowerCase();
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  return db.globalTx(async (g) => {
+    const t = g.forOrg(org.id);
+    const existing = await g.users.findOne({ email });
+    let userId = existing?.id;
+    let issued: string | null = null;
+    if (userId) {
+      await t.memberships.insertIgnore({ userId, orgRole: input.role });
+      await g.users.updateOne({ id: userId }, { status: 'active' });
+    } else {
+      userId = randomUUID();
+      await g.users.insert({
+        id: userId,
+        email,
+        name: null,
+        avatarUrl: null,
+        timezone: 'UTC',
+        status: 'active',
+        passwordHash,
+        mustChangePassword: true,
+      });
+      await t.memberships.insert({ userId, orgRole: input.role });
+      issued = temporaryPassword;
+    }
+    if (input.groupIds.length) {
+      const still = await t.groups.find({ id: { $in: input.groupIds } });
+      for (const grp of still) await t.groupMembers.insertIgnore({ groupId: grp.id, userId });
+    }
+    await writeAudit(t, {
+      orgId: org.id,
+      actorId: input.invitedBy,
+      action: 'member.created_with_password',
+      targetType: 'member',
+      targetId: userId,
+      after: { email, orgRole: input.role, existingIdentity: existing ? true : false },
+    });
+    return { userId, temporaryPassword: issued };
   });
 }

@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Camera, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ImageCropDialog } from './image-crop-dialog';
 import { cn } from '@/lib/utils';
 
 const ACCEPT = 'image/png,image/jpeg,image/webp';
@@ -32,6 +33,7 @@ export function ImageUpload({
   label,
   hint,
   fallback,
+  crop = true,
   onChanged,
 }: {
   endpoint: string;
@@ -42,11 +44,14 @@ export function ImageUpload({
   label: string;
   hint?: string;
   fallback: ReactNode;
+  /** Let the person crop the picture to a square before it is uploaded. */
+  crop?: boolean;
   onChanged: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [local, setLocal] = useState<string | null>(null);
+  const [cropping, setCropping] = useState<File | null>(null);
   const shown = local ?? preview;
 
   async function pick(file: File | undefined) {
@@ -55,8 +60,22 @@ export function ImageUpload({
       toast.error('Use a PNG, JPG or WebP picture.');
       return;
     }
-    if (file.size > MAX_BYTES) {
+    if (!crop && file.size > MAX_BYTES) {
       toast.error('Pictures can be up to 2 MB.');
+      return;
+    }
+    if (crop && !cropping) {
+      setCropping(file);
+      if (input.current) input.current.value = '';
+      return;
+    }
+    await upload(file);
+  }
+
+  async function upload(file: File) {
+    setCropping(null);
+    if (file.size > MAX_BYTES) {
+      toast.error('That picture is still over 2 MB. Try a smaller one.');
       return;
     }
     setBusy(true);
@@ -127,6 +146,13 @@ export function ImageUpload({
         </div>
         <p className="text-muted-foreground text-xs">{hint ?? 'PNG, JPG or WebP, up to 2 MB.'}</p>
       </div>
+      <ImageCropDialog
+        file={cropping}
+        shape={shape}
+        title={`Crop your ${label.toLowerCase()}`}
+        onCancel={() => setCropping(null)}
+        onApply={(f) => void upload(f)}
+      />
       <input
         ref={input}
         type="file"

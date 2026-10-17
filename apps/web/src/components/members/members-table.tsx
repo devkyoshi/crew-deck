@@ -22,7 +22,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PersonAvatar } from '@/components/messages/person-avatar';
+import { useTrackPeople } from '@/components/messages/profile-popover';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -174,10 +175,7 @@ export function MembersTable({ admin }: { admin: boolean }) {
           const m = row.original;
           return (
             <Link href={`/people/${m.id}`} className="group flex items-center gap-3">
-              <Avatar className="size-8">
-                {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
-                <AvatarFallback className="text-xs">{initials(m.name, m.email)}</AvatarFallback>
-              </Avatar>
+              <PersonAvatar person={m} />
               <span className="min-w-0">
                 <span className="block truncate font-medium group-hover:underline">
                   {m.name ?? m.email}
@@ -275,6 +273,8 @@ export function MembersTable({ admin }: { admin: boolean }) {
   }, [admin, sort, me.user.id, me.orgRole]);
 
   const items = query.data?.items ?? [];
+  // Colour the presence dots of the people on this page.
+  useTrackPeople(items.map((m) => m.id));
   const table = useReactTable({
     data: items,
     columns,

@@ -44,6 +44,8 @@ export interface UserDoc {
   timezone: string;
   status: 'invited' | 'active' | 'deactivated';
   passwordHash: string | null;
+  /** Set when an admin created the account with a temporary password; cleared when the person picks their own. */
+  mustChangePassword?: boolean;
   lastLoginAt: Date | null;
   createdAt: Date;
 }

@@ -14,6 +14,10 @@ export type ConnectionState = 'active' | 'away';
 
 const key = (orgId: string, userId: string) => orgKey(orgId, 'presence', userId);
 const dndKey = (orgId: string, userId: string) => orgKey(orgId, 'dnd', userId);
+/** Set when the person chose "Away" themselves, whatever their connections say. */
+const awayKey = (orgId: string, userId: string) => orgKey(orgId, 'away', userId);
+/** A manual away expires on its own so nobody is left looking away for days. */
+export const MANUAL_AWAY_S = 12 * 60 * 60;
 
 export class Presence {
   constructor(private readonly redis: Redis) {}
@@ -41,13 +45,26 @@ export class Presence {
   async setDnd(orgId: string, userId: string, minutes: number | null) {
     const before = await this.stateOf(orgId, userId);
     if (minutes === null) await this.redis.del(dndKey(orgId, userId));
-    else
+    else {
+      // Do not disturb and Away are alternatives: picking one drops the other.
+      await this.redis.del(awayKey(orgId, userId));
       await this.redis.set(
         dndKey(orgId, userId),
         '1',
         'EX',
         Math.max(60, Math.round(minutes * 60)),
       );
+    }
+    return { before, after: await this.stateOf(orgId, userId) };
+  }
+
+  /** Chooses "Away" (on) or goes back to automatic (off). Do not disturb is cleared either way. */
+  async setAway(orgId: string, userId: string, on: boolean) {
+    const before = await this.stateOf(orgId, userId);
+    const multi = this.redis.multi().del(dndKey(orgId, userId));
+    if (on) multi.set(awayKey(orgId, userId), '1', 'EX', MANUAL_AWAY_S);
+    else multi.del(awayKey(orgId, userId));
+    await multi.exec();
     return { before, after: await this.stateOf(orgId, userId) };
   }
 
@@ -98,12 +115,14 @@ export class Presence {
     for (const id of userIds) {
       pipe.hgetall(key(orgId, id));
       pipe.exists(dndKey(orgId, id));
+      pipe.exists(awayKey(orgId, id));
     }
     const res = (await pipe.exec()) ?? [];
     const now = Date.now();
     userIds.forEach((id, i) => {
-      const fields = (res[i * 2]?.[1] ?? {}) as Record<string, string>;
-      const dnd = res[i * 2 + 1]?.[1] === 1;
+      const fields = (res[i * 3]?.[1] ?? {}) as Record<string, string>;
+      const dnd = res[i * 3 + 1]?.[1] === 1;
+      const manualAway = res[i * 3 + 2]?.[1] === 1;
       let active = false;
       let away = false;
       for (const v of Object.values(fields)) {
@@ -114,6 +133,7 @@ export class Presence {
       }
       if (!active && !away) out.set(id, 'offline');
       else if (dnd) out.set(id, 'dnd');
+      else if (manualAway) out.set(id, 'away');
       else out.set(id, active ? 'online' : 'away');
     });
     return out;
