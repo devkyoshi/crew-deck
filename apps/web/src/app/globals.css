@@ -569,3 +569,42 @@
   transform-origin: center;
   animation: ill-pop 0.45s var(--ease-out-quint) both;
 }
+
+/* Notification bell: a short ring when something new arrives, and a pop on the count. */
+@keyframes bell-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(14deg);
+  }
+  30% {
+    transform: rotate(-12deg);
+  }
+  45% {
+    transform: rotate(8deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+.animate-bell-ring {
+  transform-origin: 50% 10%;
+  animation: bell-ring 0.9s ease-in-out;
+}
+
+/* Soft lift for clickable cards and tiles. */
+.lift {
+  transition:
+    transform 0.2s var(--ease-out-quint),
+    box-shadow 0.2s var(--ease-out-quint),
+    border-color 0.2s;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elev-sm);
+}

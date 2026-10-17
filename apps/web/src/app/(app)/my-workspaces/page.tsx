@@ -66,7 +66,7 @@ export default function MyWorkspacesPage() {
         <Stagger className="grid gap-3 sm:grid-cols-2">
           {q.data?.items.map((w) => (
             <StaggerItem key={w.id}>
-              <Card className="gap-3 p-4 shadow-none" data-testid={`workspace-${w.slug}`}>
+              <Card className="lift hover:border-primary/40 gap-3 p-4 shadow-none" data-testid={`workspace-${w.slug}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{w.name}</div>

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ConfettiBurst } from '@/components/shared/celebrate';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -331,6 +332,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
   const create = useCreateItem(spaceKey);
   const update = useUpdateItem();
   const move = useMoveItem();
+  const [burst, setBurst] = useState(0);
   const del = useDeleteItem();
 
   const [density, setDensity] = useState<Density>('comfortable');
@@ -626,7 +628,11 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
     const category = data?.statuses.find((s) => s.id === statusId)?.category;
     if (ask) setConfirmLane({ item, body, text: ask });
     else if (category && movesBlockedForward(item, category)) setBlockedMove({ item, body });
-    else move.mutate({ item, body });
+    else {
+      move.mutate({ item, body });
+      // Moving a card into a Done column earns a little celebration.
+      if (category === 'done' && start.key !== current) setBurst((n) => n + 1);
+    }
   }
 
   function onDragCancel() {
@@ -899,6 +905,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       )}
 
+      <ConfettiBurst burst={burst} />
       <DndContext
         sensors={sensors}
         collisionDetection={collide}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConfettiBurst } from '@/components/shared/celebrate';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
@@ -45,6 +46,7 @@ export default function NewWorkspacePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [burst, setBurst] = useState(0);
   const { shakeKey, fail } = useFormFeedback();
 
   useEffect(() => {
@@ -79,6 +81,8 @@ export default function NewWorkspacePage() {
         body: { company: company.trim(), slug, workTypes, usage },
       });
       // The new workspace has its own address; the link signs you straight in.
+      setBurst(1);
+      await new Promise((r) => setTimeout(r, 900));
       window.location.assign(res.url);
     } catch (err) {
       if (err instanceof ApiError && err.fields && Object.keys(err.fields).length) setErrors(err.fields);
@@ -94,6 +98,7 @@ export default function NewWorkspacePage() {
 
   return (
     <div className="max-w-3xl">
+      <ConfettiBurst burst={burst} />
       <PageHeader
         title="Create a workspace"
         description={`You will be its owner. It uses your existing account (${user.email}), so there is nothing new to sign up for.`}

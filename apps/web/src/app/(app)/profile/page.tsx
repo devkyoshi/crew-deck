@@ -8,6 +8,7 @@ import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { ProfileForm, type ProfileValues } from '@/components/members/profile-form';
 import { SecurityPanel } from '@/components/members/security-panel';
+import { PageContainer } from '@/components/shared/page-container';
 import { PageHeader } from '@/components/shared/page-header';
 import { TabPanel } from '@/components/shared/motion';
 import { ImageUpload } from '@/components/shared/image-upload';
@@ -106,7 +107,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <PageContainer>
       <PageHeader title="Your profile" description="Your details, password and preferences." />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">
         <TabsList variant="line" aria-label="Profile sections">
@@ -173,6 +174,6 @@ export default function ProfilePage() {
           </TabPanel>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

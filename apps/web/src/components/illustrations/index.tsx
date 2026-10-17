@@ -167,12 +167,22 @@ const ART: Record<IllustrationName, ReactNode> = {
   ),
 };
 
-export function Illustration({ name, className }: { name: IllustrationName; className?: string }) {
+const SIZES = { sm: 'h-16', md: 'h-24', lg: 'h-40' } as const;
+
+export function Illustration({
+  name,
+  className,
+  size = 'md',
+}: {
+  name: IllustrationName;
+  className?: string;
+  size?: keyof typeof SIZES;
+}) {
   return (
     <svg
       fill="none"
       viewBox="0 0 120 92"
-      className={cn('h-24 w-auto', className)}
+      className={cn(SIZES[size], 'w-auto', className)}
       aria-hidden
       focusable="false"
     >

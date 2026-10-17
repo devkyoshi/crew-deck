@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -160,6 +161,14 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
                   >
                     <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
                       <Link href={item.href} aria-current={active ? 'page' : undefined}>
+                        {active && (
+                          <motion.span
+                            layoutId="sidebar-active"
+                            aria-hidden
+                            className="bg-primary absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full"
+                            transition={{ type: 'spring', stiffness: 520, damping: 38 }}
+                          />
+                        )}
                         <item.icon strokeWidth={1.5} />
                         <span>{item.title}</span>
                       </Link>

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import {
   Bookmark,
   BookmarkCheck,
@@ -193,6 +193,8 @@ function HoverToolbar({
 
 export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
   const m = p.message;
+  // Only a message that has just arrived slides in; rows re-created by scrolling history stay still.
+  const [fresh] = useState(() => Date.now() - new Date(p.message.createdAt).getTime() < 4000);
   const own = m.authorId === p.selfId && m.kind === 'user';
   const name = m.author
     ? personName(m.author)
@@ -234,6 +236,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
       id={`msg-${m.seq}`}
       aria-label={`${name} at ${timeOf(m.createdAt)}`}
       className={cn(
+        fresh && 'animate-fade-up',
         'group/row relative flex gap-3 px-4 transition-colors duration-150 hover:bg-muted/50 focus-within:bg-muted/50 sm:px-5',
         p.grouped ? 'py-0.5' : 'pt-3 pb-0.5',
         mentionsMe &&

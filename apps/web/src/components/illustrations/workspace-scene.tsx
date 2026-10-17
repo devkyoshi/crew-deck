@@ -61,11 +61,14 @@ function Spark({
   tone?: string;
 }) {
   return (
-    <path
-      transform={`translate(${x} ${y}) scale(${s})`}
-      d="M0 -7 C1 -2 2 -1 7 0 C2 1 1 2 0 7 C-1 2 -2 1 -7 0 C-2 -1 -1 -2 0 -7Z"
-      fill={tone}
-    />
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path
+        className="ill-twinkle"
+        style={{ animationDelay: `${(x % 7) * 0.2}s` }}
+        d="M0 -7 C1 -2 2 -1 7 0 C2 1 1 2 0 7 C-1 2 -2 1 -7 0 C-2 -1 -1 -2 0 -7Z"
+        fill={tone}
+      />
+    </g>
   );
 }
 
@@ -120,7 +123,7 @@ export function WorkspaceScene({ className }: { className?: string }) {
       />
 
       {/* Chat bubble */}
-      <g>
+      <g className="ill-bob">
         <path
           d="M262 14h70a14 14 0 0 1 14 14v22a14 14 0 0 1-14 14h-40l-16 14v-14h-14a14 14 0 0 1-14-14V28a14 14 0 0 1 14-14Z"
           fill="var(--violet-soft)"
@@ -144,7 +147,7 @@ export function WorkspaceScene({ className }: { className?: string }) {
           const done = i === 2 || i === 6;
           return (
             <g key={i}>
-              {hot && <circle cx={cx} cy={cy} r={9} fill="var(--warning)" />}
+              {hot && <circle cx={cx} cy={cy} r={9} fill="var(--warning)" className="ill-twinkle" />}
               <circle
                 cx={cx}
                 cy={cy}
@@ -158,7 +161,7 @@ export function WorkspaceScene({ className }: { className?: string }) {
       </g>
 
       {/* Done badge */}
-      <g>
+      <g className="ill-pop" style={{ animationDelay: '0.5s' }}>
         <circle cx="284" cy="206" r="0" fill="none" />
         <circle cx="360" cy="86" r="14" fill="var(--success)" stroke={CARD} strokeWidth="3" />
         <path
@@ -177,7 +180,7 @@ export function WorkspaceScene({ className }: { className?: string }) {
           { cx: 84, tone: 'var(--warning-soft)', skin: 'var(--warning)' },
           { cx: 112, tone: 'var(--success-soft)', skin: 'var(--success)' },
         ].map((p, i) => (
-          <g key={i}>
+          <g key={i} className="ill-bob" style={{ animationDelay: `${i * 0.5}s` }}>
             <circle cx={p.cx} cy={206} r={17} fill={p.tone} stroke={CARD} strokeWidth="3" />
             <circle cx={p.cx} cy={200} r={5.5} fill={p.skin} />
             <path d={`M${p.cx - 9} 216a9 8 0 0 1 18 0`} fill={p.skin} />

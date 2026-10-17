@@ -32,7 +32,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   return (
     <div className="bg-page flex min-h-svh flex-col">
       <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-6">
             <Link href="/platform" className="flex items-center gap-2 text-sm font-semibold">
               <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md">
@@ -75,7 +75,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           </div>
         </div>
       </header>
-      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-5 py-6">
+      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

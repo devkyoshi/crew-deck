@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { Celebrate } from '@/components/shared/celebrate';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -219,6 +220,9 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
 
       {w.step === 'done' && (
         <div role="status">
+          <div className="mb-4">
+            <Celebrate />
+          </div>
           <StepHero
             headingRef={w.headingRef}
             title={`${preview.company} is ready`}

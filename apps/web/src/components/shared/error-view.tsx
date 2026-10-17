@@ -26,7 +26,7 @@ export function ErrorView({
       role="alert"
       className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center"
     >
-      <Illustration name="error" />
+      <Illustration name="error" size="lg" />
       <div className="space-y-1">
         <h1 className="text-lg font-semibold">Something went wrong</h1>
         <p className="text-muted-foreground text-sm">

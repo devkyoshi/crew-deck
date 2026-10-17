@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Layers } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,6 +20,7 @@ export function AppRail() {
   const crmVisible = useCrmAccess().data?.canView === true;
   const unread = useUnreadSummary();
   const { org, user } = useMe();
+  const reduce = useReducedMotion();
   const active = moduleForPath(pathname);
   const modules = MODULES.filter(
     (m) => (m.id !== 'admin' || isAdmin) && (m.id !== 'crm' || crmVisible),
@@ -66,7 +67,8 @@ export function AppRail() {
           </TooltipTrigger>
           <TooltipContent side="right">Profile</TooltipContent>
         </Tooltip>
-        <nav aria-label="Modules" className="flex flex-col items-center gap-2">
+        <nav aria-label="Modules" className="relative flex flex-col items-center gap-2">
+          <DropletTrack index={modules.findIndex((m) => m.id === active)} reduce={!!reduce} />
           {modules.map((m) => {
             const on = active === m.id;
             const badge = m.id === 'messages' ? unread.dms : 0;
@@ -84,14 +86,14 @@ export function AppRail() {
                       on ? 'text-primary-foreground' : 'hover:bg-accent hover:text-foreground',
                     )}
                   >
-                    {on && (
-                      <motion.span
-                        layoutId="rail-active"
-                        className="bg-primary absolute inset-0 rounded-lg"
-                        transition={{ type: 'spring', stiffness: 520, damping: 40 }}
-                      />
-                    )}
-                    <m.icon className="relative size-5" strokeWidth={1.5} aria-hidden />
+                    <m.icon
+                      className={cn(
+                        'relative size-5 transition-transform duration-300 ease-out-quint',
+                        on && 'scale-110',
+                      )}
+                      strokeWidth={1.5}
+                      aria-hidden
+                    />
                     {badge > 0 && (
                       <span className="bg-danger ring-rail absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-center text-xs leading-4 font-semibold text-white ring-2 tnum">
                         {badge > 99 ? '99+' : badge}
@@ -114,5 +116,65 @@ export function AppRail() {
         <ThemeToggle />
       </div>
     </aside>
+  );
+}
+
+/** Item height (size-10) plus the gap between items (gap-2). */
+const STEP = 48;
+
+/**
+ * The active marker. Two blobs chase the active item with different springs, and an SVG goo filter
+ * fuses them, so the marker stretches like a droplet and pinches off as it moves between modules.
+ * Only the blobs are filtered; icons and badges sit above and stay sharp.
+ */
+function DropletTrack({ index, reduce }: { index: number; reduce: boolean }) {
+  const y = Math.max(index, 0) * STEP;
+  const shown = index >= 0;
+  if (reduce) {
+    return (
+      <span
+        aria-hidden
+        className="bg-primary pointer-events-none absolute top-0 left-1/2 size-10 -translate-x-1/2 rounded-lg"
+        style={{
+          transform: `translate(-50%, ${y}px)`,
+          opacity: shown ? 1 : 0,
+          transition: 'transform 150ms, opacity 150ms',
+        }}
+      />
+    );
+  }
+  return (
+    <>
+      <svg aria-hidden width="0" height="0" className="absolute">
+        <defs>
+          <filter id="rail-goo" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"
+            />
+          </filter>
+        </defs>
+      </svg>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ filter: 'url(#rail-goo)', opacity: shown ? 1 : 0, transition: 'opacity 200ms' }}
+      >
+        <motion.span
+          className="bg-primary absolute top-0 left-1/2 -ml-5 size-10 rounded-[14px]"
+          initial={false}
+          animate={{ y }}
+          transition={{ type: 'spring', stiffness: 620, damping: 36 }}
+        />
+        <motion.span
+          className="bg-primary absolute top-0 left-1/2 -ml-5 size-10 rounded-[14px]"
+          initial={false}
+          animate={{ y }}
+          transition={{ type: 'spring', stiffness: 170, damping: 19 }}
+        />
+      </div>
+    </>
   );
 }

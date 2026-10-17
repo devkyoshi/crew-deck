@@ -10,6 +10,7 @@ import { AppRail } from './rail';
 import { AppSidebar } from './app-sidebar';
 import { MeProvider } from './me-context';
 import { Branding, StatusBanners } from './status-banners';
+import { RouteProgress } from './route-progress';
 import { Topbar } from './topbar';
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
@@ -33,6 +34,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           Skip to content
         </a>
         <Branding />
+        <RouteProgress />
         <div className="bg-background flex min-w-0 flex-1 overflow-hidden md:rounded-tl-frame">
         <AppRail />
         <AppSidebar />

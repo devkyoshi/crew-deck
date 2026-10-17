@@ -11,7 +11,12 @@ const BY_TITLE: [RegExp, IllustrationName][] = [
   [/admins only|admin only|don.t have access|switched off/i, 'lock'],
   [/not found/i, 'notfound'],
   [/not built yet/i, 'build'],
-  [/match|nothing in this range/i, 'search'],
+  [/match|nothing in this range|no results/i, 'search'],
+  [/report|sprint|flow|deal|pipeline|revenue/i, 'chart'],
+  [/attendance|check-?in|roadmap|release|version|calendar|schedule/i, 'calendar'],
+  [/request|invite|message|notification|mention/i, 'inbox'],
+  [/lead|contact|compan|member|people|group|team/i, 'people'],
+  [/space|project|board|backlog|epic/i, 'spaces'],
 ];
 
 const BY_ICON: Record<string, IllustrationName> = {
