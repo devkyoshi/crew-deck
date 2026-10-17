@@ -198,7 +198,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
     return (
       <div
         id={`msg-${m.seq}`}
-        className="text-muted-foreground flex items-center gap-2 px-4 py-1 pl-16 text-[13px]"
+        className="text-muted-foreground flex items-center gap-2 px-4 py-1 pl-16 text-label"
       >
         <CornerDownRight className="size-3.5 shrink-0" aria-hidden />
         <span>
@@ -229,7 +229,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
       className={cn(
         'group/row relative flex gap-3 px-4 transition-colors hover:bg-muted/50 focus-within:bg-muted/50',
         p.grouped ? 'py-px' : 'pt-2 pb-px',
-        mentionsMe && 'border-l-2 border-amber-400 bg-amber-50/70 pl-3.5 dark:bg-amber-500/10',
+        mentionsMe && 'border-l-2 border-warning bg-warning/70 pl-3.5 ',
         p.highlighted && 'bg-primary/10 hover:bg-primary/10',
       )}
     >
@@ -238,7 +238,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
           <time
             dateTime={m.createdAt}
             title={fullTime(m.createdAt)}
-            className="text-muted-foreground pt-0.5 text-[10px] leading-5 opacity-0 group-hover/row:opacity-100"
+            className="text-muted-foreground pt-0.5 text-xs leading-5 opacity-0 group-hover/row:opacity-100"
           >
             {timeOf(m.createdAt)}
           </time>
@@ -269,7 +269,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
                 <button
                   type="button"
                   className={cn(
-                    'focus-visible:ring-ring/50 rounded text-[14px] font-semibold outline-none hover:underline focus-visible:ring-[3px]',
+                    'focus-visible:ring-ring/50 rounded-sm text-sm font-semibold outline-none hover:underline focus-visible:ring-[3px]',
                     m.author.deactivated && 'text-muted-foreground',
                   )}
                 >
@@ -277,13 +277,13 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
                 </button>
               </ProfilePopover>
             ) : (
-              <span className="text-[14px] font-semibold">{name}</span>
+              <span className="text-sm font-semibold">{name}</span>
             )}
             {m.author?.deactivated && (
               <span className="text-muted-foreground text-xs">(deactivated)</span>
             )}
             {m.kind === 'bot' && (
-              <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded px-1 text-[10px] font-medium uppercase">
+              <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-sm px-1 text-xs font-medium uppercase">
                 <Bot className="size-3" /> Bot
               </span>
             )}
@@ -315,7 +315,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
             className="mt-1"
           />
         ) : deleted ? (
-          <p className="text-muted-foreground text-[13px] italic">This message was deleted</p>
+          <p className="text-muted-foreground text-label italic">This message was deleted</p>
         ) : (
           <>
             {(m.bodyText || m.attachments.length === 0) && (
@@ -323,7 +323,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
                 <RichContent doc={m.body} />
                 {m.editedAt && (
                   <span
-                    className="text-muted-foreground shrink-0 text-[11px]"
+                    className="text-muted-foreground shrink-0 text-xs"
                     title={`Edited ${fullTime(m.editedAt)}`}
                   >
                     (edited)
@@ -376,14 +376,14 @@ export function PendingRow({
       <div className="min-w-0 flex-1 pb-0.5">
         {!grouped && (
           <header className="flex items-baseline gap-2">
-            <span className="text-[14px] font-semibold">{personName(self)}</span>
+            <span className="text-sm font-semibold">{personName(self)}</span>
             <time className="text-muted-foreground text-xs">{timeOf(pending.createdAt)}</time>
           </header>
         )}
         <div className={cn(!failed && 'opacity-60')}>
           {pending.text && <RichContent doc={pending.body} />}
           {pending.files?.length ? (
-            <ul className="mt-1 flex flex-wrap gap-1.5 text-[13px]">
+            <ul className="mt-1 flex flex-wrap gap-1.5 text-label">
               {pending.files.map((f) => (
                 <li key={f.id} className="bg-muted rounded-md px-2 py-1">
                   {f.name}
@@ -395,7 +395,7 @@ export function PendingRow({
         {failed && (
           <div
             role="alert"
-            className="border-destructive/40 bg-destructive/10 text-destructive mt-1 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px]"
+            className="border-destructive/40 bg-destructive/10 text-destructive mt-1 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-label"
           >
             <TriangleAlert className="size-4 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">{pending.error ?? 'Not sent.'}</span>

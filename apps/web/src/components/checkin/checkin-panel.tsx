@@ -34,7 +34,7 @@ export function CheckinPanel({ today, onDone }: { today: TodayState; onDone?: ()
     return (
       <div className="space-y-3 text-sm">
         <div className="flex items-center gap-2 font-medium">
-          <CheckCircle2 className="size-4 text-emerald-500" aria-hidden /> You are done for today
+          <CheckCircle2 className="size-4 text-success-soft-foreground" aria-hidden /> You are done for today
         </div>
         <dl className="text-muted-foreground grid grid-cols-2 gap-1.5">
           <dt>Location</dt>
@@ -84,7 +84,7 @@ export function CheckinPanel({ today, onDone }: { today: TodayState; onDone?: ()
           <span className="text-muted-foreground ml-auto">since {day.checkinLocal}</span>
         </div>
         {day.date !== today.date && (
-          <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="rounded-lg bg-warning-soft p-2 text-xs text-warning-soft-foreground ">
             This check-in is from {day.date} and was never closed.
           </p>
         )}
@@ -153,7 +153,7 @@ export function CheckinPanel({ today, onDone }: { today: TodayState; onDone?: ()
                 aria-pressed={on}
                 onClick={() => setLocation(l)}
                 className={cn(
-                  'hover:bg-accent flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-medium transition-colors',
+                  'hover:bg-accent flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-xs font-medium transition-colors',
                   on && 'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                 )}
               >

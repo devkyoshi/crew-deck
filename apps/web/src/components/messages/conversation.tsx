@@ -349,7 +349,7 @@ export function Conversation({
           <Hash className="text-muted-foreground size-5 shrink-0" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] leading-tight font-semibold">{name}</h1>
+          <h1 className="truncate text-heading leading-tight font-semibold">{name}</h1>
           {channel.topic && !perms.isDm && (
             <p className="text-muted-foreground truncate text-xs">{channel.topic}</p>
           )}
@@ -578,7 +578,7 @@ export function Conversation({
 
       {dragging && (
         <div
-          className="bg-primary/10 border-primary text-primary pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed backdrop-blur-[1px]"
+          className="bg-primary/10 border-primary text-primary pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed backdrop-blur-[1px]"
           role="status"
         >
           <Upload className="size-8" aria-hidden />

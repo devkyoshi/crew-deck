@@ -41,7 +41,7 @@ export default function BillingPage() {
     );
   }
   if (query.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-lg" />;
   if (query.isError) return <ErrorView error={query.error} reset={() => query.refetch()} />;
 
   const { plan, usage, plans } = query.data;
@@ -57,7 +57,7 @@ export default function BillingPage() {
 
       <section
         aria-labelledby="current-plan"
-        className="bg-card flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5"
+        className="bg-card flex flex-wrap items-center justify-between gap-4 rounded-lg border p-5"
       >
         <div className="space-y-1">
           <h2 id="current-plan" className="flex items-center gap-2 text-lg font-semibold">
@@ -85,7 +85,7 @@ export default function BillingPage() {
       </section>
 
       {usage && (
-        <section aria-labelledby="usage" className="bg-card space-y-4 rounded-2xl border p-5">
+        <section aria-labelledby="usage" className="bg-card space-y-4 rounded-lg border p-5">
           <h2 id="usage" className="text-lg font-semibold">
             Usage
           </h2>
@@ -107,7 +107,7 @@ export default function BillingPage() {
                       value={pct}
                       aria-label={`${LIMIT_LABEL[k]} used`}
                       className={
-                        pct >= 100 ? '[&>div]:bg-rose-600' : pct >= 80 ? '[&>div]:bg-amber-500' : ''
+                        pct >= 100 ? '[&>div]:bg-danger' : pct >= 80 ? '[&>div]:bg-warning' : ''
                       }
                     />
                   ) : (

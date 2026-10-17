@@ -232,7 +232,7 @@ export function RoadmapView() {
           description={`Create ${vocab.typeLabel('epic').toLowerCase()}s on the ${vocab.typeLabel('epic')}s tab, then give them dates here.`}
         />
       ) : (
-        <div className="bg-card flex overflow-hidden rounded-xl border">
+        <div className="bg-card flex overflow-hidden rounded-lg border">
           <div className="w-56 shrink-0 border-r sm:w-72">
             <div
               className="text-muted-foreground border-b px-3 text-xs font-medium"
@@ -277,7 +277,7 @@ export function RoadmapView() {
                   className="absolute top-0 bottom-0 border-l"
                   style={{ left: x(t.day) }}
                 >
-                  <span className="text-muted-foreground absolute top-1 left-1.5 text-[11px] whitespace-nowrap">
+                  <span className="text-muted-foreground absolute top-1 left-1.5 text-xs whitespace-nowrap">
                     {t.text}
                   </span>
                 </div>
@@ -296,15 +296,15 @@ export function RoadmapView() {
                     <div
                       className={cn(
                         'h-full border-l border-dashed',
-                        v.state === 'released' ? 'border-emerald-500' : 'border-violet-500',
+                        v.state === 'released' ? 'border-success' : 'border-violet',
                       )}
                     />
                     <span
                       className={cn(
-                        'absolute top-6 left-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
+                        'absolute top-6 left-1 inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
                         v.state === 'released'
-                          ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200'
-                          : 'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-200',
+                          ? 'bg-success-soft text-success-soft-foreground '
+                          : 'bg-violet-soft text-violet-soft-foreground ',
                       )}
                     >
                       <Flag className="size-3" aria-hidden /> {v.name}
@@ -312,11 +312,11 @@ export function RoadmapView() {
                   </div>
                 ))}
               <div
-                className="absolute top-0 bottom-0 z-10 border-l-2 border-red-500"
+                className="absolute top-0 bottom-0 z-10 border-l-2 border-danger"
                 style={{ left: todayX }}
                 aria-hidden
               >
-                <span className="absolute top-1 left-1 rounded bg-red-700 px-1 text-[10px] font-semibold text-white">
+                <span className="absolute top-1 left-1 rounded-sm bg-danger px-1 text-xs font-semibold text-white">
                   Today
                 </span>
               </div>
@@ -349,7 +349,7 @@ export function RoadmapView() {
                           commit(e, draft[e.id]!);
                       }}
                       className={cn(
-                        'focus-visible:ring-ring absolute top-2.5 flex h-6 items-center overflow-hidden rounded-md border border-violet-500 bg-violet-200 text-xs font-medium text-violet-950 outline-none focus-visible:ring-2 dark:bg-violet-500/30 dark:text-violet-100',
+                        'focus-visible:ring-ring absolute top-2.5 flex h-6 items-center overflow-hidden rounded-md border border-violet bg-violet-soft text-xs font-medium text-violet outline-none focus-visible:ring-2 ',
                         canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                         dragging
                           ? 'shadow-lg'
@@ -358,7 +358,7 @@ export function RoadmapView() {
                       style={{ left: x(s.start), width: w }}
                     >
                       <span
-                        className="absolute inset-y-0 left-0 bg-violet-400/70 dark:bg-violet-400/50"
+                        className="absolute inset-y-0 left-0 bg-violet/70 "
                         style={{ width: `${pct}%` }}
                         aria-hidden
                       />
@@ -367,12 +367,12 @@ export function RoadmapView() {
                         <>
                           <span
                             aria-hidden
-                            className="absolute inset-y-0 left-0 w-2 cursor-ew-resize hover:bg-violet-500/40"
+                            className="absolute inset-y-0 left-0 w-2 cursor-ew-resize hover:bg-violet/40"
                             onPointerDown={(ev) => startDrag(e, 'start', ev)}
                           />
                           <span
                             aria-hidden
-                            className="absolute inset-y-0 right-0 w-2 cursor-ew-resize hover:bg-violet-500/40"
+                            className="absolute inset-y-0 right-0 w-2 cursor-ew-resize hover:bg-violet/40"
                             onPointerDown={(ev) => startDrag(e, 'end', ev)}
                           />
                         </>
@@ -392,7 +392,7 @@ export function RoadmapView() {
             Without dates{' '}
             <span className="text-muted-foreground font-normal">{unscheduled.length}</span>
           </h2>
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y rounded-lg border">
             {unscheduled.map((e) => (
               <li key={e.id} className="flex items-center gap-3 p-2.5 text-sm">
                 <button

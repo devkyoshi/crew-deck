@@ -275,7 +275,7 @@ function List({
   }
   const items = filter ? query.data.items.filter(filter) : query.data.items;
   if (items.length === 0) return <EmptyState icon={Inbox} {...empty} />;
-  return <ul className="divide-y rounded-2xl border">{items.map(render)}</ul>;
+  return <ul className="divide-y rounded-lg border">{items.map(render)}</ul>;
 }
 
 function Row({
@@ -316,7 +316,7 @@ function Row({
             <span className="font-mono">({r.spaceKey})</span> · {timeAgo(r.createdAt)}
           </div>
           {r.message && (
-            <p className="bg-muted mt-2 max-w-xl rounded-xl px-3 py-2 text-sm">“{r.message}”</p>
+            <p className="bg-muted mt-2 max-w-xl rounded-lg px-3 py-2 text-sm">“{r.message}”</p>
           )}
           {showStatus && (
             <div className="mt-2 flex items-center gap-2">

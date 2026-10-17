@@ -32,7 +32,7 @@ export default function SavedPage() {
           <ArrowLeft />
         </Button>
         <Bookmark className="text-muted-foreground size-5" aria-hidden />
-        <h1 className="text-[15px] font-semibold">Saved for later</h1>
+        <h1 className="text-heading font-semibold">Saved for later</h1>
       </header>
       {saved.isLoading || !hydrated ? (
         <MessageSkeletons />

@@ -73,7 +73,7 @@ function FilterPopover({
         >
           <Icon aria-hidden /> {label}
           {count > 0 && (
-            <span className="bg-primary text-primary-foreground ml-0.5 rounded-full px-1.5 text-[10px] font-semibold tabular-nums">
+            <span className="bg-primary text-primary-foreground ml-0.5 rounded-full px-1.5 text-xs font-semibold tabular-nums">
               {count}
             </span>
           )}
@@ -105,7 +105,7 @@ function Option({
     >
       <span
         className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded border',
+          'flex size-4 shrink-0 items-center justify-center rounded-sm border',
           checked && 'bg-primary border-primary text-primary-foreground',
         )}
         aria-hidden
@@ -246,7 +246,7 @@ export function FilterBar({
             onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
           />
           {!text && (
-            <kbd className="bg-muted text-muted-foreground pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded px-1 text-[10px] sm:block" aria-hidden>
+            <kbd className="bg-muted text-muted-foreground pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded-sm px-1 text-xs sm:block" aria-hidden>
               /
             </kbd>
           )}

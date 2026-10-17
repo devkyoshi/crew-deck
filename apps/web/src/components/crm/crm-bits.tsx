@@ -53,7 +53,7 @@ export function CrmGate({
   // the server rendered, or an early answer causes a hydration mismatch.
   const hydrated = useHydrated();
   if (!hydrated || access.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-lg" />;
   if (access.isError) return <ErrorView error={access.error} reset={() => access.refetch()} />;
   const a = access.data;
   if (!a.enabled) {

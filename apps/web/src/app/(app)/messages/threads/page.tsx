@@ -50,7 +50,7 @@ export default function ThreadsPage() {
           <ArrowLeft />
         </Button>
         <MessageSquare className="text-muted-foreground size-5" aria-hidden />
-        <h1 className="text-[15px] font-semibold">Threads</h1>
+        <h1 className="text-heading font-semibold">Threads</h1>
       </header>
       {threads.isLoading || !hydrated ? (
         <MessageSkeletons />
@@ -96,7 +96,7 @@ export default function ThreadsPage() {
                     {root.bodyText ?? 'This message was deleted'}
                   </span>
                   {latestReply && (
-                    <span className="text-muted-foreground mt-1 line-clamp-1 block text-[13px]">
+                    <span className="text-muted-foreground mt-1 line-clamp-1 block text-label">
                       <span className="font-medium">
                         {personName(latestReply.author).split(' ')[0]}:
                       </span>{' '}
@@ -109,7 +109,7 @@ export default function ThreadsPage() {
                 </span>
                 {unread > 0 && (
                   <span
-                    className="bg-destructive text-white h-5 min-w-5 self-center rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums"
+                    className="bg-destructive text-white h-5 min-w-5 self-center rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
                     aria-label={`${unread} new replies`}
                   >
                     {unread}

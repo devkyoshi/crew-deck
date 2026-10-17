@@ -42,7 +42,7 @@ function Stepper({
           const circle = (
             <span
               className={cn(
-                'relative flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-medium transition-colors duration-300',
+                'relative flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors duration-300',
                 done || active ? 'bg-muted text-foreground' : 'bg-muted/60 text-muted-foreground',
               )}
             >
@@ -197,11 +197,11 @@ export function StepHero({
       <h1
         ref={headingRef}
         tabIndex={-1}
-        className="text-[1.75rem] leading-tight font-semibold tracking-tight outline-none"
+        className="text-display leading-tight font-semibold tracking-tight outline-none"
       >
         {title}
       </h1>
-      {lead && <p className="text-muted-foreground text-[15px] leading-relaxed">{lead}</p>}
+      {lead && <p className="text-muted-foreground text-heading leading-relaxed">{lead}</p>}
     </div>
   );
 }
@@ -229,7 +229,7 @@ export function FieldGroup({
 }) {
   return (
     <fieldset className={cn('border-border/70 space-y-4 border-t pt-5 first:border-t-0 first:pt-0', className)}>
-      <legend className="text-muted-foreground float-left mb-3 w-full text-[11px] font-semibold tracking-wider uppercase">
+      <legend className="text-muted-foreground float-left mb-3 w-full text-xs font-semibold tracking-wider uppercase">
         {title}
       </legend>
       <div className="clear-both space-y-4">{children}</div>
@@ -311,7 +311,7 @@ export function SetupMessage({
       <div className="flex w-full max-w-sm flex-col items-center gap-3 text-center">
         {art}
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {children && <div className="text-muted-foreground text-[15px] leading-relaxed">{children}</div>}
+        {children && <div className="text-muted-foreground text-heading leading-relaxed">{children}</div>}
         {actions && <div className="mt-3 flex flex-wrap justify-center gap-2">{actions}</div>}
       </div>
     </main>

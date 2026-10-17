@@ -55,13 +55,13 @@ export function ReactionBar({
                 disabled={!canReact}
                 onClick={() => onToggle(r.emoji)}
                 className={cn(
-                  'focus-visible:ring-ring/50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[13px] transition-colors outline-none focus-visible:ring-[3px] disabled:cursor-default',
+                  'focus-visible:ring-ring/50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-label transition-colors outline-none focus-visible:ring-[3px] disabled:cursor-default',
                   mine
                     ? 'border-primary/50 bg-primary/10 text-primary'
                     : 'bg-muted/50 hover:bg-muted',
                 )}
               >
-                <span className="text-[15px] leading-none">{r.emoji}</span>
+                <span className="text-heading leading-none">{r.emoji}</span>
                 <span className="tabular-nums">{r.count}</span>
               </button>
             </TooltipTrigger>
@@ -100,7 +100,7 @@ export function ThreadSummaryLink({
     <button
       type="button"
       onClick={onOpen}
-      className="hover:bg-background focus-visible:ring-ring/50 group/thread mt-1 flex max-w-full items-center gap-2 rounded-md border border-transparent px-1 py-0.5 text-left text-[13px] outline-none hover:border-border focus-visible:ring-[3px]"
+      className="hover:bg-background focus-visible:ring-ring/50 group/thread mt-1 flex max-w-full items-center gap-2 rounded-md border border-transparent px-1 py-0.5 text-left text-label outline-none hover:border-border focus-visible:ring-[3px]"
     >
       <span className="flex -space-x-1.5">
         {message.replyAuthors.map((p) => (
@@ -226,7 +226,7 @@ export function ImageLightbox({
           <img
             src={current.url}
             alt={current.name}
-            className="max-h-full max-w-full rounded object-contain"
+            className="max-h-full max-w-full rounded-sm object-contain"
           />
           <div className="absolute top-3 right-3 flex gap-2">
             <a
@@ -307,7 +307,7 @@ export function PreviewCards({
               </span>
               <span className="line-clamp-1 text-sm font-semibold">{p.title ?? p.url}</span>
               {p.description && (
-                <span className="text-muted-foreground line-clamp-2 text-[13px]">
+                <span className="text-muted-foreground line-clamp-2 text-label">
                   {p.description}
                 </span>
               )}

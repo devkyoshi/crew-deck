@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useMarkRead, useNotifications, useUnreadCount } from '@/lib/notifications-api';
 import { NotificationRow } from './notification-row';
 
-export function NotificationBell() {
+export function NotificationBell({ side = 'right' }: { side?: 'right' | 'bottom' }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const count = useUnreadCount().data?.unread ?? 0;
@@ -26,16 +26,16 @@ export function NotificationBell() {
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative size-8" aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}>
-          <Bell />
+        <Button variant="ghost" size="icon" className="text-muted-foreground relative size-11 rounded-xl" aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}>
+          <Bell className="size-[22px]" strokeWidth={1.5} />
           {count > 0 && (
-            <span className="bg-red-600 text-white absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums">
+            <span className="bg-danger text-white absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-xs leading-4 font-semibold tabular-nums">
               {count > 99 ? '99+' : count}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-0">
+      <PopoverContent align="end" side={side} className="w-96 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <h2 className="text-sm font-semibold">Notifications</h2>
           <Button variant="ghost" size="sm" className="h-7" disabled={!count || markRead.isPending} onClick={() => markRead.mutate({ all: true })}>

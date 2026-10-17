@@ -160,12 +160,12 @@ export function InviteDialog() {
         {response ? (
           <div className="space-y-3">
             {!response.emailDelivery && (
-              <div className="bg-accent text-accent-foreground flex gap-2 rounded-xl p-3 text-sm">
+              <div className="bg-accent text-accent-foreground flex gap-2 rounded-lg p-3 text-sm">
                 <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
                 Email delivery is not set up, so nothing was emailed. Share each link yourself.
               </div>
             )}
-            <ul className="divide-y rounded-xl border">
+            <ul className="divide-y rounded-lg border">
               {response.results.map((r) => {
                 const t = RESULT_TEXT[r.status];
                 return (
@@ -176,7 +176,7 @@ export function InviteDialog() {
                         <div
                           className={
                             t.ok
-                              ? 'text-xs text-emerald-600 dark:text-emerald-400'
+                              ? 'text-xs text-success-soft-foreground '
                               : 'text-muted-foreground text-xs'
                           }
                         >
@@ -266,7 +266,7 @@ export function InviteDialog() {
                     They join these groups automatically when they accept. Optional.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 rounded-xl border border-dashed p-4">
+                <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
                   <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-lg">
                     <FolderKanban className="size-4" aria-hidden />
                   </span>
@@ -281,7 +281,7 @@ export function InviteDialog() {
 
             {step === 2 && (
               <div className="space-y-3">
-                <div className="rounded-xl border p-4">
+                <div className="rounded-lg border p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-medium">
                       {emails.length} {emails.length === 1 ? 'person' : 'people'}
@@ -295,7 +295,7 @@ export function InviteDialog() {
                   </ul>
                 </div>
                 {groups.length > 0 && (
-                  <div className="rounded-xl border p-4 text-sm">
+                  <div className="rounded-lg border p-4 text-sm">
                     <span className="text-muted-foreground">Groups: </span>
                     {groups.map((g) => g.name).join(', ')}
                   </div>

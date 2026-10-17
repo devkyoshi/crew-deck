@@ -126,7 +126,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
   });
 
   if (query.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-lg" />;
   if (query.isError) return <ErrorView error={query.error} reset={() => query.refetch()} />;
   const t = query.data;
 
@@ -171,7 +171,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-labelledby="plan" className="bg-card space-y-4 rounded-2xl border p-5">
+        <section aria-labelledby="plan" className="bg-card space-y-4 rounded-lg border p-5">
           <h2 id="plan" className="font-semibold">
             Plan
           </h2>
@@ -231,7 +231,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </section>
 
-        <section aria-labelledby="usage" className="bg-card space-y-3 rounded-2xl border p-5">
+        <section aria-labelledby="usage" className="bg-card space-y-3 rounded-lg border p-5">
           <h2 id="usage" className="font-semibold">
             Usage
           </h2>
@@ -249,7 +249,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
         </section>
       </div>
 
-      <section aria-labelledby="history" className="bg-card space-y-3 rounded-2xl border p-5">
+      <section aria-labelledby="history" className="bg-card space-y-3 rounded-lg border p-5">
         <h2 id="history" className="font-semibold">
           Platform activity
         </h2>

@@ -10,17 +10,17 @@ const VARIANTS = {
   },
   warning: {
     icon: TriangleAlert,
-    box: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+    box: 'border-warning/30 bg-warning/10 text-warning-soft-foreground ',
     role: 'status' as const,
   },
   info: {
     icon: Info,
-    box: 'border-blue-500/25 bg-blue-500/10 text-blue-900 dark:text-blue-300',
+    box: 'border-info/25 bg-info/10 text-info-soft-foreground ',
     role: 'status' as const,
   },
   success: {
     icon: CheckCircle2,
-    box: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
+    box: 'border-success/25 bg-success/10 text-success-soft-foreground ',
     role: 'status' as const,
   },
 };

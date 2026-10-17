@@ -82,7 +82,7 @@ export default function BrandingPage() {
         description="How your workspace looks, and who can be invited."
       />
       <form onSubmit={save} className="space-y-6" noValidate>
-        <section className="bg-card space-y-4 rounded-2xl border p-5">
+        <section className="bg-card space-y-4 rounded-lg border p-5">
           <h2 className="font-semibold">Workspace</h2>
           <Field label="Workspace name" htmlFor="brand-name" error={errors.name}>
             <Input
@@ -124,7 +124,7 @@ export default function BrandingPage() {
           {!canLook && <Locked what="Logo and accent colour" />}
         </section>
 
-        <section className="bg-card space-y-3 rounded-2xl border p-5">
+        <section className="bg-card space-y-3 rounded-lg border p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <label htmlFor="domain-lock" className="font-semibold">

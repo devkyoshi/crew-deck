@@ -463,7 +463,7 @@ function StatusRow({
     >
       <button
         type="button"
-        className="text-muted-foreground hover:bg-accent cursor-grab rounded p-1 outline-none focus-visible:ring-2 active:cursor-grabbing"
+        className="text-muted-foreground hover:bg-accent cursor-grab rounded-sm p-1 outline-none focus-visible:ring-2 active:cursor-grabbing"
         aria-label={`Reorder ${status.name}. Press space, then use arrow keys.`}
         {...attributes}
         {...listeners}
@@ -475,7 +475,7 @@ function StatusRow({
           <button
             type="button"
             aria-label={`Colour of ${status.name}: ${status.color}`}
-            className="hover:bg-accent rounded p-1.5 outline-none focus-visible:ring-2"
+            className="hover:bg-accent rounded-sm p-1.5 outline-none focus-visible:ring-2"
           >
             <span className={cn('block size-3.5 rounded-full', STATUS_DOT[status.color])} />
           </button>

@@ -250,7 +250,7 @@ const SortableCard = memo(function SortableCard({
               {...attributes}
               onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLButtonElement> | undefined}
               aria-label={`Move ${item.key}: ${item.title}. Press space to pick up.`}
-              className="text-muted-foreground hover:bg-accent focus-visible:ring-ring flex size-6 cursor-grab items-center justify-center rounded outline-none focus-visible:ring-2 active:cursor-grabbing"
+              className="text-muted-foreground hover:bg-accent focus-visible:ring-ring flex size-6 cursor-grab items-center justify-center rounded-sm outline-none focus-visible:ring-2 active:cursor-grabbing"
             >
               <GripVertical className="size-4" aria-hidden />
             </button>
@@ -834,14 +834,14 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
           {perms.createItem && (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus /> Create
-              <kbd className="bg-primary-foreground/20 ml-1 hidden rounded px-1 text-[10px] sm:inline">C</kbd>
+              <kbd className="bg-primary-foreground/20 ml-1 hidden rounded-sm px-1 text-xs sm:inline">C</kbd>
             </Button>
           )}
         </div>
       </div>
 
       {data.board.features.includes('sprints') && data.sprint && (
-        <div className="bg-primary/5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-sm">
+        <div className="bg-primary/5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-sm">
           <span className="font-medium">{data.sprint.name}</span>
           <span className="text-muted-foreground">{dateRange(data.sprint)}</span>
           {data.sprint.goal && <span className="text-muted-foreground">Goal: {data.sprint.goal}</span>}
@@ -851,7 +851,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       )}
       {data.board.features.includes('sprints') && !data.sprint && !filtered && (
-        <div className="rounded-xl border border-dashed">
+        <div className="rounded-lg border border-dashed">
           <EmptyState
             icon={Kanban}
             title="No active sprint"
@@ -865,7 +865,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       )}
       {totalAll === 0 && !filtered && !data.board.features.includes('sprints') && (
-        <div className="rounded-xl border border-dashed">
+        <div className="rounded-lg border border-dashed">
           <EmptyState
             icon={Kanban}
             title={`No ${vocab.nounPlural} yet`}
@@ -885,7 +885,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
         </div>
       )}
       {filtered && totalShown === 0 && (
-        <div className="rounded-xl border border-dashed">
+        <div className="rounded-lg border border-dashed">
           <EmptyState
             icon={ListFilter}
             title="Nothing matches these filters"
@@ -993,7 +993,7 @@ export function BoardView({ spaceKey }: { spaceKey: string }) {
                   return (
                     <div
                       key={status.id}
-                      className={cn('bg-muted/50 rounded-xl px-3 py-3', density === 'compact' ? 'w-[264px]' : 'w-[288px]')}
+                      className={cn('bg-muted/50 rounded-lg px-3 py-3', density === 'compact' ? 'w-[264px]' : 'w-[288px]')}
                     >
                       <ColumnHeader
                         name={status.name}

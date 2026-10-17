@@ -57,8 +57,8 @@ import { UserAvatar } from './work-bits';
 const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 const STATE_STYLE: Record<Version['state'], string> = {
-  unreleased: 'bg-sky-100 text-sky-900 dark:bg-sky-500/15 dark:text-sky-200',
-  released: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-200',
+  unreleased: 'bg-info-soft text-info-soft-foreground ',
+  released: 'bg-success-soft text-success-soft-foreground ',
   archived: 'bg-muted text-muted-foreground',
 };
 
@@ -103,7 +103,7 @@ export function ReleasesView() {
         </div>
 
         {!feature && (
-          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="rounded-lg bg-warning-soft p-3 text-sm text-warning-soft-foreground ">
             Releases are included from the Team plan. Components below are available on every plan.
           </p>
         )}
@@ -124,12 +124,12 @@ export function ReleasesView() {
         ) : (
           <ul className="space-y-2">
             {visible.map((v) => (
-              <li key={v.id} className="bg-card space-y-2 rounded-xl border p-3">
+              <li key={v.id} className="bg-card space-y-2 rounded-lg border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-medium">{v.name}</h3>
                   <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium capitalize', STATE_STYLE[v.state])}>{v.state}</span>
                   {v.overdue && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-500/15 dark:text-red-200">
+                    <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger-soft-foreground ">
                       Overdue
                     </span>
                   )}
@@ -470,7 +470,7 @@ function ComponentsSection() {
           Components are parts of your product. Work in a component can go to its default assignee.
         </p>
       ) : (
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-lg border">
           {items.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
               <div className="min-w-0 flex-1">

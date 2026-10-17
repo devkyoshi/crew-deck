@@ -127,7 +127,7 @@ export function SpacesDirectory() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex rounded-xl border p-0.5" role="group" aria-label="View">
+        <div className="flex rounded-lg border p-0.5" role="group" aria-label="View">
           <Button
             variant={view === 'cards' ? 'secondary' : 'ghost'}
             size="icon"
@@ -169,7 +169,7 @@ export function SpacesDirectory() {
           aria-label="Loading spaces"
         >
           {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="h-40 rounded-2xl" />
+            <Skeleton key={i} className="h-40 rounded-lg" />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -225,7 +225,7 @@ export function SpacesDirectory() {
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
+        <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">

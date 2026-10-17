@@ -191,7 +191,7 @@ export function WizardProgress({
           <p className="text-muted-foreground text-xs font-medium tracking-wide" aria-live="polite">
             Step {index + 1} of {steps.length}: {steps[index]?.label}
           </p>
-          <span className="text-[11px] font-semibold text-primary">
+          <span className="text-xs font-semibold text-primary">
             {Math.round(((index + 1) / steps.length) * 100)}% complete
           </span>
         </div>
@@ -203,7 +203,7 @@ export function WizardProgress({
               <>
                 <span
                   className={cn(
-                    'flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-all',
+                    'flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all',
                     active && 'bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/20',
                     done && 'bg-primary/15 text-primary',
                     !active && !done && 'bg-muted text-muted-foreground',
@@ -228,7 +228,7 @@ export function WizardProgress({
                   <button
                     type="button"
                     onClick={() => onGo(s.id)}
-                    className="text-primary flex items-center gap-1.5 text-xs font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+                    className="text-primary flex items-center gap-1.5 text-xs font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm"
                   >
                     {inner}
                   </button>
@@ -293,7 +293,7 @@ export function WizardProgress({
                   <button
                     type="button"
                     onClick={() => onGo(s.id)}
-                    className="group flex items-start gap-3.5 text-left w-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 rounded-xl p-1 -m-1 transition-colors hover:bg-muted/40"
+                    className="group flex items-start gap-3.5 text-left w-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg p-1 -m-1 transition-colors hover:bg-muted/40"
                   >
                     <span className="relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/25 transition-transform group-hover:scale-105">
                       <Check className="size-4 stroke-[2.5]" aria-hidden="true" />

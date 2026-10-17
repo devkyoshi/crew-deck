@@ -32,7 +32,7 @@ export function StatusBanners() {
     return (
       <div
         role="status"
-        className="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-950 dark:bg-amber-500/20 dark:text-amber-100"
+        className="flex flex-wrap items-center justify-between gap-2 bg-warning-soft px-4 py-2 text-sm text-warning "
       >
         <span className="flex items-center gap-2">
           <Eye className="size-4" aria-hidden />

@@ -39,7 +39,7 @@ export default function PlatformSettingsPage() {
 
   if (query.isError) return <ErrorView error={query.error} reset={() => query.refetch()} />;
   if (!form)
-    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-lg" />;
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -47,7 +47,7 @@ export default function PlatformSettingsPage() {
         title="Platform settings"
         description="Rules for sign-up across every workspace."
       />
-      <section className="bg-card flex items-center justify-between gap-4 rounded-2xl border p-5">
+      <section className="bg-card flex items-center justify-between gap-4 rounded-lg border p-5">
         <div>
           <Label htmlFor="signups" className="text-base">
             Open sign-ups
@@ -62,7 +62,7 @@ export default function PlatformSettingsPage() {
           onCheckedChange={(v) => setForm({ ...form, signupsEnabled: v })}
         />
       </section>
-      <section className="bg-card flex items-center justify-between gap-4 rounded-2xl border p-5">
+      <section className="bg-card flex items-center justify-between gap-4 rounded-lg border p-5">
         <div>
           <Label htmlFor="free-mail" className="text-base">
             Block free email providers
@@ -78,7 +78,7 @@ export default function PlatformSettingsPage() {
           onCheckedChange={(v) => setForm({ ...form, blockFreeEmailDomains: v })}
         />
       </section>
-      <section className="bg-card space-y-2 rounded-2xl border p-5">
+      <section className="bg-card space-y-2 rounded-lg border p-5">
         <Label htmlFor="trial" className="text-base">
           Trial length (days)
         </Label>

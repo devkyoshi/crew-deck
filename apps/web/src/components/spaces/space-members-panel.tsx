@@ -179,7 +179,7 @@ export function SpaceMembersPanel({ space }: { space: SpaceDetail }) {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
+        <div className="overflow-x-auto rounded-lg border">
           <Table aria-busy={query.isFetching}>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -216,7 +216,7 @@ export function SpaceMembersPanel({ space }: { space: SpaceDetail }) {
                               </AvatarFallback>
                             </Avatar>
                           ) : (
-                            <span className="bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 flex size-8 items-center justify-center rounded-full">
+                            <span className="bg-violet-soft text-violet-soft-foreground flex size-8 items-center justify-center rounded-full">
                               <Users className="size-4" aria-hidden />
                             </span>
                           )}

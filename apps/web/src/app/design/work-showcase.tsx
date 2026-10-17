@@ -120,7 +120,7 @@ const SAMPLES: Record<string, WorkItem> = {
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">{title}</h3>
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{title}</h3>
       {children}
     </div>
   );
@@ -217,13 +217,13 @@ export function WorkShowcase() {
       </Block>
 
       <Block title="Cards (hover for handle and menu, click to select)">
-        <div className="bg-muted/50 grid gap-2 rounded-xl p-3 sm:grid-cols-2">
+        <div className="bg-muted/50 grid gap-2 rounded-lg p-3 sm:grid-cols-2">
           <WorkItemCard item={SAMPLES.full!} {...cardProps} selected={selected} onOpen={() => setSelected((s) => !s)} />
           <WorkItemCard item={SAMPLES.overdue!} {...cardProps} />
           <WorkItemCard item={SAMPLES.plain!} {...cardProps} />
           <WorkItemCard item={SAMPLES.done!} {...cardProps} />
           <div className="space-y-1 sm:col-span-2">
-            <p className="text-muted-foreground text-[11px]">Dragging: placeholder left behind, copy follows the pointer</p>
+            <p className="text-muted-foreground text-xs">Dragging: placeholder left behind, copy follows the pointer</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <WorkItemCard item={SAMPLES.plain!} {...cardProps} dragging />
               <div className="p-1">
@@ -299,7 +299,7 @@ export function WorkShowcase() {
             <LabelChip key={c} label={{ name: c, color: c }} />
           ))}
         </div>
-        <div className="bg-muted/50 grid gap-2 rounded-xl p-3 sm:grid-cols-2">
+        <div className="bg-muted/50 grid gap-2 rounded-lg p-3 sm:grid-cols-2">
           <WorkItemCard item={SAMPLES.full!} {...cardProps} selected />
           <div className="space-y-3">
             <ul className="flex flex-wrap items-center gap-1.5" aria-label="Active filters (example)">
@@ -336,13 +336,13 @@ export function WorkShowcase() {
           <ColumnSkeleton density={density} />
           <ColumnSkeleton density={density} />
         </div>
-        <div className="rounded-xl border">
+        <div className="rounded-lg border">
           <ItemPanelSkeleton />
         </div>
       </Block>
 
       <Block title="Empty board">
-        <div className="rounded-xl border border-dashed">
+        <div className="rounded-lg border border-dashed">
           <EmptyState
             icon={Kanban}
             title="No work items yet"

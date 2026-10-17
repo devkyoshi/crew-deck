@@ -38,7 +38,7 @@ function useCrumbs() {
 export function Topbar() {
   const crumbs = useCrumbs();
   return (
-    <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4 md:rounded-t-2xl">
+    <header className="bg-background/90 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-sm md:rounded-t-xl">
       <SidebarTrigger aria-label="Toggle sidebar" />
       <Separator orientation="vertical" className="mr-1 h-5" />
       <Breadcrumb className="min-w-0 flex-1">
@@ -62,9 +62,12 @@ export function Topbar() {
       <CheckinControl />
       <SpaceSwitcher />
       <CommandPalette />
-      <NotificationBell />
-      <ThemeToggle />
-      <UserMenu />
+      {/* On desktop these live in the rail; the rail is hidden below md. */}
+      <div className="flex items-center gap-1 md:hidden">
+        <NotificationBell side="bottom" />
+        <ThemeToggle />
+        <UserMenu side="bottom" />
+      </div>
     </header>
   );
 }

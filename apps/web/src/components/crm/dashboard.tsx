@@ -25,7 +25,7 @@ function Stat({
   hint?: string;
 }) {
   return (
-    <div className="bg-card rounded-2xl border p-4">
+    <div className="bg-card rounded-lg border p-4">
       <p className="text-muted-foreground flex items-center gap-2 text-sm">
         <Icon className="size-4" aria-hidden /> {label}
       </p>
@@ -77,7 +77,7 @@ function Inner() {
   });
 
   if (query.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-96 w-full rounded-lg" />;
   if (query.isError) return <ErrorView error={query.error} reset={() => query.refetch()} />;
   const d = query.data;
 
@@ -131,7 +131,7 @@ function Inner() {
         />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <section aria-labelledby="by-stage" className="bg-card rounded-2xl border p-4">
+        <section aria-labelledby="by-stage" className="bg-card rounded-lg border p-4">
           <h2 id="by-stage" className="mb-3 text-sm font-semibold">
             Open deals by stage
           </h2>
@@ -150,7 +150,7 @@ function Inner() {
             />
           )}
         </section>
-        <section aria-labelledby="by-source" className="bg-card rounded-2xl border p-4">
+        <section aria-labelledby="by-source" className="bg-card rounded-lg border p-4">
           <h2 id="by-source" className="mb-3 text-sm font-semibold">
             Leads by source
           </h2>
@@ -169,7 +169,7 @@ function Inner() {
             />
           )}
         </section>
-        <section aria-labelledby="overdue" className="bg-card rounded-2xl border p-4 lg:col-span-2">
+        <section aria-labelledby="overdue" className="bg-card rounded-lg border p-4 lg:col-span-2">
           <h2 id="overdue" className="mb-3 text-sm font-semibold">
             My overdue activities
           </h2>

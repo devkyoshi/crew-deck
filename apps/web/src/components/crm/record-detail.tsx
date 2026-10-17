@@ -60,7 +60,7 @@ function RelatedDeals({
 }) {
   if (!deals.length) return null;
   return (
-    <section aria-labelledby="related-deals" className="bg-card space-y-2 rounded-2xl border p-4">
+    <section aria-labelledby="related-deals" className="bg-card space-y-2 rounded-lg border p-4">
       <h2 id="related-deals" className="text-sm font-semibold">
         Deals
       </h2>
@@ -93,7 +93,7 @@ function StageControl({ deal }: { deal: DealDetail }) {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not move the deal'),
   });
   return (
-    <div className="bg-card flex flex-wrap items-center gap-3 rounded-2xl border p-4">
+    <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border p-4">
       <label htmlFor="deal-stage" className="text-sm font-medium">
         Stage
       </label>
@@ -157,7 +157,7 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
   });
 
   if (query.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-80 w-full rounded-lg" />;
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 404) {
       return (
@@ -234,7 +234,7 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
         <div className="space-y-4">
           {type === 'deal' && <StageControl deal={r} />}
-          <section aria-labelledby="details" className="bg-card rounded-2xl border p-4">
+          <section aria-labelledby="details" className="bg-card rounded-lg border p-4">
             <h2 id="details" className="mb-3 text-sm font-semibold">
               Details
             </h2>
@@ -250,7 +250,7 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
           {converted && (
             <section
               aria-labelledby="converted"
-              className="bg-card space-y-1 rounded-2xl border p-4 text-sm"
+              className="bg-card space-y-1 rounded-lg border p-4 text-sm"
             >
               <h2 id="converted" className="font-semibold">
                 Converted
@@ -290,7 +290,7 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
           {type === 'company' && r.contacts?.length > 0 && (
             <section
               aria-labelledby="related-contacts"
-              className="bg-card space-y-2 rounded-2xl border p-4"
+              className="bg-card space-y-2 rounded-lg border p-4"
             >
               <h2 id="related-contacts" className="text-sm font-semibold">
                 Contacts
@@ -309,7 +309,7 @@ function DetailInner({ type, id }: { type: CrmRecordType; id: string }) {
           )}
           {(type === 'company' || type === 'contact') && <RelatedDeals deals={r.deals ?? []} />}
         </div>
-        <section aria-label="Activity and notes" className="bg-card rounded-2xl border p-4">
+        <section aria-label="Activity and notes" className="bg-card rounded-lg border p-4">
           <Timeline linkedType={type} linkedId={id} />
         </section>
       </div>

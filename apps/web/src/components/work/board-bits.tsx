@@ -10,7 +10,7 @@ import { CATEGORY_META, STATUS_DOT, type StatusCategory, type StatusColor } from
 import { cn } from '@/lib/utils';
 import { useVocabulary } from './use-vocabulary';
 
-/** A column: a rounded lane with a thin category-coloured bar, a sticky header and its own scroll area. */
+/** A column: a rounded-sm lane with a thin category-coloured bar, a sticky header and its own scroll area. */
 export function BoardColumn({
   category,
   collapsed = false,
@@ -34,7 +34,7 @@ export function BoardColumn({
   return (
     <section
       className={cn(
-        'bg-muted/50 relative flex shrink-0 flex-col overflow-hidden rounded-xl border border-transparent transition-colors',
+        'bg-muted/50 relative flex shrink-0 flex-col overflow-hidden rounded-lg border border-transparent transition-colors',
         collapsed ? 'w-12' : density === 'compact' ? 'w-[264px]' : 'w-[288px]',
         highlight && 'border-primary/50 bg-primary/5',
         className,
@@ -189,7 +189,7 @@ export function ColumnCreateRow({
         }}
         className="w-full bg-transparent px-1 text-sm outline-none"
       />
-      <p className="text-muted-foreground px-1 text-[11px]">
+      <p className="text-muted-foreground px-1 text-xs">
         Enter to create · Shift+Enter to add another · Esc to cancel
       </p>
     </form>
@@ -206,12 +206,12 @@ export function ColumnSkeleton({ density = 'comfortable' }: { density?: Density 
     <div
       aria-hidden
       className={cn(
-        'bg-muted/50 shrink-0 space-y-2 rounded-xl p-2 pt-4',
+        'bg-muted/50 shrink-0 space-y-2 rounded-lg p-2 pt-4',
         density === 'compact' ? 'w-[264px]' : 'w-[288px]',
       )}
     >
       <div className="flex items-center gap-2 px-1 pb-1">
-        <Skeleton className="size-4 rounded" />
+        <Skeleton className="size-4 rounded-sm" />
         <Skeleton className="h-4 w-24" />
         <Skeleton className="ml-auto h-4 w-6" />
       </div>
@@ -227,7 +227,7 @@ export function ItemPanelSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading work item" className="space-y-6 p-6">
       <div className="flex items-center gap-2">
-        <Skeleton className="size-5 rounded" />
+        <Skeleton className="size-5 rounded-sm" />
         <Skeleton className="h-4 w-20" />
         <Skeleton className="ml-auto size-8 rounded-md" />
       </div>

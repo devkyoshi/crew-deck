@@ -70,7 +70,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: { open: boolean; onOpen
                     <dt className="text-muted-foreground">{text}</dt>
                     <dd className="flex shrink-0 gap-1">
                       {keys.map((k) => (
-                        <kbd key={k} className="bg-muted min-w-6 rounded border px-1.5 py-0.5 text-center text-xs font-medium">
+                        <kbd key={k} className="bg-muted min-w-6 rounded-sm border px-1.5 py-0.5 text-center text-xs font-medium">
                           {k}
                         </kbd>
                       ))}

@@ -172,7 +172,7 @@ export function DocumentsView() {
 
   return (
     <div
-      className={cn('space-y-4 rounded-xl', dragOver && 'ring-primary ring-2 ring-offset-4')}
+      className={cn('space-y-4 rounded-lg', dragOver && 'ring-primary ring-2 ring-offset-4')}
       onDragOver={(e) => {
         if (!permissions.add || !e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
@@ -283,7 +283,7 @@ export function DocumentsView() {
             }
           />
         ) : (
-          <div className="bg-card overflow-x-auto rounded-xl border">
+          <div className="bg-card overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <caption className="sr-only">
                 Folders and files{path.length ? ` in ${path[path.length - 1]!.name}` : ''}
@@ -341,7 +341,7 @@ export function DocumentsView() {
               className="bg-card animate-in zoom-in-90 fade-in flex w-max max-w-64 rotate-2 cursor-grabbing items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-medium shadow-xl ring-1 ring-black/5 duration-150 motion-reduce:rotate-0 motion-reduce:animate-none"
             >
               {dragging.kind === 'folder' ? (
-                <Folder className="size-5 shrink-0 text-amber-600" />
+                <Folder className="size-5 shrink-0 text-warning-soft-foreground" />
               ) : (
                 <FileIcon className="text-muted-foreground size-5 shrink-0" />
               )}
@@ -662,7 +662,7 @@ function Crumb({
       aria-current={current ? 'page' : undefined}
       onClick={onOpen}
       className={cn(
-        'rounded px-1 transition-colors duration-150 hover:underline',
+        'rounded-sm px-1 transition-colors duration-150 hover:underline',
         current ? 'font-semibold' : 'text-muted-foreground',
         canDrop && 'outline-primary/40 outline-dashed',
         isOver && 'bg-primary/10 outline-primary outline-solid',
@@ -685,7 +685,7 @@ function DragHandle({ target, disabled }: { target: Target; disabled: boolean })
       ref={setNodeRef}
       type="button"
       aria-label={`Drag ${target.item.name} to a folder`}
-      className="text-muted-foreground hover:text-foreground cursor-grab touch-none rounded p-1"
+      className="text-muted-foreground hover:text-foreground cursor-grab touch-none rounded-sm p-1"
       {...attributes}
       {...listeners}
     >
@@ -753,7 +753,7 @@ function FolderRow({
           >
             <Folder
               className={cn(
-                'size-4 shrink-0 text-amber-600 transition-transform duration-150 motion-reduce:transition-none',
+                'size-4 shrink-0 text-warning-soft-foreground transition-transform duration-150 motion-reduce:transition-none',
                 (isOver || filesOver) && 'scale-125',
               )}
               aria-hidden

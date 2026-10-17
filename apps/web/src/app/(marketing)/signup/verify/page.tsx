@@ -161,7 +161,7 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
             <FieldGroup title="Account">
               <div className="space-y-1">
                 <p className="text-muted-foreground text-xs">Signing up as</p>
-                <p className="text-[15px] font-medium">{preview.email}</p>
+                <p className="text-heading font-medium">{preview.email}</p>
               </div>
               <Field label="Your name" htmlFor="name" error={errors.name} shakeKey={shakeKey}>
                 <Input
@@ -228,7 +228,7 @@ function VerifyWizard({ token, preview }: { token: string; preview: Preview }) {
             <ul className="space-y-2.5">
               {['Workspace created', 'You are the owner', 'Business trial started'].map((t) => (
                 <li key={t} className="flex items-center gap-2.5 text-sm font-medium">
-                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden />
+                  <CheckCircle2 className="size-4 shrink-0 text-success-soft-foreground" aria-hidden />
                   {t}
                 </li>
               ))}

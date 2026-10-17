@@ -18,7 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useVocabulary } from './use-vocabulary';
 
-/** The type icon in a small rounded tile. The label is always available to assistive tech. */
+/** The type icon in a small rounded-sm tile. The label is always available to assistive tech. */
 export function TypeIcon({
   type,
   size = 'sm',
@@ -38,7 +38,7 @@ export function TypeIcon({
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded',
+        'inline-flex shrink-0 items-center justify-center rounded-sm',
         size === 'sm' ? 'size-4' : 'size-5',
         m.tile,
         className,
@@ -132,7 +132,7 @@ export function UserAvatar({
       <TooltipTrigger asChild>
         <Avatar style={{ width: size, height: size }} className={className}>
           {person.avatarUrl && <AvatarImage src={person.avatarUrl} alt="" />}
-          <AvatarFallback className="bg-secondary text-[10px] font-semibold">
+          <AvatarFallback className="bg-secondary text-xs font-semibold">
             {initialsOf(person)}
           </AvatarFallback>
         </Avatar>
@@ -157,9 +157,9 @@ export function DueDate({
       className={cn(
         'inline-flex items-center gap-1 text-xs tabular-nums',
         state === 'overdue'
-          ? 'font-medium text-red-600 dark:text-red-400'
+          ? 'font-medium text-danger-soft-foreground '
           : state === 'soon'
-            ? 'text-amber-700 dark:text-amber-400'
+            ? 'text-warning-soft-foreground '
             : 'text-muted-foreground',
         className,
       )}
@@ -174,7 +174,7 @@ export function DueDate({
 export function EstimatePill({ value }: { value: number }) {
   return (
     <span
-      className="bg-secondary text-secondary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums"
+      className="bg-secondary text-secondary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums"
       title={`${value} story points`}
     >
       {value}
@@ -190,9 +190,9 @@ export function WipBadge({ count, limit }: { count: number; limit: number }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums',
+        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums',
         over
-          ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200'
+          ? 'bg-warning-soft text-warning-soft-foreground '
           : at
             ? 'bg-secondary text-foreground'
             : 'text-muted-foreground',

@@ -167,47 +167,47 @@ export const TYPE_META: Record<
   epic: {
     label: 'Epic',
     icon: Zap,
-    tile: 'bg-violet-100 dark:bg-violet-500/20',
-    text: 'text-violet-700 dark:text-violet-300',
+    tile: 'bg-violet-soft ',
+    text: 'text-violet-soft-foreground ',
   },
   story: {
     label: 'Story',
     icon: BookOpen,
-    tile: 'bg-emerald-100 dark:bg-emerald-500/20',
-    text: 'text-emerald-700 dark:text-emerald-300',
+    tile: 'bg-success-soft ',
+    text: 'text-success-soft-foreground ',
   },
   task: {
     label: 'Task',
     icon: CheckSquare,
-    tile: 'bg-sky-100 dark:bg-sky-500/20',
-    text: 'text-sky-700 dark:text-sky-300',
+    tile: 'bg-info-soft ',
+    text: 'text-info-soft-foreground ',
   },
   bug: {
     label: 'Bug',
     icon: Bug,
-    tile: 'bg-rose-100 dark:bg-rose-500/20',
-    text: 'text-rose-700 dark:text-rose-300',
+    tile: 'bg-danger-soft ',
+    text: 'text-danger-soft-foreground ',
   },
   ticket: {
     label: 'Ticket',
     icon: Ticket,
-    tile: 'bg-amber-100 dark:bg-amber-500/20',
-    text: 'text-amber-700 dark:text-amber-300',
+    tile: 'bg-warning-soft ',
+    text: 'text-warning-soft-foreground ',
   },
   subtask: {
     label: 'Subtask',
     icon: CornerDownRight,
-    tile: 'bg-slate-100 dark:bg-slate-500/20',
-    text: 'text-slate-600 dark:text-slate-300',
+    tile: 'bg-muted ',
+    text: 'text-muted-foreground ',
   },
 };
 
 export const PRIORITY_META: Record<Priority, { label: string; icon: LucideIcon; text: string }> = {
-  highest: { label: 'Highest', icon: ChevronsUp, text: 'text-red-700 dark:text-red-400' },
-  high: { label: 'High', icon: ChevronUp, text: 'text-orange-700 dark:text-orange-400' },
-  medium: { label: 'Medium', icon: Equal, text: 'text-amber-700 dark:text-amber-400' },
-  low: { label: 'Low', icon: ChevronDown, text: 'text-sky-700 dark:text-sky-400' },
-  lowest: { label: 'Lowest', icon: ChevronsDown, text: 'text-slate-600 dark:text-slate-400' },
+  highest: { label: 'Highest', icon: ChevronsUp, text: 'text-danger-soft-foreground ' },
+  high: { label: 'High', icon: ChevronUp, text: 'text-orange-soft-foreground ' },
+  medium: { label: 'Medium', icon: Equal, text: 'text-warning-soft-foreground ' },
+  low: { label: 'Low', icon: ChevronDown, text: 'text-info-soft-foreground ' },
+  lowest: { label: 'Lowest', icon: ChevronsDown, text: 'text-muted-foreground ' },
 };
 
 export const CATEGORY_META: Record<
@@ -217,49 +217,49 @@ export const CATEGORY_META: Record<
   todo: {
     label: 'To do',
     icon: Circle,
-    accent: 'bg-slate-400 dark:bg-slate-500',
-    chip: 'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-200',
+    accent: 'bg-muted-foreground/40 ',
+    chip: 'bg-muted text-muted-foreground ',
   },
   in_progress: {
     label: 'In progress',
     icon: CircleDot,
-    accent: 'bg-sky-500 dark:bg-sky-400',
-    chip: 'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200',
+    accent: 'bg-info ',
+    chip: 'bg-info-soft text-info-soft-foreground ',
   },
   done: {
     label: 'Done',
     icon: CheckCircle2,
-    accent: 'bg-emerald-500 dark:bg-emerald-400',
-    chip: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200',
+    accent: 'bg-success ',
+    chip: 'bg-success-soft text-success-soft-foreground ',
   },
 };
 
 /** The small dot beside a status name. Colour is decoration; the category icon and name carry the meaning. */
 export const STATUS_DOT: Record<StatusColor, string> = {
-  slate: 'bg-slate-400',
-  blue: 'bg-blue-500',
-  sky: 'bg-sky-500',
-  teal: 'bg-teal-500',
-  green: 'bg-emerald-500',
-  amber: 'bg-amber-500',
-  orange: 'bg-orange-500',
-  red: 'bg-red-500',
-  pink: 'bg-pink-500',
-  violet: 'bg-violet-500',
+  slate: 'bg-muted-foreground/40',
+  blue: 'bg-info',
+  sky: 'bg-info',
+  teal: 'bg-success',
+  green: 'bg-success',
+  amber: 'bg-warning',
+  orange: 'bg-orange',
+  red: 'bg-danger',
+  pink: 'bg-violet',
+  violet: 'bg-violet',
 };
 
 /** Label chips share the status palette. Text and fill are chosen together to stay readable. */
 export const LABEL_CHIP: Record<StatusColor, string> = {
-  slate: 'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-200',
-  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200',
-  sky: 'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200',
-  teal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200',
-  green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200',
-  amber: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200',
-  orange: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-200',
-  red: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200',
-  pink: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-200',
-  violet: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200',
+  slate: 'bg-muted text-muted-foreground ',
+  blue: 'bg-info-soft text-info-soft-foreground ',
+  sky: 'bg-info-soft text-info-soft-foreground ',
+  teal: 'bg-success-soft text-success-soft-foreground ',
+  green: 'bg-success-soft text-success-soft-foreground ',
+  amber: 'bg-warning-soft text-warning-soft-foreground ',
+  orange: 'bg-orange-soft text-orange-soft-foreground ',
+  red: 'bg-danger-soft text-danger-soft-foreground ',
+  pink: 'bg-violet-soft text-violet-soft-foreground ',
+  violet: 'bg-violet-soft text-violet-soft-foreground ',
 };
 
 export const initialsOf = (p: { name: string | null; email: string }) =>

@@ -57,7 +57,7 @@ export function WorkItemCard({
         <h3
           className={cn(
             'min-w-0 flex-1 leading-snug font-medium break-words',
-            compact ? 'text-[13px]' : 'text-sm',
+            compact ? 'text-label' : 'text-sm',
             done && 'text-muted-foreground',
           )}
         >
@@ -85,7 +85,7 @@ export function WorkItemCard({
 
       {!compact && show('epic') && item.parent?.type === 'epic' && (
         <div className="mt-2 flex">
-          <span className="inline-flex max-w-full items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 dark:bg-violet-500/20 dark:text-violet-200">
+          <span className="inline-flex max-w-full items-center gap-1 rounded-sm bg-violet-soft px-1.5 py-0.5 text-xs font-medium text-violet-soft-foreground ">
             <CornerLeftUp className="size-3 shrink-0" aria-hidden />
             <span className="truncate">{item.parent.title}</span>
           </span>
@@ -100,7 +100,7 @@ export function WorkItemCard({
 
       <div className={cn('flex items-center gap-2', compact ? 'mt-1.5' : 'mt-2.5')}>
         <TypeIcon type={item.type} />
-        <span className="text-muted-foreground text-xs font-medium tabular-nums">{item.key}</span>
+        <span className="text-muted-foreground font-mono text-xs font-medium whitespace-nowrap tabular-nums">{item.key}</span>
         {show('priority') && <PriorityIcon priority={item.priority} />}
         <div className="ml-auto flex items-center gap-2">
           {show('subtasks') && sub.total > 0 && (
@@ -115,7 +115,7 @@ export function WorkItemCard({
           )}
           {(item.blockedBy ?? 0) > 0 && (
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 text-[11px] font-medium text-red-900 dark:bg-red-500/15 dark:text-red-200"
+              className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-1.5 text-xs font-medium text-danger-soft-foreground "
               title={`Blocked by ${item.blockedBy} open ${item.blockedBy === 1 ? 'item' : 'items'}`}
             >
               <Ban className="size-3" aria-hidden />
@@ -147,7 +147,7 @@ export function WorkItemCard({
           {show('estimate') && item.estimate !== null && <EstimatePill value={item.estimate} />}
           {(item.carryOverCount ?? 0) > 0 && (
             <span
-              className="rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-200"
+              className="rounded-full bg-warning-soft px-1.5 text-xs font-medium text-warning-soft-foreground "
               title={`Carried over from ${item.carryOverCount} sprint${item.carryOverCount === 1 ? '' : 's'}`}
             >
               ↻ {item.carryOverCount}
@@ -176,7 +176,7 @@ export function WorkItemCardSkeleton({ density = 'comfortable' }: { density?: De
       <Skeleton className={cn('h-4 w-11/12', compact && 'h-3.5')} />
       {!compact && <Skeleton className="h-4 w-2/3" />}
       <div className={cn('flex items-center gap-2', compact && 'mt-1.5')}>
-        <Skeleton className="size-4 rounded" />
+        <Skeleton className="size-4 rounded-sm" />
         <Skeleton className="h-3 w-14" />
         <Skeleton className="ml-auto size-6 rounded-full" />
       </div>

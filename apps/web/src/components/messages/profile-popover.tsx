@@ -18,10 +18,10 @@ import { PersonAvatar, PRESENCE_LABEL } from './person-avatar';
 import { useMessaging } from './store';
 
 const PILL: Record<CheckinBadge, string> = {
-  onsite: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100',
-  remote: 'bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100',
-  offsite: 'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-100',
-  leave: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100',
+  onsite: 'bg-success-soft text-success-soft-foreground ',
+  remote: 'bg-info-soft text-info-soft-foreground ',
+  offsite: 'bg-violet-soft text-violet-soft-foreground ',
+  leave: 'bg-warning-soft text-warning-soft-foreground ',
 };
 
 /** Where someone works today: a word, never a time. */
@@ -29,7 +29,7 @@ export function CheckinPill({ badge, className }: { badge: CheckinBadge; classNa
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center rounded px-1.5 text-[10px] leading-4 font-medium',
+        'inline-flex shrink-0 items-center rounded-sm px-1.5 text-xs leading-4 font-medium',
         PILL[badge],
         className,
       )}
@@ -115,7 +115,7 @@ function Card({ id, onNavigate }: { id: string; onNavigate: () => void }) {
           <span aria-hidden>{p.status.emoji}</span> {p.status.text}
         </p>
       )}
-      <ul className="text-muted-foreground space-y-1 text-[13px]">
+      <ul className="text-muted-foreground space-y-1 text-label">
         {time && (
           <li className="flex items-center gap-2">
             <Clock className="size-3.5" aria-hidden /> {time}

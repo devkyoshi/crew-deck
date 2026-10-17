@@ -6,9 +6,9 @@ type Clock = NonNullable<WorkItem['sla']>['response'];
 
 const LOOK: Record<Exclude<SlaState, 'none'>, { text: string; icon: typeof AlarmClock; cls: string }> = {
   ok: { text: 'On track', icon: Hourglass, cls: 'text-muted-foreground' },
-  due_soon: { text: 'Due soon', icon: AlarmClock, cls: 'text-amber-700 dark:text-amber-400' },
-  breached: { text: 'Missed', icon: TriangleAlert, cls: 'text-red-700 dark:text-red-400' },
-  met: { text: 'Met', icon: CheckCircle2, cls: 'text-emerald-700 dark:text-emerald-400' },
+  due_soon: { text: 'Due soon', icon: AlarmClock, cls: 'text-warning-soft-foreground ' },
+  breached: { text: 'Missed', icon: TriangleAlert, cls: 'text-danger-soft-foreground ' },
+  met: { text: 'Met', icon: CheckCircle2, cls: 'text-success-soft-foreground ' },
 };
 
 const when = (iso: string) =>

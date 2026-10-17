@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 /** Side-by-side plan table. Used on the pricing page, in sign-up and on the plan page. */
 export function PlanComparison({ plans, current }: { plans: PlanInfo[]; current?: string | null }) {
   return (
-    <div className="bg-card overflow-x-auto rounded-2xl border">
+    <div className="bg-card overflow-x-auto rounded-lg border">
       <Table>
         <caption className="sr-only">Compare plans</caption>
         <TableHeader>
@@ -51,7 +51,7 @@ export function PlanComparison({ plans, current }: { plans: PlanInfo[]; current?
                   <TableCell key={p.key} className={cn(no && 'text-muted-foreground')}>
                     {v === 'Included' ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <Check className="size-4 text-emerald-600" aria-hidden /> Included
+                        <Check className="size-4 text-success-soft-foreground" aria-hidden /> Included
                       </span>
                     ) : no ? (
                       <span className="inline-flex items-center gap-1.5">

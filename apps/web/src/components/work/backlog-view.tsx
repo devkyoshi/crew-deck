@@ -123,7 +123,7 @@ export function BacklogView() {
   return (
     <div className="space-y-4">
       {!data.data.features.sprints && (
-        <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+        <p className="rounded-lg bg-warning-soft p-3 text-sm text-warning-soft-foreground ">
           Your plan does not include sprints. You can plan here, but starting a sprint needs an upgrade.
         </p>
       )}
@@ -213,7 +213,7 @@ function Section({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { label } });
   return (
-    <section aria-label={label} ref={setNodeRef} className={cn('bg-card rounded-xl border', isOver && 'ring-primary ring-2', className)}>
+    <section aria-label={label} ref={setNodeRef} className={cn('bg-card rounded-lg border', isOver && 'ring-primary ring-2', className)}>
       <div className="border-b px-3 py-2.5">{header}</div>
       {items.length === 0 ? (
         <p className="text-muted-foreground px-3 py-4 text-sm">{empty}</p>
@@ -253,7 +253,7 @@ function Row({
   return (
     <li ref={overlay ? undefined : setNodeRef} className={cn('bg-card flex items-center gap-2 px-2 py-1.5 text-sm', isDragging && 'opacity-40', overlay && 'rounded-lg border shadow-lg')}>
       {canMove ? (
-        <button type="button" aria-label={`Drag ${item.key}`} className="text-muted-foreground hover:text-foreground cursor-grab rounded p-1" {...attributes} {...listeners}>
+        <button type="button" aria-label={`Drag ${item.key}`} className="text-muted-foreground hover:text-foreground cursor-grab rounded-sm p-1" {...attributes} {...listeners}>
           <GripVertical className="size-4" aria-hidden />
         </button>
       ) : (
@@ -265,7 +265,7 @@ function Row({
         {item.title}
       </button>
       {(item.carryOverCount ?? 0) > 0 && (
-        <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-200" title={`Carried over ${item.carryOverCount} times`}>
+        <span className="inline-flex items-center gap-0.5 rounded-full bg-warning-soft px-1.5 text-xs font-medium text-warning-soft-foreground " title={`Carried over ${item.carryOverCount} times`}>
           <Repeat className="size-3" aria-hidden />
           {item.carryOverCount}
           <span className="sr-only"> carry-overs</span>

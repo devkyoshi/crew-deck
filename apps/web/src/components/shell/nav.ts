@@ -121,3 +121,31 @@ export function visibleGroups(isAdmin: boolean, checkinEnabled = true, crmVisibl
     }))
     .filter((g) => g.items.length > 0);
 }
+
+/** The rail's top-level modules. Each one owns a nav group that fills the contextual panel. */
+export interface NavModule {
+  id: 'home' | 'messages' | 'spaces' | 'crm' | 'admin';
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  /** Which NAV group the panel shows while this module is active. */
+  group: string;
+}
+
+export const MODULES: NavModule[] = [
+  { id: 'home', label: 'Home', href: '/', icon: Home, group: 'workspace' },
+  { id: 'messages', label: 'Messages', href: '/messages', icon: MessagesSquare, group: 'workspace' },
+  { id: 'spaces', label: 'Spaces', href: '/spaces', icon: FolderKanban, group: 'spaces' },
+  { id: 'crm', label: 'CRM', href: '/crm', icon: Handshake, group: 'crm' },
+  { id: 'admin', label: 'Administration', href: '/admin/members', icon: Settings, group: 'admin' },
+];
+
+/** The module a path belongs to. Attendance is an admin-only page that lives in the workspace group. */
+export function moduleForPath(pathname: string): NavModule['id'] {
+  if (pathname.startsWith('/messages')) return 'messages';
+  if (pathname.startsWith('/spaces') || pathname === '/access-requests' || pathname === '/request-access')
+    return 'spaces';
+  if (pathname.startsWith('/crm')) return 'crm';
+  if (pathname.startsWith('/admin') && pathname !== '/admin/attendance') return 'admin';
+  return 'home';
+}

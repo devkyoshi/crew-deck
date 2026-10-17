@@ -3,9 +3,9 @@ import { LEAD_STATUS_LABEL, type DealStatus, type LeadStatus } from '@/lib/crm';
 import { cn } from '@/lib/utils';
 
 const LEAD_TONE: Record<LeadStatus, string> = {
-  new: 'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300',
-  contacted: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  qualified: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+  new: 'bg-info-soft text-info-soft-foreground ',
+  contacted: 'bg-warning-soft text-warning-soft-foreground ',
+  qualified: 'bg-success-soft text-success-soft-foreground ',
   unqualified: 'bg-secondary text-secondary-foreground',
 };
 
@@ -22,7 +22,7 @@ export function LeadStatusPill({
         variant="outline"
         className={cn(
           pill,
-          'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300',
+          'bg-violet-soft text-violet-soft-foreground ',
         )}
       >
         Converted
@@ -37,9 +37,9 @@ export function LeadStatusPill({
 }
 
 const DEAL_TONE: Record<DealStatus, string> = {
-  open: 'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300',
-  won: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  lost: 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300',
+  open: 'bg-info-soft text-info-soft-foreground ',
+  won: 'bg-success-soft text-success-soft-foreground ',
+  lost: 'bg-danger-soft text-danger-soft-foreground ',
 };
 
 export function DealStatusPill({ status }: { status: DealStatus }) {

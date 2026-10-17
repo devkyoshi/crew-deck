@@ -303,7 +303,7 @@ export default function MemberProfilePage({ params }: { params: Promise<{ id: st
                       <li key={g.id}>
                         <Link
                           href={`/groups/${g.id}`}
-                          className="bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-500/20 dark:text-violet-300 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm"
+                          className="bg-violet-soft text-violet-soft-foreground hover:bg-violet-soft inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm"
                         >
                           <Users className="size-3.5" aria-hidden />
                           {g.name}

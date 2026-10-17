@@ -32,7 +32,7 @@ export function useSignOut() {
   };
 }
 
-export function UserMenu() {
+export function UserMenu({ side = 'right' }: { side?: 'right' | 'bottom' }) {
   const { user, orgRole } = useMe();
   const signOut = useSignOut();
   const fallback = initials(user.name, user.email);
@@ -40,14 +40,14 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account menu">
+        <Button variant="ghost" size="icon" className="size-10 rounded-full" aria-label="Account menu">
           <Avatar className="size-8">
             {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
             <AvatarFallback className="text-xs">{fallback}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" side={side} className="w-60">
         <DropdownMenuLabel className="space-y-1 font-normal">
           <div className="truncate font-medium">{user.name ?? user.email}</div>
           <div className="text-muted-foreground truncate text-xs">{user.email}</div>

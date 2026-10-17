@@ -52,7 +52,7 @@ export default function WorkspacesPage() {
           <section aria-labelledby="recent" className="space-y-2.5">
             <h2
               id="recent"
-              className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase"
+              className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
             >
               Recent workspaces
             </h2>

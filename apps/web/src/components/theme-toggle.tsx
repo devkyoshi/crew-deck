@@ -8,13 +8,14 @@ export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="icon"
+      className="text-muted-foreground size-11 rounded-xl"
       aria-label="Toggle theme"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
-      <Sun className="size-4 dark:hidden" />
-      <Moon className="hidden size-4 dark:block" />
+      <Sun className="size-[22px] dark:hidden" strokeWidth={1.5} />
+      <Moon className="hidden size-[22px] dark:block" strokeWidth={1.5} />
     </Button>
   );
 }

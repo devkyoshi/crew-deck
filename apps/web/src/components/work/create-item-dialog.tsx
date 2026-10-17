@@ -302,7 +302,7 @@ export function CreateItemDialog({
                       aria-pressed={estimate === String(p)}
                       onClick={() => setEstimate(estimate === String(p) ? '' : String(p))}
                       className={cn(
-                        'hover:bg-accent h-6 min-w-6 rounded-full border px-1.5 text-[11px] font-semibold tabular-nums',
+                        'hover:bg-accent h-6 min-w-6 rounded-full border px-1.5 text-xs font-semibold tabular-nums',
                         estimate === String(p) && 'bg-primary text-primary-foreground hover:bg-primary border-transparent',
                       )}
                     >

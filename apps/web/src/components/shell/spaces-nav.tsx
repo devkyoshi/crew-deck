@@ -44,7 +44,7 @@ function SpaceLink({ spaceKey, name, icon }: { spaceKey: string; name: string; i
                 <Link
                   href={l.to}
                   aria-current={on ? 'page' : undefined}
-                  className={`hover:bg-sidebar-accent block rounded px-2 py-1 ${on ? 'text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80'}`}
+                  className={`hover:bg-sidebar-accent block rounded-sm px-2 py-1 ${on ? 'text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80'}`}
                 >
                   {l.label}
                 </Link>
@@ -106,7 +106,7 @@ export function SpacesNav() {
           {pendingCount > 0 && (
             <SidebarMenuBadge
               aria-label={`${pendingCount} pending`}
-              className="bg-primary text-primary-foreground rounded-full text-[10px]"
+              className="bg-primary text-primary-foreground rounded-full text-xs"
             >
               {pendingCount}
             </SidebarMenuBadge>

@@ -82,7 +82,7 @@ export function ServiceSlaSettings({ spaceKey }: { spaceKey: string }) {
           onCheckedChange={(v) => setDraft({ ...draft, businessHours: v })}
         />
       </div>
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <caption className="sr-only">Response and resolve targets in hours, by priority</caption>
           <thead className="text-muted-foreground bg-muted/40 text-xs">

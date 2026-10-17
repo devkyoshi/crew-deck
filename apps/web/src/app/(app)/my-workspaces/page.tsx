@@ -48,7 +48,7 @@ export default function MyWorkspacesPage() {
       {q.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
       ) : (
@@ -62,7 +62,7 @@ export default function MyWorkspacesPage() {
                     <div className="text-muted-foreground truncate text-xs">{w.slug}</div>
                   </div>
                   {w.current ? (
-                    <span className="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                    <span className="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
                       <Check className="size-3" aria-hidden /> Current
                     </span>
                   ) : (

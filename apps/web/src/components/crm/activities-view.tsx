@@ -119,7 +119,7 @@ function Inner() {
       {query.isError ? (
         <ErrorView error={query.error} reset={() => query.refetch()} />
       ) : query.isPending ? (
-        <Skeleton role="status" aria-label="Loading" className="h-48 w-full rounded-2xl" />
+        <Skeleton role="status" aria-label="Loading" className="h-48 w-full rounded-lg" />
       ) : query.data.items.length === 0 ? (
         <EmptyState
           icon={CalendarClock}

@@ -10,7 +10,7 @@ import { PriorityIcon, StatusChip, TypeIcon, UserAvatar } from './work-bits';
 export function FoundItems({ items, showSpace = true }: { items: (FoundItem | WorkItem)[]; showSpace?: boolean }) {
   const open = useOpenItem();
   return (
-    <ul className="bg-card divide-y rounded-xl border">
+    <ul className="bg-card divide-y rounded-lg border">
       {items.map((i) => (
         <li key={i.id} className="flex items-center gap-3 px-3 py-2 text-sm">
           <TypeIcon type={i.type} />

@@ -259,7 +259,7 @@ export function MessageList(props: MessageListProps) {
                     aria-label="New messages"
                   >
                     <span className="bg-destructive/40 h-px flex-1" />
-                    <span className="text-[11px] font-semibold tracking-wide uppercase">
+                    <span className="text-xs font-semibold tracking-wide uppercase">
                       New messages
                     </span>
                     <span className="bg-destructive/40 h-px flex-1" />

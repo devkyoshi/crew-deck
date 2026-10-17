@@ -34,21 +34,21 @@ type Icon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 /** Icon and tint for each kind of work. Tints are decorative; the label always carries the meaning. */
 export const WORK_TYPE_VISUALS: Record<WorkType, { icon: Icon; tint: string }> = {
-  software: { icon: Code2, tint: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' },
-  product: { icon: Layers, tint: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  marketing: { icon: Megaphone, tint: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300' },
-  design: { icon: Palette, tint: 'bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300' },
-  project_mgmt: { icon: KanbanSquare, tint: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' },
-  operations: { icon: Cog, tint: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' },
-  it_support: { icon: Headset, tint: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300' },
-  hr: { icon: Users, tint: 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300' },
-  customer_service: { icon: MessagesSquare, tint: 'bg-lime-100 text-lime-700 dark:bg-lime-500/20 dark:text-lime-300' },
-  legal: { icon: Scale, tint: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' },
-  finance: { icon: Landmark, tint: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-300' },
-  sales: { icon: TrendingUp, tint: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300' },
-  data_science: { icon: FlaskConical, tint: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300' },
-  construction: { icon: HardHat, tint: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300' },
-  other: { icon: Sparkles, tint: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300' },
+  software: { icon: Code2, tint: 'bg-violet-soft text-violet-soft-foreground ' },
+  product: { icon: Layers, tint: 'bg-success-soft text-success-soft-foreground ' },
+  marketing: { icon: Megaphone, tint: 'bg-orange-soft text-orange-soft-foreground ' },
+  design: { icon: Palette, tint: 'bg-violet-soft text-violet-soft-foreground ' },
+  project_mgmt: { icon: KanbanSquare, tint: 'bg-info-soft text-info-soft-foreground ' },
+  operations: { icon: Cog, tint: 'bg-warning-soft text-warning-soft-foreground ' },
+  it_support: { icon: Headset, tint: 'bg-info-soft text-info-soft-foreground ' },
+  hr: { icon: Users, tint: 'bg-success-soft text-success-soft-foreground ' },
+  customer_service: { icon: MessagesSquare, tint: 'bg-success-soft text-success-soft-foreground ' },
+  legal: { icon: Scale, tint: 'bg-violet-soft text-violet-soft-foreground ' },
+  finance: { icon: Landmark, tint: 'bg-violet-soft text-violet-soft-foreground ' },
+  sales: { icon: TrendingUp, tint: 'bg-warning-soft text-warning-soft-foreground ' },
+  data_science: { icon: FlaskConical, tint: 'bg-info-soft text-info-soft-foreground ' },
+  construction: { icon: HardHat, tint: 'bg-orange-soft text-orange-soft-foreground ' },
+  other: { icon: Sparkles, tint: 'bg-violet-soft text-violet-soft-foreground ' },
 };
 
 export const workTypeLabel = (t: string | null | undefined) =>
@@ -152,7 +152,7 @@ export function UsagePicker({
             {checked && <Check className="text-primary size-3.5 shrink-0" aria-hidden />}
             <span>{o.label}</span>
             {o.status !== 'built' && (
-              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium">
                 Coming soon
               </span>
             )}
@@ -171,7 +171,7 @@ export function WorkTypeBadge({ type }: { type: string | null | undefined }) {
   const Visual = visual?.icon ?? Briefcase;
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
-      <span className={cn('flex size-5 items-center justify-center rounded', visual?.tint ?? 'bg-muted')}>
+      <span className={cn('flex size-5 items-center justify-center rounded-sm', visual?.tint ?? 'bg-muted')}>
         <Visual className="size-3" aria-hidden />
       </span>
       {workTypeLabel(type)}

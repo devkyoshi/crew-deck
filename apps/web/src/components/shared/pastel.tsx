@@ -6,34 +6,34 @@ import { cn } from '@/lib/utils';
 /** Soft tinted palettes used across headers, pills and icon tiles. */
 export const TONES = {
   blue: {
-    bg: 'bg-sky-50 dark:bg-sky-500/10',
-    text: 'text-sky-700 dark:text-sky-300',
-    pill: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300',
+    bg: 'bg-info-soft ',
+    text: 'text-info-soft-foreground ',
+    pill: 'bg-info-soft text-info-soft-foreground ',
   },
   orange: {
-    bg: 'bg-orange-50 dark:bg-orange-500/10',
-    text: 'text-orange-700 dark:text-orange-300',
-    pill: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
+    bg: 'bg-orange-soft ',
+    text: 'text-orange-soft-foreground ',
+    pill: 'bg-orange-soft text-orange-soft-foreground ',
   },
   pink: {
-    bg: 'bg-rose-50 dark:bg-rose-500/10',
-    text: 'text-rose-700 dark:text-rose-300',
-    pill: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
+    bg: 'bg-danger-soft ',
+    text: 'text-danger-soft-foreground ',
+    pill: 'bg-danger-soft text-danger-soft-foreground ',
   },
   green: {
-    bg: 'bg-emerald-50 dark:bg-emerald-500/10',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+    bg: 'bg-success-soft ',
+    text: 'text-success-soft-foreground ',
+    pill: 'bg-success-soft text-success-soft-foreground ',
   },
   violet: {
-    bg: 'bg-violet-50 dark:bg-violet-500/10',
-    text: 'text-violet-700 dark:text-violet-300',
-    pill: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
+    bg: 'bg-violet-soft ',
+    text: 'text-violet-soft-foreground ',
+    pill: 'bg-violet-soft text-violet-soft-foreground ',
   },
   amber: {
-    bg: 'bg-amber-50 dark:bg-amber-500/10',
-    text: 'text-amber-700 dark:text-amber-300',
-    pill: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+    bg: 'bg-warning-soft ',
+    text: 'text-warning-soft-foreground ',
+    pill: 'bg-warning-soft text-warning-soft-foreground ',
   },
 } as const;
 export type Tone = keyof typeof TONES;
@@ -65,7 +65,7 @@ export function TonedHeader({
   );
 }
 
-/** Small rounded grey chip with an icon, e.g. "Due: 5 Dec". */
+/** Small rounded-sm grey chip with an icon, e.g. "Due: 5 Dec". */
 export function Chip({
   icon: Icon,
   children,
@@ -112,11 +112,11 @@ export function TonePill({
 }
 
 const AVATAR_TONES = [
-  'bg-sky-200 text-sky-900',
-  'bg-amber-200 text-amber-900',
-  'bg-emerald-200 text-emerald-900',
-  'bg-rose-200 text-rose-900',
-  'bg-violet-200 text-violet-900',
+  'bg-info-soft text-info-soft-foreground',
+  'bg-warning-soft text-warning-soft-foreground',
+  'bg-success-soft text-success-soft-foreground',
+  'bg-danger-soft text-danger-soft-foreground',
+  'bg-violet-soft text-violet-soft-foreground',
 ];
 
 export function AvatarStack({ names, max = 4 }: { names: string[]; max?: number }) {
@@ -127,7 +127,7 @@ export function AvatarStack({ names, max = 4 }: { names: string[]; max?: number 
       {shown.map((n, i) => (
         <Avatar key={n} className="ring-card size-7 ring-2">
           <AvatarFallback
-            className={cn('text-[10px] font-medium', AVATAR_TONES[i % AVATAR_TONES.length])}
+            className={cn('text-xs font-medium', AVATAR_TONES[i % AVATAR_TONES.length])}
           >
             {n
               .split(' ')
@@ -139,7 +139,7 @@ export function AvatarStack({ names, max = 4 }: { names: string[]; max?: number 
       ))}
       {extra > 0 && (
         <Avatar className="ring-card size-7 ring-2">
-          <AvatarFallback className="text-[10px]">+{extra}</AvatarFallback>
+          <AvatarFallback className="text-xs">+{extra}</AvatarFallback>
         </Avatar>
       )}
     </div>

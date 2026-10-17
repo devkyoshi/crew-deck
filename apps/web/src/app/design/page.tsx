@@ -15,10 +15,10 @@ export default function DesignPage() {
         <ThemeToggle />
       </div>
       <div className="grid gap-8 xl:grid-cols-2">
-        <div className="light bg-background text-foreground rounded-2xl border p-5">
+        <div className="light bg-background text-foreground rounded-lg border p-5">
           <Showcase />
         </div>
-        <div className="dark bg-background text-foreground rounded-2xl border p-5">
+        <div className="dark bg-background text-foreground rounded-lg border p-5">
           <Showcase />
         </div>
       </div>

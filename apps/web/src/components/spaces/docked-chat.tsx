@@ -56,7 +56,7 @@ export function DockedChatButton({
       <MessageSquare />
       Chat
       {unread > 0 && !open && (
-        <span className="bg-destructive h-4 min-w-4 rounded-full px-1 text-center text-[10px] leading-4 font-semibold text-white tabular-nums">
+        <span className="bg-destructive h-4 min-w-4 rounded-full px-1 text-center text-xs leading-4 font-semibold text-white tabular-nums">
           {unread > 99 ? '99+' : unread}
           <span className="sr-only"> unread messages</span>
         </span>

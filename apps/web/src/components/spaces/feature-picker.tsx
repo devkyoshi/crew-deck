@@ -118,7 +118,7 @@ export function FeaturePicker({
                         <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
                           {f.label}
                           {locked && (
-                            <span className="bg-secondary rounded-full px-2 py-0.5 text-[11px] font-normal">Team plan</span>
+                            <span className="bg-secondary rounded-full px-2 py-0.5 text-xs font-normal">Team plan</span>
                           )}
                         </span>
                         <span className="text-muted-foreground block text-xs">{f.hint}</span>

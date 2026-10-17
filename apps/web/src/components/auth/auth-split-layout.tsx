@@ -55,7 +55,7 @@ export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-xl shadow-xs',
+        'bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-lg shadow-xs',
         className,
       )}
     >
@@ -100,7 +100,7 @@ function BrandPanel({ variant }: { variant: SplitVariant }) {
           transition={{ type: 'spring', stiffness: 220, damping: 22 }}
           className="mb-10 flex size-20 items-center justify-center rounded-[1.4rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-black/40 backdrop-blur"
         >
-          <span className="bg-primary flex size-12 items-center justify-center rounded-2xl text-white">
+          <span className="bg-primary flex size-12 items-center justify-center rounded-lg text-white">
             <Icon className="size-6" aria-hidden />
           </span>
         </motion.div>

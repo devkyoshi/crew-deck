@@ -33,6 +33,9 @@ import { useSearch } from '@/lib/work-find-api';
 import { conversationName, useChannels } from '@/lib/messaging-api';
 import { useHydrated } from '@/components/checkin/use-hydrated';
 
+/** Dispatched by the sidebar's search field to open the palette mounted in the top bar. */
+export const OPEN_PALETTE_EVENT = 'crew:open-palette';
+
 /** Ctrl/Cmd+K: jump to work items by key or words, to pages, and run a few actions. */
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -66,8 +69,13 @@ export function CommandPalette() {
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
+    };
   }, []);
 
   const run = (fn: () => void) => {
@@ -78,15 +86,13 @@ export function CommandPalette() {
   return (
     <>
       <Button
-        variant="outline"
-        size="sm"
-        className="text-muted-foreground w-9 justify-start px-2.5 lg:w-56"
+        variant="ghost"
+        size="icon"
+        className="text-muted-foreground"
         onClick={() => setOpen(true)}
         aria-label="Search and jump to"
       >
-        <Search className="size-4 shrink-0" />
-        <span className="hidden flex-1 text-left lg:inline">Search…</span>
-        <kbd className="bg-muted hidden rounded px-1.5 font-mono text-[10px] lg:inline">Ctrl K</kbd>
+        <Search className="size-[18px]" />
       </Button>
       <CommandDialog
         open={open}

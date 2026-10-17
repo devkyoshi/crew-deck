@@ -43,7 +43,7 @@ export default function PlatformSignInPage() {
     <>
       <SplitHeading
         icon={
-          <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-xl">
+          <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-lg">
             <ShieldAlert className="size-6" aria-hidden />
           </span>
         }

@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Check, ChevronRight, ChevronsUpDown, Layers, LayoutGrid, Plus } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Check, ChevronsUpDown, Layers, LayoutGrid, Plus, Search } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,38 +23,19 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
 import { useIsAdmin, useMe } from './me-context';
 import { workTypeLabel } from '@/components/workspace/work-type-picker';
 import { openWorkspace } from '@/lib/workspaces';
 import { useToday } from '@/components/checkin/use-today';
 import { useCrmAccess } from '@/lib/crm';
 import { useUnreadSummary } from '@/lib/messaging-api';
-import { visibleGroups } from './nav';
+import { Kbd } from '@/components/shared/kbd';
+import { moduleForPath, MODULES, visibleGroups } from './nav';
+import { OPEN_PALETTE_EVENT } from './command-palette';
 import { SpacesNav } from './spaces-nav';
-
-/** Remembers whether a sidebar group is open, per browser. */
-function usePersistedOpen(key: string, initial = true) {
-  const [open, setOpen] = useState(initial);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved !== null) setOpen(saved === '1');
-    } catch {
-      /* storage unavailable */
-    }
-  }, [key]);
-  const update = (v: boolean) => {
-    setOpen(v);
-    try {
-      localStorage.setItem(key, v ? '1' : '0');
-    } catch {
-      /* storage unavailable */
-    }
-  };
-  return [open, update] as const;
-}
 
 function TenantSwitcher() {
   const { org, orgs } = useMe();
@@ -66,15 +46,15 @@ function TenantSwitcher() {
   const label = (
     <>
       {org.logoUrl ? (
-        <img src={org.logoUrl} alt="" className="size-7 shrink-0 rounded-md object-cover" />
+        <img src={org.logoUrl} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
       ) : (
-        <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-          <Layers className="size-3.5" aria-hidden />
+        <span className="bg-foreground text-background flex size-10 shrink-0 items-center justify-center rounded-xl">
+          <Layers className="size-5" strokeWidth={1.5} aria-hidden />
         </span>
       )}
       <span className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-        <span className="truncate text-[13px] font-semibold">{org.name}</span>
-        <span className="text-muted-foreground truncate text-[11px]">{org.slug}</span>
+        <span className="truncate text-heading font-semibold">{org.name}</span>
+        <span className="text-muted-foreground truncate text-sm">{org.slug}</span>
       </span>
     </>
   );
@@ -103,7 +83,7 @@ function TenantSwitcher() {
                 <span className="grid flex-1 leading-tight">
                   <span className="truncate">{o.name}</span>
                   {o.workType && (
-                    <span className="text-muted-foreground truncate text-[11px]">
+                    <span className="text-muted-foreground truncate text-xs">
                       {workTypeLabel(o.workType)}
                     </span>
                   )}
@@ -131,76 +111,104 @@ function TenantSwitcher() {
 
 function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[number] }) {
   const pathname = usePathname();
-  const [open, setOpen] = usePersistedOpen(`sidebar:${group.id}`);
   const unread = useUnreadSummary();
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="group/collapsible">
-      <SidebarGroup>
-        <SidebarGroupLabel asChild>
-          <CollapsibleTrigger>
-            {group.label}
-            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-          </CollapsibleTrigger>
-        </SidebarGroupLabel>
-        <CollapsibleContent>
-          <SidebarGroupContent>
-            {group.id === 'spaces' ? (
-              <SpacesNav />
-            ) : (
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const active =
-                    item.href === '/' || item.href === '/crm'
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href);
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                        <Link href={item.href} aria-current={active ? 'page' : undefined}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                      {item.href === '/messages' && unread.dms > 0 && (
-                        <SidebarMenuBadge className="bg-destructive text-white rounded-full">
-                          {unread.dms > 99 ? '99+' : unread.dms}
-                          <span className="sr-only"> unread direct messages and mentions</span>
-                        </SidebarMenuBadge>
-                      )}
-                      {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
-                        <SidebarMenuBadge>
-                          <span className="bg-primary size-2 rounded-full" aria-hidden />
-                          <span className="sr-only">Unread channels</span>
-                        </SidebarMenuBadge>
-                      )}
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            )}
-          </SidebarGroupContent>
-        </CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
+    <SidebarGroup>
+      <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        {group.id === 'spaces' ? (
+          <SpacesNav />
+        ) : (
+          <SidebarMenu>
+            {group.items.map((item) => {
+              const active =
+                item.href === '/' || item.href === '/crm'
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                    <Link href={item.href} aria-current={active ? 'page' : undefined}>
+                      <item.icon strokeWidth={1.75} />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {item.href === '/messages' && unread.dms > 0 && (
+                    <SidebarMenuBadge className="bg-destructive text-white rounded-full">
+                      {unread.dms > 99 ? '99+' : unread.dms}
+                      <span className="sr-only"> unread direct messages and mentions</span>
+                    </SidebarMenuBadge>
+                  )}
+                  {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
+                    <SidebarMenuBadge>
+                      <span className="bg-primary size-2 rounded-full" aria-hidden />
+                      <span className="sr-only">Unread channels</span>
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        )}
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
+/** The search field. The palette itself is mounted once in the top bar and opened by an event. */
+function SearchField() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
+      className="bg-background text-muted-foreground hover:border-foreground/25 flex h-11 w-full items-center gap-2.5 rounded-xl border px-3.5 text-sm transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
+    >
+      <Search className="size-5 shrink-0" strokeWidth={1.5} aria-hidden />
+      <span className="flex-1 text-left">Search</span>
+      <Kbd>Ctrl K</Kbd>
+    </button>
+  );
+}
+
+/** The contextual panel: workspace switcher, search, and the nav group of the active rail module. */
 export function AppSidebar() {
+  const pathname = usePathname();
+  const { isMobile, open } = useSidebar();
   const isAdmin = useIsAdmin();
   const checkinOn = useToday().data?.enabled !== false;
   const crmVisible = useCrmAccess().data?.canView === true;
-  return (
-    <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="border-sidebar-border border-b p-2">
+  const moduleId = moduleForPath(pathname);
+  const groupId = MODULES.find((m) => m.id === moduleId)!.group;
+  const shown = visibleGroups(isAdmin, checkinOn, crmVisible).filter((g) => g.id === groupId);
+
+  const body = (
+    <>
+      <SidebarHeader className="gap-4 border-b p-4">
         <TenantSwitcher />
       </SidebarHeader>
-      <SidebarContent>
-        {visibleGroups(isAdmin, checkinOn, crmVisible).map((g) => (
+      <div className="px-4 pt-4">
+        <SearchField />
+      </div>
+      <SidebarContent className="pt-2">
+        {shown.map((g) => (
           <NavGroupSection key={g.id} group={g} />
         ))}
       </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+    </>
+  );
+
+  if (isMobile) return <Sidebar collapsible="offcanvas">{body}</Sidebar>;
+  return (
+    <aside
+      data-slot="sidebar"
+      data-state={open ? 'expanded' : 'collapsed'}
+      className={cn(
+        'bg-sidebar text-sidebar-foreground border-sidebar-border shrink-0 overflow-hidden border-r transition-[width] duration-200 ease-out-quint',
+        open ? 'w-72' : 'w-0 border-r-0',
+      )}
+    >
+      <div className="flex h-full w-72 flex-col">{body}</div>
+    </aside>
   );
 }

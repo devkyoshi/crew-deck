@@ -121,7 +121,7 @@ export function ConversationListItem({
         href={href ?? `/messages/${channel.id}`}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'focus-visible:ring-ring/50 flex h-8 items-center gap-2 rounded-md px-2 text-[14px] outline-none focus-visible:ring-[3px]',
+          'focus-visible:ring-ring/50 flex h-8 items-center gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-[3px]',
           active
             ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
             : 'hover:bg-muted/70',
@@ -149,11 +149,11 @@ export function ConversationListItem({
           <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Muted" />
         )}
         {channel.isArchived && (
-          <span className="text-muted-foreground text-[10px] uppercase">archived</span>
+          <span className="text-muted-foreground text-xs uppercase">archived</span>
         )}
         {badge > 0 && (
           <span
-            className="bg-destructive text-white min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums"
+            className="bg-destructive text-white min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
             aria-label={isDm ? `${badge} unread` : `${badge} unread mentions`}
           >
             {badge > 99 ? '99+' : badge}
@@ -222,7 +222,7 @@ function Section({
     <Collapsible open={open} onOpenChange={setOpen} className="group/section">
       <div className="flex items-center gap-1 px-1">
         {handle}
-        <CollapsibleTrigger className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-1 text-xs font-semibold tracking-wide uppercase outline-none focus-visible:ring-2">
+        <CollapsibleTrigger className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold tracking-wide uppercase outline-none focus-visible:ring-2">
           <ChevronRight
             className="size-3.5 shrink-0 transition-transform group-data-[state=open]/section:rotate-90"
             aria-hidden
@@ -254,7 +254,7 @@ function SortableSection({
     <button
       type="button"
       aria-label="Drag to reorder this section (or focus and press Space, then the arrow keys)"
-      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 cursor-grab rounded p-0.5 opacity-0 outline-none group-focus-within/section:opacity-100 group-hover/section:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 pointer-coarse:opacity-100"
+      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 cursor-grab rounded-sm p-0.5 opacity-0 outline-none group-focus-within/section:opacity-100 group-hover/section:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 pointer-coarse:opacity-100"
       {...attributes}
       {...listeners}
     >
@@ -449,7 +449,7 @@ function TopLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'focus-visible:ring-ring/50 mx-1 flex h-8 items-center gap-2 rounded-md px-2 text-[14px] outline-none focus-visible:ring-[3px]',
+        'focus-visible:ring-ring/50 mx-1 flex h-8 items-center gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-[3px]',
         active
           ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
           : 'text-muted-foreground hover:bg-muted/70',
@@ -459,7 +459,7 @@ function TopLink({
       <span className="flex-1">{label}</span>
       {!!badge && badge > 0 && (
         <span
-          className="bg-destructive text-white min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums"
+          className="bg-destructive text-white min-w-5 rounded-full px-1.5 text-center text-xs leading-5 font-semibold tabular-nums"
           aria-label={`${badge} unread`}
         >
           {badge > 99 ? '99+' : badge}
@@ -596,7 +596,7 @@ export function ConversationList({
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Find a conversation"
             aria-label="Find a conversation"
-            className="h-8 pl-7 text-[13px]"
+            className="h-8 pl-7 text-label"
           />
         </div>
         <Button
@@ -691,7 +691,7 @@ export function ConversationList({
             {[60, 44, 72, 52, 64, 40].map((w, i) => (
               <div
                 key={i}
-                className="bg-muted h-6 animate-pulse rounded"
+                className="bg-muted h-6 animate-pulse rounded-sm"
                 style={{ width: `${w + 20}%` }}
               />
             ))}
@@ -785,7 +785,7 @@ export function ConversationList({
                       >
                         {(bySection.get(s.id) ?? []).map(item)}
                         {!bySection.get(s.id)?.length && (
-                          <li className="text-muted-foreground px-2 py-1.5 text-[13px]">
+                          <li className="text-muted-foreground px-2 py-1.5 text-label">
                             Empty. Use a conversation’s menu to move it here.
                           </li>
                         )}
@@ -812,7 +812,7 @@ export function ConversationList({
             >
               {rooms.map(item)}
               {rooms.length === 0 && (
-                <li className="text-muted-foreground px-2 py-1.5 text-[13px]">
+                <li className="text-muted-foreground px-2 py-1.5 text-label">
                   {filter ? 'No channels match.' : 'You are not in any channels yet.'}
                 </li>
               )}
@@ -838,7 +838,7 @@ export function ConversationList({
                   <button
                     type="button"
                     onClick={() => setDialog('new')}
-                    className="text-muted-foreground hover:text-foreground text-left text-[13px] underline-offset-2 hover:underline"
+                    className="text-muted-foreground hover:text-foreground text-left text-label underline-offset-2 hover:underline"
                   >
                     {filter ? 'No conversations match.' : 'Start a conversation'}
                   </button>

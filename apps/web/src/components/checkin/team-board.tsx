@@ -90,7 +90,7 @@ export function useTeamStatus(filters: { group?: string; space?: string; q?: str
 
 function Person({ p }: { p: TeamItem }) {
   return (
-    <li className={'bg-card flex items-center gap-3 rounded-xl border p-2.5'}>
+    <li className={'bg-card flex items-center gap-3 rounded-lg border p-2.5'}>
       <Avatar className="size-8">
         {p.avatarUrl && <AvatarImage src={p.avatarUrl} alt="" />}
         <AvatarFallback className="text-xs">{initials(p.name, p.email)}</AvatarFallback>
@@ -200,7 +200,7 @@ export function TeamBoard() {
           aria-label="Loading the team"
         >
           {Array.from({ length: 4 }, (_, i) => (
-            <Skeleton key={i} className="h-64 rounded-2xl" />
+            <Skeleton key={i} className="h-64 rounded-lg" />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -253,7 +253,7 @@ export function TeamWidget() {
     return (
       <Skeleton
         role="status"
-        className="h-32 w-full rounded-2xl"
+        className="h-32 w-full rounded-lg"
         aria-label="Loading team status"
       />
     );
@@ -274,7 +274,7 @@ export function TeamWidget() {
           const people = items.filter((i) => (i.location ?? 'none') === col.id);
           const t = TONES[col.tone];
           return (
-            <div key={col.id} className={cn('space-y-2 rounded-xl p-3', t.bg)}>
+            <div key={col.id} className={cn('space-y-2 rounded-lg p-3', t.bg)}>
               <div className={cn('flex items-center gap-1.5 text-sm font-medium', t.text)}>
                 <col.icon className="size-4" aria-hidden /> {col.label}
                 <span className="ml-auto text-xs">{people.length}</span>

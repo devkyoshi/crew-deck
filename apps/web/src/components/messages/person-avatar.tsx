@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils';
 import { useMessaging } from './store';
 
 const DOT: Record<PresenceState, string> = {
-  online: 'bg-emerald-500',
-  away: 'bg-amber-400',
-  dnd: 'bg-red-500',
+  online: 'bg-success',
+  away: 'bg-warning',
+  dnd: 'bg-danger',
   offline: 'bg-muted-foreground/50',
 };
 export const PRESENCE_LABEL: Record<PresenceState, string> = {
@@ -21,12 +21,12 @@ export const PRESENCE_LABEL: Record<PresenceState, string> = {
 
 /** A quiet colour per person, so a busy channel is easier to scan than a wall of grey circles. */
 const TINTS = [
-  'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200',
-  'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200',
-  'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200',
-  'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100',
-  'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-200',
-  'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200',
+  'bg-info-soft text-info-soft-foreground ',
+  'bg-success-soft text-success-soft-foreground ',
+  'bg-violet-soft text-violet-soft-foreground ',
+  'bg-warning-soft text-warning-soft-foreground ',
+  'bg-danger-soft text-danger-soft-foreground ',
+  'bg-success-soft text-success-soft-foreground ',
 ];
 const tintOf = (id: string) =>
   TINTS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % TINTS.length]!;
@@ -64,7 +64,7 @@ export function PersonAvatar({
     <span className={cn('relative inline-flex shrink-0', className)}>
       <Avatar size={size}>
         {person?.avatarUrl && <AvatarImage src={person.avatarUrl} alt="" />}
-        <AvatarFallback className={cn('text-[11px] font-medium', person && tintOf(person.id))}>
+        <AvatarFallback className={cn('text-xs font-medium', person && tintOf(person.id))}>
           {person ? initials(person.name, person.email) : '?'}
         </AvatarFallback>
       </Avatar>

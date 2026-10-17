@@ -29,7 +29,7 @@ export default function ItemPage({ params }: { params: Promise<{ ref: string }> 
           <ArrowLeft /> Board
         </Link>
       </Button>
-      <div className="bg-card rounded-2xl border p-6">
+      <div className="bg-card rounded-lg border p-6">
         <ItemDetail
           itemRef={itemRef}
           variant="page"

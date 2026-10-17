@@ -75,8 +75,8 @@ export default function WorkSettingsPage() {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Loading settings">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-40 w-full rounded-lg" />
       </div>
     );
   }
@@ -151,7 +151,7 @@ function HoursCard({ initial }: { initial: WorkSettingsView }) {
         <CardDescription>These apply to everyone. Times are 24-hour.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
           <div>
             <Label htmlFor="w-enabled">Check-in is on</Label>
             <p className="text-muted-foreground text-xs">
@@ -178,7 +178,7 @@ function HoursCard({ initial }: { initial: WorkSettingsView }) {
                   aria-pressed={on}
                   onClick={() => toggleDay(day)}
                   className={cn(
-                    'hover:bg-accent h-9 w-14 rounded-xl border text-sm transition-colors',
+                    'hover:bg-accent h-9 w-14 rounded-lg border text-sm transition-colors',
                     on && 'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                   )}
                 >
@@ -247,7 +247,7 @@ function HoursCard({ initial }: { initial: WorkSettingsView }) {
           {errors.timezone && <p className="text-destructive text-xs">{errors.timezone}</p>}
         </div>
 
-        <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
           <div>
             <Label htmlFor="w-note">Require a note at check-out</Label>
             <p className="text-muted-foreground text-xs">
@@ -327,7 +327,7 @@ function SitesCard() {
             description="Add your offices so people can say where they are working."
           />
         ) : (
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y rounded-lg border">
             {sites.data.items.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 p-3">
                 <div className="min-w-0">
@@ -582,7 +582,7 @@ function HolidaysCard() {
             description="Add the days your workspace is closed."
           />
         ) : (
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y rounded-lg border">
             {holidays.data.items.map((h) => (
               <li key={h.id} className="flex items-center justify-between gap-3 p-3">
                 <div>

@@ -395,7 +395,7 @@ export function BrowseChannelsDialog({
               <button
                 type="button"
                 onClick={() => go(c.id)}
-                className="focus-visible:ring-ring/50 min-w-0 flex-1 rounded text-left outline-none focus-visible:ring-2"
+                className="focus-visible:ring-ring/50 min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2"
               >
                 <span className="flex items-center gap-1 text-sm font-medium">
                   <Hash className="text-muted-foreground size-3.5" aria-hidden />

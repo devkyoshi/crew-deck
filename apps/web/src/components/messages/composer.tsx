@@ -447,7 +447,7 @@ function FileChips({ items, onRemove }: { items: UploadItem[]; onRemove: (key: s
         <li
           key={it.key}
           className={cn(
-            'bg-muted/50 relative flex w-52 items-center gap-2 rounded-md border px-2 py-1.5 text-[13px]',
+            'bg-muted/50 relative flex w-52 items-center gap-2 rounded-md border px-2 py-1.5 text-label',
             it.status === 'error' && 'border-destructive/50',
           )}
         >
@@ -483,7 +483,7 @@ function FileChips({ items, onRemove }: { items: UploadItem[]; onRemove: (key: s
               it.status === 'uploading' ? `Cancel upload of ${it.name}` : `Remove ${it.name}`
             }
             onClick={() => onRemove(it.key)}
-            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded p-0.5 outline-none focus-visible:ring-2"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm p-0.5 outline-none focus-visible:ring-2"
           >
             <X className="size-4" />
           </button>
@@ -592,7 +592,7 @@ export function Composer({
         'aria-multiline': 'true',
         'aria-label': placeholder,
         class:
-          'rich-text max-h-60 min-h-[2.5rem] overflow-y-auto px-3 py-2 text-[14px] outline-none',
+          'rich-text max-h-60 min-h-[2.5rem] overflow-y-auto px-3 py-2 text-sm outline-none',
       },
       // Pasting an image (a screenshot, say) attaches it instead of inserting nothing.
       handlePaste: (_view, event) => {

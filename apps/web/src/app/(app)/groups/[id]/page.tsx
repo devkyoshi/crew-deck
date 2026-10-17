@@ -187,7 +187,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ id: stri
           />
         </div>
       )}
-      <div className="overflow-x-auto rounded-2xl border">
+      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">

@@ -20,7 +20,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-[oklch(0.975_0.007_85/0.8)] dark:bg-page/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3.5">
           <Link href="/" className="group flex items-center gap-2.5 text-sm font-semibold tracking-tight">
-            <span className="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-xl shadow-xs transition-transform group-hover:scale-105">
+            <span className="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-lg shadow-xs transition-transform group-hover:scale-105">
               <Layers className="size-4" aria-hidden />
             </span>
             <span className="text-base font-semibold">Crew Deck</span>
@@ -34,7 +34,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Button variant="ghost" size="sm" className="hidden sm:inline-flex" asChild>
               <Link href="/workspaces">Find workspace</Link>
             </Button>
-            <Button size="sm" className="rounded-xl px-4 font-medium" asChild>
+            <Button size="sm" className="rounded-lg px-4 font-medium" asChild>
               <Link href="/signup">Start free trial</Link>
             </Button>
             <ThemeToggle />

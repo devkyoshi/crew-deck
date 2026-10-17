@@ -297,7 +297,7 @@ export function ItemDetail({
           <DropdownMenuTrigger asChild disabled={!canEdit}>
             <button
               type="button"
-              className="focus-visible:ring-ring rounded p-0.5 outline-none focus-visible:ring-2 disabled:cursor-default"
+              className="focus-visible:ring-ring rounded-sm p-0.5 outline-none focus-visible:ring-2 disabled:cursor-default"
               aria-label={`Type: ${vocab.typeLabel(item.type)}${canEdit ? '. Change type' : ''}`}
             >
               <TypeIcon type={item.type} size="md" />
@@ -766,7 +766,7 @@ function EstimateField({
               onClick={() => onChange(p)}
               aria-pressed={value === p}
               className={cn(
-                'hover:bg-accent h-6 min-w-6 rounded-full border px-1.5 text-[11px] font-semibold tabular-nums',
+                'hover:bg-accent h-6 min-w-6 rounded-full border px-1.5 text-xs font-semibold tabular-nums',
                 value === p && 'bg-primary text-primary-foreground hover:bg-primary border-transparent',
               )}
             >

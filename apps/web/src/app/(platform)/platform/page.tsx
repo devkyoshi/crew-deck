@@ -256,7 +256,7 @@ export default function PlatformTenantsPage() {
       {query.isError ? (
         <ErrorView error={query.error} reset={() => query.refetch()} />
       ) : query.isPending ? (
-        <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />
+        <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-lg" />
       ) : query.data.items.length === 0 ? (
         <EmptyState
           icon={SearchX}
@@ -265,7 +265,7 @@ export default function PlatformTenantsPage() {
         />
       ) : (
         <>
-          <div className="bg-card rounded-2xl border">
+          <div className="bg-card rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -303,8 +303,8 @@ export default function PlatformTenantsPage() {
                         className={cn(
                           'rounded-full border-transparent font-normal',
                           t.status === 'suspended'
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300'
-                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+                            ? 'bg-danger-soft text-danger-soft-foreground '
+                            : 'bg-success-soft text-success-soft-foreground ',
                         )}
                       >
                         {t.status === 'suspended' ? 'Suspended' : 'Active'}

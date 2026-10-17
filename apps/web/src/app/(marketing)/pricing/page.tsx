@@ -122,7 +122,7 @@ export default function PricingPage() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Button size="lg" className="h-11 rounded-xl px-6 font-medium shadow-sm" asChild>
+            <Button size="lg" className="h-11 rounded-lg px-6 font-medium shadow-sm" asChild>
               <Link href="/signup">
                 Start free trial <ArrowRight className="ml-1 size-4" />
               </Link>
@@ -130,7 +130,7 @@ export default function PricingPage() {
             <Button
               size="lg"
               variant="outline"
-              className="h-11 rounded-xl px-6 font-medium"
+              className="h-11 rounded-lg px-6 font-medium"
               asChild
             >
               <a href="#compare">Compare plans</a>
@@ -139,13 +139,13 @@ export default function PricingPage() {
 
           <div className="flex items-center justify-center gap-6 pt-2 text-xs text-muted-foreground font-medium">
             <span className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-emerald-600" aria-hidden /> No credit card needed
+              <Check className="size-3.5 text-success-soft-foreground" aria-hidden /> No credit card needed
             </span>
             <span className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-emerald-600" aria-hidden /> 60-second setup
+              <Check className="size-3.5 text-success-soft-foreground" aria-hidden /> 60-second setup
             </span>
             <span className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-emerald-600" aria-hidden /> 100% data isolation
+              <Check className="size-3.5 text-success-soft-foreground" aria-hidden /> 100% data isolation
             </span>
           </div>
         </div>
@@ -154,7 +154,7 @@ export default function PricingPage() {
       {/* Plans Grid */}
       <div className="mx-auto max-w-6xl px-5 space-y-20">
         {query.isPending && (
-          <Skeleton role="status" aria-label="Loading plans" className="h-96 w-full rounded-2xl" />
+          <Skeleton role="status" aria-label="Loading plans" className="h-96 w-full rounded-lg" />
         )}
         {query.isError && (
           <p role="alert" className="text-destructive text-center">
@@ -170,7 +170,7 @@ export default function PricingPage() {
                 <li
                   key={p.key}
                   className={cn(
-                    'bg-card relative flex flex-col justify-between rounded-2xl border p-7 transition-all shadow-xs',
+                    'bg-card relative flex flex-col justify-between rounded-lg border p-7 transition-all shadow-xs',
                     isTeam
                       ? 'border-primary shadow-lg ring-2 ring-primary/20 md:-translate-y-2'
                       : 'border-border/80 hover:border-border',
@@ -199,7 +199,7 @@ export default function PricingPage() {
                           {p.priceCents ? ' / person / mo' : ' forever'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {p.priceCents ? 'Billed annually or monthly' : 'Free for small teams'}
                       </p>
                     </div>
@@ -207,7 +207,7 @@ export default function PricingPage() {
                     <ul className="space-y-2.5 text-xs text-foreground/90 pt-1">
                       {(BLURB[p.key]?.points ?? []).map((pt) => (
                         <li key={pt} className="flex items-start gap-2.5">
-                          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-0.5">
+                          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-success/10 text-success-soft-foreground mt-0.5">
                             <Check className="size-2.5 font-bold" aria-hidden />
                           </span>
                           <span className="leading-snug">{pt}</span>
@@ -226,7 +226,7 @@ export default function PricingPage() {
                     <Button
                       asChild
                       variant={isTeam ? 'default' : 'outline'}
-                      className="w-full h-10 rounded-xl font-medium"
+                      className="w-full h-10 rounded-lg font-medium"
                     >
                       <Link href="/signup">
                         {p.key === 'free' ? 'Start for free' : 'Start free trial'}
@@ -254,7 +254,7 @@ export default function PricingPage() {
             {STEPS.map((s, i) => (
               <li
                 key={s.title}
-                className="bg-card rounded-2xl border border-border/70 p-6 shadow-xs flex flex-col justify-between gap-4 transition-all hover:border-primary/40 hover:shadow-sm"
+                className="bg-card rounded-lg border border-border/70 p-6 shadow-xs flex flex-col justify-between gap-4 transition-all hover:border-primary/40 hover:shadow-sm"
               >
                 <div className="flex items-center justify-between">
                   <JiraSpotIcon icon={s.icon} color={s.color} />
@@ -283,7 +283,7 @@ export default function PricingPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs p-4 sm:p-6">
+            <div className="rounded-lg border border-border/80 bg-card overflow-hidden shadow-xs p-4 sm:p-6">
               <PlanComparison plans={query.data.plans} />
             </div>
 
@@ -309,7 +309,7 @@ export default function PricingPage() {
             {FAQ.map((f) => (
               <details
                 key={f.q}
-                className="bg-card group rounded-xl border border-border/70 px-5 py-4 transition-colors hover:border-border open:border-primary/40 open:bg-card/90"
+                className="bg-card group rounded-lg border border-border/70 px-5 py-4 transition-colors hover:border-border open:border-primary/40 open:bg-card/90"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-sm text-foreground">
                   <span>{f.q}</span>
@@ -325,9 +325,9 @@ export default function PricingPage() {
         </section>
 
         {/* Bottom Call to Action Card */}
-        <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-b from-primary/10 via-primary/5 to-card p-8 sm:p-12 text-center shadow-xs">
+        <section className="relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-b from-primary/10 via-primary/5 to-card p-8 sm:p-12 text-center shadow-xs">
           <div className="mx-auto max-w-xl space-y-4">
-            <div className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <div className="inline-flex size-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Layers className="size-6" aria-hidden />
             </div>
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -337,7 +337,7 @@ export default function PricingPage() {
               Create your workspace in under a minute. Zero credit card required, 14-day full Business trial.
             </p>
             <div className="pt-2">
-              <Button size="lg" className="h-11 rounded-xl px-8 font-medium shadow-sm" asChild>
+              <Button size="lg" className="h-11 rounded-lg px-8 font-medium shadow-sm" asChild>
                 <Link href="/signup">
                   Start free trial <ArrowRight className="ml-1 size-4" />
                 </Link>

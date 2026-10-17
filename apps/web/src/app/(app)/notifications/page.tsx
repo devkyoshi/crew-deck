@@ -85,7 +85,7 @@ function Inbox({ unreadOnly }: { unreadOnly: boolean }) {
           description="New assignments, mentions and comments show up here."
         />
       ) : (
-        <ul className="bg-card divide-y overflow-hidden rounded-xl border">
+        <ul className="bg-card divide-y overflow-hidden rounded-lg border">
           {items.map((n) => (
             <NotificationRow
               key={n.id}
@@ -125,7 +125,7 @@ function Settings() {
     );
   return (
     <div className="space-y-3">
-      <div className="bg-card flex items-center justify-between gap-4 rounded-xl border p-3 text-sm">
+      <div className="bg-card flex items-center justify-between gap-4 rounded-lg border p-3 text-sm">
         <div>
           <p className="font-medium">Daily summary</p>
           <p className="text-muted-foreground text-xs">
@@ -147,7 +147,7 @@ function Settings() {
         desktop={prefs.data.desktop}
         save={(body) => save.mutate(body, { onError: () => toast.error('Could not save that') })}
       />
-      <div className="bg-card overflow-x-auto rounded-xl border">
+      <div className="bg-card overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <caption className="text-muted-foreground p-3 text-left text-xs">
             {prefs.data.digest
@@ -231,7 +231,7 @@ function MessagingSettings({
     save({ desktop: true });
   };
   return (
-    <div className="bg-card divide-y rounded-xl border text-sm">
+    <div className="bg-card divide-y rounded-lg border text-sm">
       <div className="flex items-center justify-between gap-4 p-3">
         <div>
           <p className="font-medium">Desktop notifications</p>

@@ -169,7 +169,7 @@ function ListInner({ type, bare }: { type: CrmRecordType; bare: boolean }) {
       ) : query.isPending ? (
         <div role="status" aria-label="Loading" className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-xl" />
+            <Skeleton key={i} className="h-12 w-full rounded-lg" />
           ))}
         </div>
       ) : query.data.items.length === 0 ? (
@@ -192,7 +192,7 @@ function ListInner({ type, bare }: { type: CrmRecordType; bare: boolean }) {
         )
       ) : (
         <>
-          <div className="bg-card rounded-2xl border">
+          <div className="bg-card rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>

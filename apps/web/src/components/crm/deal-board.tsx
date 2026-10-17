@@ -82,7 +82,7 @@ function CardBody({
     deal.expectedClose < new Date().toISOString().slice(0, 10);
   return (
     <div
-      className="bg-card flex items-start gap-1 rounded-xl border p-3 shadow-xs"
+      className="bg-card flex items-start gap-1 rounded-lg border p-3 shadow-xs"
       data-testid="deal-card"
     >
       {handle}
@@ -100,7 +100,7 @@ function CardBody({
             <span
               className={cn(
                 'text-xs',
-                overdue ? 'font-medium text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
+                overdue ? 'font-medium text-danger-soft-foreground ' : 'text-muted-foreground',
               )}
             >
               {overdue ? 'Overdue · ' : ''}
@@ -175,7 +175,7 @@ function SortableCard({
             <button
               type="button"
               aria-label={`Drag ${deal.title}`}
-              className="text-muted-foreground hover:text-foreground -ml-1 mt-0.5 cursor-grab touch-none rounded p-0.5"
+              className="text-muted-foreground hover:text-foreground -ml-1 mt-0.5 cursor-grab touch-none rounded-sm p-0.5"
               {...attributes}
               {...listeners}
             >
@@ -274,7 +274,7 @@ function Column({
     <section
       aria-label={`${col.name}, ${col.count} deals`}
       className={cn(
-        'bg-muted/50 flex w-72 shrink-0 flex-col rounded-2xl p-2',
+        'bg-muted/50 flex w-72 shrink-0 flex-col rounded-lg p-2',
         isOver && 'ring-primary ring-2',
       )}
     >
@@ -387,7 +387,7 @@ function BoardView({ params }: { params: Record<string, string | undefined> }) {
     return (
       <div role="status" aria-label="Loading board" className="flex gap-3 overflow-hidden">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-72 w-72 shrink-0 rounded-2xl" />
+          <Skeleton key={i} className="h-72 w-72 shrink-0 rounded-lg" />
         ))}
       </div>
     );
@@ -559,7 +559,7 @@ function DealsInner() {
             </SelectContent>
           </Select>
         )}
-        <div role="group" aria-label="View" className="ml-auto flex rounded-xl border p-0.5">
+        <div role="group" aria-label="View" className="ml-auto flex rounded-lg border p-0.5">
           {(
             [
               ['board', 'Board', KanbanSquare],

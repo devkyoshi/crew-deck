@@ -199,7 +199,7 @@ export function ItemPicker({
                   onChange(null);
                 }
               }}
-              className="hover:bg-accent rounded p-0.5"
+              className="hover:bg-accent rounded-sm p-0.5"
             >
               <X className="size-3.5" aria-hidden />
             </span>

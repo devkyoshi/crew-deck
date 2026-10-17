@@ -53,7 +53,7 @@ function OptionPicker({
           <span className="flex min-w-0 flex-wrap gap-1">
             {value.length ? (
               value.map((v) => (
-                <span key={v.id} className="bg-muted rounded px-1.5 py-0.5 text-xs">
+                <span key={v.id} className="bg-muted rounded-sm px-1.5 py-0.5 text-xs">
                   {v.name}
                 </span>
               ))

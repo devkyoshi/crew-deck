@@ -47,7 +47,7 @@ export default function ActivityPage() {
           <ArrowLeft />
         </Button>
         <AtSign className="text-muted-foreground size-5" aria-hidden />
-        <h1 className="text-[15px] font-semibold">Mentions and reactions</h1>
+        <h1 className="text-heading font-semibold">Mentions and reactions</h1>
       </header>
       {activity.isLoading || !hydrated ? (
         <MessageSkeletons />
@@ -93,7 +93,7 @@ export default function ActivityPage() {
                     )}{' '}
                     <span className="font-medium">{where(a.channel)}</span>
                   </span>
-                  <span className="text-muted-foreground line-clamp-2 block text-[13px]">
+                  <span className="text-muted-foreground line-clamp-2 block text-label">
                     {a.message.bodyText}
                   </span>
                   <time dateTime={a.at} className="text-muted-foreground text-xs">

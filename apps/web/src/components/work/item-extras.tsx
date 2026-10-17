@@ -69,7 +69,7 @@ export function BlockedNotice({ item }: { item: WorkItem }) {
   return (
     <p
       role="note"
-      className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-900 dark:bg-red-500/10 dark:text-red-200"
+      className="flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-sm text-danger-soft-foreground "
     >
       <Ban className="mt-0.5 size-4 shrink-0" aria-hidden />
       <span>

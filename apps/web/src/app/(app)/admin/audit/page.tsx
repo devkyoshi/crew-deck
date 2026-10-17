@@ -189,7 +189,7 @@ export default function AuditLogPage() {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border">
+        <div className="overflow-x-auto rounded-lg border">
           <Table aria-busy={query.isFetching}>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -271,7 +271,7 @@ export default function AuditLogPage() {
                                   </pre>
                                 </div>
                               </div>
-                              <div className="text-muted-foreground mt-2 font-mono text-[11px]">
+                              <div className="text-muted-foreground mt-2 font-mono text-xs">
                                 {e.targetType} {e.targetId}
                               </div>
                             </TableCell>

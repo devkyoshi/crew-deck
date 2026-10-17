@@ -361,7 +361,7 @@ function SignUpWizard() {
                     <button
                       key={ex}
                       type="button"
-                      className="border-border hover:border-primary/50 hover:bg-muted rounded-full border px-2.5 py-1 text-[11px] transition-colors"
+                      className="border-border hover:border-primary/50 hover:bg-muted rounded-full border px-2.5 py-1 text-xs transition-colors"
                       onClick={() => {
                         clear('company');
                         w.set({ company: ex, slug: suggest(ex), slugTouched: false });
@@ -387,7 +387,7 @@ function SignUpWizard() {
                       </>
                     ) : a.slug && slugValid(a.slug) && check.data?.available ? (
                       <>
-                        <CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />
+                        <CheckCircle2 className="size-3.5 text-success-soft-foreground" aria-hidden />
                         {a.slug}.{domain} is available
                       </>
                     ) : (
@@ -508,7 +508,7 @@ function SignUpWizard() {
                 onEdit={() => w.go('usage')}
               />
             </FieldGroup>
-            <p className="text-muted-foreground flex items-start gap-2.5 text-[13px] leading-relaxed">
+            <p className="text-muted-foreground flex items-start gap-2.5 text-label leading-relaxed">
               <Sparkles className="text-primary mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
                 You start with a <strong className="text-foreground">{trial}-day Business trial</strong>, no
@@ -584,7 +584,7 @@ function ReviewRow({ label, value, onEdit }: { label: string; value: string; onE
         <button
           type="button"
           onClick={onEdit}
-          className="text-primary shrink-0 rounded p-1"
+          className="text-primary shrink-0 rounded-sm p-1"
           aria-label={`Change ${label.toLowerCase()}`}
         >
           <Pencil className="size-3.5" aria-hidden />

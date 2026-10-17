@@ -15,7 +15,7 @@ export function passwordScore(pw: string) {
 }
 
 const LABELS = ['', 'Too short or too simple', 'Okay', 'Good', 'Strong'];
-const BARS = ['', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-emerald-600'];
+const BARS = ['', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 
 export function PasswordStrength({ password }: { password: string }) {
   const score = password.length < MIN_PASSWORD && password ? 1 : passwordScore(password);

@@ -19,7 +19,7 @@ export function CheckinControl() {
     return (
       <Skeleton
         role="status"
-        className="h-9 w-28 rounded-xl"
+        className="h-9 w-28 rounded-lg"
         aria-label="Loading check-in status"
       />
     );
@@ -56,7 +56,7 @@ export function CheckinControl() {
         >
           {t.status === 'checked_in' && (
             <span
-              className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-neutral-900"
+              className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-success ring-2 ring-white "
               aria-hidden
             />
           )}

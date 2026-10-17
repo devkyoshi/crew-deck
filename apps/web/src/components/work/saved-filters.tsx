@@ -70,7 +70,7 @@ export function SavedFilters({
                 <button
                   type="button"
                   aria-label={`Delete ${f.name}`}
-                  className="text-muted-foreground hover:text-destructive rounded p-0.5"
+                  className="text-muted-foreground hover:text-destructive rounded-sm p-0.5"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

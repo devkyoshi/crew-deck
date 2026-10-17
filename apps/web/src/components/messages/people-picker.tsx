@@ -58,7 +58,7 @@ export function PeoplePicker({
           {value.map((m) => (
             <li
               key={m.id}
-              className="bg-secondary flex items-center gap-1.5 rounded-full py-0.5 pr-1 pl-0.5 text-[13px]"
+              className="bg-secondary flex items-center gap-1.5 rounded-full py-0.5 pr-1 pl-0.5 text-label"
             >
               <PersonAvatar person={asPerson(m)} size="sm" presence={false} />
               <span className="max-w-32 truncate">{m.name ?? m.email}</span>

@@ -231,7 +231,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           onMouseDown={(e) => e.preventDefault()}
           onClick={t.run}
           className={cn(
-            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring rounded p-1.5 outline-none focus-visible:ring-2',
+            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring rounded-sm p-1.5 outline-none focus-visible:ring-2',
             state[t.key] && 'bg-accent text-foreground',
           )}
         >

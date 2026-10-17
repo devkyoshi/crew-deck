@@ -332,7 +332,7 @@ export function ListView({ ticketsOnly = false }: { ticketsOnly?: boolean } = {}
           }
         />
       ) : (
-        <div ref={scrollRef} className="bg-card max-h-[70vh] overflow-auto rounded-xl border">
+        <div ref={scrollRef} className="bg-card max-h-[70vh] overflow-auto rounded-lg border">
           <table className="w-full text-sm">
             <caption className="sr-only">
               {vocab.Noun} list, {vocab.count(total)}

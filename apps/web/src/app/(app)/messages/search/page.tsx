@@ -40,12 +40,12 @@ const hrefOf = (h: SearchHit) =>
 
 function Snippet({ parts }: { parts: SearchHit['snippet'] }) {
   return (
-    <p className="text-[14px] leading-snug break-words">
+    <p className="text-sm leading-snug break-words">
       {parts.map((p, i) =>
         p.match ? (
           <mark
             key={i}
-            className="bg-amber-200/80 text-foreground rounded px-0.5 dark:bg-amber-400/30"
+            className="bg-warning/80 text-foreground rounded-sm px-0.5 "
           >
             {p.text}
           </mark>
@@ -67,7 +67,7 @@ function Chip({
       type="button"
       aria-pressed={active}
       className={cn(
-        'focus-visible:ring-ring/50 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13px] outline-none focus-visible:ring-[3px]',
+        'focus-visible:ring-ring/50 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-label outline-none focus-visible:ring-[3px]',
         active ? 'border-primary/50 bg-primary/10 text-primary' : 'hover:bg-muted',
         className,
       )}
@@ -101,7 +101,7 @@ function PickPerson({ onPick }: { onPick: (token: string) => void }) {
               <button
                 type="button"
                 onClick={() => onPick(`from:${(m.email.split('@')[0] ?? m.id).toLowerCase()}`)}
-                className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
+                className="hover:bg-muted flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
               >
                 <PersonAvatar person={m} size="sm" presence={false} /> {m.name ?? m.email}
               </button>
@@ -130,7 +130,7 @@ function PickChannel({ onPick }: { onPick: (token: string) => void }) {
               <button
                 type="button"
                 onClick={() => onPick(`in:#${c.name}`)}
-                className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
+                className="hover:bg-muted flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
               >
                 <Hash className="text-muted-foreground size-3.5" aria-hidden /> {c.name}
               </button>
@@ -356,8 +356,8 @@ function SearchView() {
           <div className="space-y-4 p-4" aria-hidden>
             {[70, 50, 80].map((w) => (
               <div key={w} className="space-y-2">
-                <div className="bg-muted h-3 w-40 animate-pulse rounded" />
-                <div className="bg-muted h-3 animate-pulse rounded" style={{ width: `${w}%` }} />
+                <div className="bg-muted h-3 w-40 animate-pulse rounded-sm" />
+                <div className="bg-muted h-3 animate-pulse rounded-sm" style={{ width: `${w}%` }} />
               </div>
             ))}
           </div>

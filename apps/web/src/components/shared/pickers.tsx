@@ -14,7 +14,7 @@ export function PersonLabel({ person }: { person: PickedPerson }) {
     <span className="flex min-w-0 items-center gap-2">
       <Avatar className="size-5">
         {person.avatarUrl && <AvatarImage src={person.avatarUrl} alt="" />}
-        <AvatarFallback className="text-[9px]">
+        <AvatarFallback className="text-xs">
           {initials(person.name, person.email)}
         </AvatarFallback>
       </Avatar>
@@ -26,7 +26,7 @@ export function PersonLabel({ person }: { person: PickedPerson }) {
 export function GroupLabel({ group }: { group: PickedGroup }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className="bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 flex size-5 items-center justify-center rounded-full">
+      <span className="bg-violet-soft text-violet-soft-foreground flex size-5 items-center justify-center rounded-full">
         <Users className="size-3" aria-hidden />
       </span>
       <span className="truncate">{group.name}</span>

@@ -122,7 +122,7 @@ export function Showcase() {
                 count={count}
                 action={<Plus className="text-muted-foreground size-4" />}
               />
-              <div className="bg-card space-y-3 rounded-2xl border p-4">
+              <div className="bg-card space-y-3 rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <Chip icon={CalendarClock}>Due: 5 Dec, 2026</Chip>
                   <MoreHorizontal className="text-muted-foreground size-4" />

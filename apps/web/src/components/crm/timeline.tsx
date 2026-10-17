@@ -89,7 +89,7 @@ export function ActivityRow({
   });
   const mayDelete = canEdit && (a.assigneeId === me.user.id || access?.canAdmin);
   return (
-    <li className="flex items-start gap-3 rounded-xl border p-3">
+    <li className="flex items-start gap-3 rounded-lg border p-3">
       <Checkbox
         checked={!!a.completedAt}
         disabled={!canEdit || toggle.isPending}
@@ -106,7 +106,7 @@ export function ActivityRow({
         <p
           className={cn(
             'text-xs',
-            overdue ? 'font-medium text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
+            overdue ? 'font-medium text-danger-soft-foreground ' : 'text-muted-foreground',
           )}
         >
           {dueLabel(a)}
@@ -177,7 +177,7 @@ export function ActivityForm({
   });
   return (
     <form
-      className="bg-muted/40 grid gap-3 rounded-2xl p-3 sm:grid-cols-2"
+      className="bg-muted/40 grid gap-3 rounded-lg p-3 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (!subject.trim()) return setError('Enter a subject');
@@ -298,7 +298,7 @@ function NotesPanel({
         </form>
       )}
       {notes.isPending ? (
-        <Skeleton role="status" aria-label="Loading notes" className="h-20 w-full rounded-xl" />
+        <Skeleton role="status" aria-label="Loading notes" className="h-20 w-full rounded-lg" />
       ) : notes.data?.items.length === 0 ? (
         <EmptyState
           icon={MessageSquarePlus}
@@ -308,7 +308,7 @@ function NotesPanel({
       ) : (
         <ul className="space-y-2">
           {notes.data?.items.map((n) => (
-            <li key={n.id} className="rounded-xl border p-3">
+            <li key={n.id} className="rounded-lg border p-3">
               <p className="whitespace-pre-wrap">{n.body}</p>
               <p className="text-muted-foreground mt-1 flex items-center justify-between text-xs">
                 <span>
@@ -363,7 +363,7 @@ export function Timeline({
           <Skeleton
             role="status"
             aria-label="Loading activity"
-            className="h-20 w-full rounded-xl"
+            className="h-20 w-full rounded-lg"
           />
         ) : acts.data?.items.length === 0 ? (
           <EmptyState

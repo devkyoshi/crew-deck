@@ -79,8 +79,8 @@ export default function MyDayPage() {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Loading your day">
         <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-lg" />
+        <Skeleton className="h-48 w-full rounded-lg" />
       </div>
     );
   }
@@ -183,7 +183,7 @@ export default function MyDayPage() {
                 aria-busy="true"
               >
                 {Array.from({ length: 7 }, (_, i) => (
-                  <Skeleton key={i} className="h-28 rounded-xl" />
+                  <Skeleton key={i} className="h-28 rounded-lg" />
                 ))}
               </div>
             ) : week.isError ? (
@@ -207,7 +207,7 @@ export default function MyDayPage() {
                     <li
                       key={d.date}
                       className={cn(
-                        'space-y-2 rounded-xl border p-2.5 text-xs',
+                        'space-y-2 rounded-lg border p-2.5 text-xs',
                         isToday && 'border-primary ring-primary/30 ring-2',
                         !d.isWorkday && 'bg-muted/50',
                       )}
@@ -295,7 +295,7 @@ export default function MyDayPage() {
               description="Your check-ins will show up here."
             />
           ) : (
-            <div className="overflow-x-auto rounded-2xl border">
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">

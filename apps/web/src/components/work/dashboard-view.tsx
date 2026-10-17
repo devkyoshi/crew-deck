@@ -149,7 +149,7 @@ export function DashboardView() {
           <section
             key={g.id}
             aria-label={TYPES.find((t) => t.type === g.type)?.label}
-            className="bg-card space-y-3 rounded-xl border p-4"
+            className="bg-card space-y-3 rounded-lg border p-4"
           >
             <div className="flex items-center gap-1">
               <h2 className="font-semibold">{TYPES.find((t) => t.type === g.type)?.label}</h2>
@@ -332,7 +332,7 @@ function VersionsGadget({ space }: { space: string | null }) {
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium">{v.name}</span>
             {v.overdue && (
-              <span className="rounded-full bg-red-100 px-1.5 text-[11px] font-medium text-red-900 dark:bg-red-500/15 dark:text-red-200">
+              <span className="rounded-full bg-danger-soft px-1.5 text-xs font-medium text-danger-soft-foreground ">
                 Overdue
               </span>
             )}
@@ -385,7 +385,7 @@ function FlowGadget({ space }: { space: string | null }) {
               y={46 - (r.created / max) * 44}
               width={4.5}
               height={(r.created / max) * 44}
-              className="fill-amber-400 stroke-amber-600 dark:fill-amber-500"
+              className="fill-warning stroke-warning "
               strokeWidth={0.3}
             />
             <rect
@@ -393,7 +393,7 @@ function FlowGadget({ space }: { space: string | null }) {
               y={46 - (r.resolved / max) * 44}
               width={4.5}
               height={(r.resolved / max) * 44}
-              className="fill-emerald-500 stroke-emerald-600"
+              className="fill-success stroke-success"
               strokeWidth={0.3}
             />
           </g>
@@ -402,14 +402,14 @@ function FlowGadget({ space }: { space: string | null }) {
       <p className="text-muted-foreground flex flex-wrap gap-x-4 text-xs">
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="inline-block size-2.5 border border-amber-600 bg-amber-400"
+            className="inline-block size-2.5 border border-warning bg-warning"
             aria-hidden
           />{' '}
           Created {created}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="inline-block size-2.5 border border-emerald-600 bg-emerald-500"
+            className="inline-block size-2.5 border border-success bg-success"
             aria-hidden
           />{' '}
           Resolved {resolved}

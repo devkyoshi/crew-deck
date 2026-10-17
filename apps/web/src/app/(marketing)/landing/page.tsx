@@ -51,31 +51,31 @@ function Reveal({
 type Tone = 'blue' | 'orange' | 'pink' | 'green';
 const TONE: Record<Tone, { head: string; dot: string; count: string }> = {
   blue: {
-    head: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
-    dot: 'bg-blue-500',
-    count: 'bg-blue-100 text-blue-700 dark:bg-blue-500/25 dark:text-blue-200',
+    head: 'bg-info-soft text-info-soft-foreground ',
+    dot: 'bg-info',
+    count: 'bg-info-soft text-info-soft-foreground ',
   },
   orange: {
-    head: 'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
-    dot: 'bg-orange-500',
-    count: 'bg-orange-100 text-orange-700 dark:bg-orange-500/25 dark:text-orange-200',
+    head: 'bg-orange-soft text-orange-soft-foreground ',
+    dot: 'bg-orange',
+    count: 'bg-orange-soft text-orange-soft-foreground ',
   },
   pink: {
-    head: 'bg-pink-50 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300',
-    dot: 'bg-pink-500',
-    count: 'bg-pink-100 text-pink-700 dark:bg-pink-500/25 dark:text-pink-200',
+    head: 'bg-violet-soft text-violet-soft-foreground ',
+    dot: 'bg-violet',
+    count: 'bg-violet-soft text-violet-soft-foreground ',
   },
   green: {
-    head: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-    dot: 'bg-emerald-500',
-    count: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-200',
+    head: 'bg-success-soft text-success-soft-foreground ',
+    dot: 'bg-success',
+    count: 'bg-success-soft text-success-soft-foreground ',
   },
 };
 
 const PRIORITY = {
-  High: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300',
-  Medium: 'bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300',
-  Low: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
+  High: 'bg-danger-soft text-danger-soft-foreground ',
+  Medium: 'bg-orange-soft text-orange-soft-foreground ',
+  Low: 'bg-info-soft text-info-soft-foreground ',
 } as const;
 
 interface Ticket {
@@ -129,10 +129,10 @@ const COLUMNS: { name: string; tone: Tone; count: number; tickets: Ticket[] }[] 
 ];
 
 const AVATAR = [
-  'bg-sky-200 text-sky-800',
-  'bg-amber-200 text-amber-800',
-  'bg-emerald-200 text-emerald-800',
-  'bg-violet-200 text-violet-800',
+  'bg-info-soft text-info-soft-foreground',
+  'bg-warning-soft text-warning-soft-foreground',
+  'bg-success-soft text-success-soft-foreground',
+  'bg-violet-soft text-violet-soft-foreground',
 ];
 
 function Avatars({ people }: { people: string[] }) {
@@ -142,7 +142,7 @@ function Avatars({ people }: { people: string[] }) {
         <span
           key={p}
           className={cn(
-            'ring-card flex size-5 items-center justify-center rounded-full text-[8px] font-bold ring-2',
+            'ring-card flex size-5 items-center justify-center rounded-full text-xs font-bold ring-2',
             AVATAR[(p.charCodeAt(0) + i) % AVATAR.length],
           )}
         >
@@ -156,14 +156,14 @@ function Avatars({ people }: { people: string[] }) {
 function TicketCard({ t, finished }: { t: Ticket; finished: boolean }) {
   const pct = Math.round((t.done / t.total) * 100);
   return (
-    <div className="border-border/70 bg-card rounded-xl border p-3 shadow-xs transition-shadow hover:shadow-md">
-      <div className="text-muted-foreground flex items-center justify-between text-[10px]">
+    <div className="border-border/70 bg-card rounded-lg border p-3 shadow-xs transition-shadow hover:shadow-md">
+      <div className="text-muted-foreground flex items-center justify-between text-xs">
         <span className="bg-muted rounded-md px-1.5 py-0.5 font-medium">Due {t.due}</span>
         <span className="font-mono">{t.id}</span>
       </div>
-      <p className="text-foreground mt-2 text-[13px] leading-snug font-semibold">{t.title}</p>
+      <p className="text-foreground mt-2 text-label leading-snug font-semibold">{t.title}</p>
       <div className="mt-2.5">
-        <div className="text-muted-foreground mb-1 flex justify-between text-[10px]">
+        <div className="text-muted-foreground mb-1 flex justify-between text-xs">
           <span>Milestone</span>
           <span>
             {t.done}/{t.total}
@@ -171,7 +171,7 @@ function TicketCard({ t, finished }: { t: Ticket; finished: boolean }) {
         </div>
         <div className="bg-muted h-1 overflow-hidden rounded-full">
           <div
-            className={cn('h-full rounded-full', finished ? 'bg-emerald-500' : 'bg-primary')}
+            className={cn('h-full rounded-full', finished ? 'bg-success' : 'bg-primary')}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -179,11 +179,11 @@ function TicketCard({ t, finished }: { t: Ticket; finished: boolean }) {
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Avatars people={t.people} />
-          <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold', PRIORITY[t.priority])}>
+          <span className={cn('rounded-md px-1.5 py-0.5 text-xs font-semibold', PRIORITY[t.priority])}>
             {t.priority}
           </span>
         </div>
-        <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <span className="flex items-center gap-0.5">
             <Link2 className="size-3" aria-hidden /> {t.links}
           </span>
@@ -216,7 +216,7 @@ function Board() {
             <span className="flex items-center gap-2">
               <span className={cn('size-1.5 rounded-full', TONE[c.tone].dot)} />
               {c.name}
-              <span className={cn('rounded-full px-1.5 py-px text-[10px]', TONE[c.tone].count)}>
+              <span className={cn('rounded-full px-1.5 py-px text-xs', TONE[c.tone].count)}>
                 {c.count}
               </span>
             </span>
@@ -241,23 +241,23 @@ type TabId = (typeof TABS)[number]['id'];
 function Showcase() {
   const [tab, setTab] = useState<TabId>('board');
   return (
-    <div className="border-border/70 bg-card rounded-2xl border p-4 shadow-xl shadow-slate-900/5 sm:p-6 dark:shadow-none">
+    <div className="border-border/70 bg-card rounded-lg border p-4 shadow-xl shadow-slate-900/5 sm:p-6 dark:shadow-none">
       <div className="border-border/60 mb-5 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
-          <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-xl text-sm font-bold">
+          <span className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-lg text-sm font-bold">
             AE
           </span>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold">Acme Engineering</h3>
-              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success-soft-foreground ">
                 Active sprint
               </span>
             </div>
             <p className="text-muted-foreground text-xs">acme.crewdeck.app</p>
           </div>
         </div>
-        <div role="tablist" aria-label="Product views" className="bg-muted/70 inline-flex rounded-xl p-1">
+        <div role="tablist" aria-label="Product views" className="bg-muted/70 inline-flex rounded-lg p-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -313,10 +313,10 @@ function Showcase() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {[
                 ['Leads', '24 active', '8 new this week', ''],
-                ['Deals in flight', '$148,000', '+18% vs last month', 'text-emerald-600'],
+                ['Deals in flight', '$148,000', '+18% vs last month', 'text-success-soft-foreground'],
                 ['Win rate', '68%', 'Across 32 closed deals', ''],
               ].map(([k, v, s, c]) => (
-                <div key={k} className="bg-muted/40 border-border/50 rounded-xl border p-4">
+                <div key={k} className="bg-muted/40 border-border/50 rounded-lg border p-4">
                   <span className="text-muted-foreground text-xs font-semibold uppercase">{k}</span>
                   <p className="mt-1 text-2xl font-bold">{v}</p>
                   <p className={cn('text-muted-foreground mt-0.5 text-xs', c && `${c} font-medium`)}>{s}</p>
@@ -335,7 +335,7 @@ function HeroSlabs() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-6 -bottom-6 -z-10">
       <div className="absolute inset-x-4 top-8 bottom-0 rotate-[-1.2deg] rounded-[2rem] bg-primary/90 sm:inset-x-10" />
-      <div className="absolute inset-x-8 top-2 bottom-4 rotate-[1.4deg] rounded-[2rem] bg-amber-300 dark:bg-amber-500/80 sm:inset-x-16" />
+      <div className="absolute inset-x-8 top-2 bottom-4 rotate-[1.4deg] rounded-[2rem] bg-warning sm:inset-x-16" />
     </div>
   );
 }
@@ -378,7 +378,7 @@ export default function LandingPage() {
           >
             Where great teams plan,
             <br />
-            <span className="from-primary bg-linear-to-r to-blue-500 bg-clip-text text-transparent">
+            <span className="from-primary bg-linear-to-r to-info bg-clip-text text-transparent">
               track and ship together.
             </span>
           </motion.h1>
@@ -397,19 +397,19 @@ export default function LandingPage() {
             transition={{ delay: 0.15 }}
             className="flex flex-wrap items-center justify-center gap-3 pt-2"
           >
-            <Button size="lg" className="h-12 rounded-xl px-7 text-sm font-semibold shadow-md" asChild>
+            <Button size="lg" className="h-12 rounded-lg px-7 text-sm font-semibold shadow-md" asChild>
               <Link href="/signup">
                 Start free trial <ArrowRight className="ml-1.5 size-4" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="h-12 rounded-xl px-7 text-sm font-semibold" asChild>
+            <Button size="lg" variant="outline" className="h-12 rounded-lg px-7 text-sm font-semibold" asChild>
               <Link href="/pricing">View pricing</Link>
             </Button>
           </motion.div>
           <div className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium">
             {['14-day Business trial', 'No credit card needed', 'Your own company address'].map((t) => (
               <span key={t} className="flex items-center gap-1.5">
-                <Check className="size-3.5 text-emerald-600" aria-hidden /> {t}
+                <Check className="size-3.5 text-success-soft-foreground" aria-hidden /> {t}
               </span>
             ))}
           </div>
@@ -434,11 +434,11 @@ export default function LandingPage() {
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.06}>
-              <div className="bg-card border-border/70 hover:border-primary/40 h-full space-y-4 rounded-2xl border p-6 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md">
+              <div className="bg-card border-border/70 hover:border-primary/40 h-full space-y-4 rounded-lg border p-6 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <JiraSpotIcon icon={f.icon} color={f.color} />
                 <div>
                   <h3 className="text-base font-bold">{f.title}</h3>
-                  <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">{f.body}</p>
+                  <p className="text-muted-foreground mt-1.5 text-label leading-relaxed">{f.body}</p>
                 </div>
               </div>
             </Reveal>
@@ -448,7 +448,7 @@ export default function LandingPage() {
 
       {/* Setup */}
       <section className="mx-auto max-w-5xl px-5">
-        <Reveal className="bg-muted/40 border-border/70 rounded-3xl border p-8 sm:p-12">
+        <Reveal className="bg-muted/40 border-border/70 rounded-lg border p-8 sm:p-12">
           <div className="mx-auto mb-10 max-w-2xl space-y-3 text-center">
             <span className="text-primary text-xs font-semibold tracking-wider uppercase">Simple setup</span>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -460,12 +460,12 @@ export default function LandingPage() {
           </div>
           <ol className="grid gap-5 sm:grid-cols-3">
             {STEPS.map((s, i) => (
-              <li key={s.t} className="bg-card border-border/70 space-y-3 rounded-2xl border p-6 shadow-xs">
+              <li key={s.t} className="bg-card border-border/70 space-y-3 rounded-lg border p-6 shadow-xs">
                 <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-full text-xs font-bold">
                   {i + 1}
                 </span>
                 <h3 className="text-sm font-bold">{s.t}</h3>
-                <p className="text-muted-foreground text-[13px] leading-relaxed">{s.d}</p>
+                <p className="text-muted-foreground text-label leading-relaxed">{s.d}</p>
               </li>
             ))}
           </ol>
@@ -474,8 +474,8 @@ export default function LandingPage() {
 
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-5">
-        <Reveal className="relative overflow-hidden rounded-3xl bg-primary px-8 py-14 text-center text-primary-foreground sm:px-14 sm:py-20">
-          <div aria-hidden className="absolute -top-16 -right-10 size-64 rounded-full bg-amber-300/90" />
+        <Reveal className="relative overflow-hidden rounded-lg bg-primary px-8 py-14 text-center text-primary-foreground sm:px-14 sm:py-20">
+          <div aria-hidden className="absolute -top-16 -right-10 size-64 rounded-full bg-warning/90" />
           <div aria-hidden className="absolute -bottom-24 -left-10 size-72 rounded-full bg-white/10" />
           <div className="relative mx-auto max-w-2xl space-y-5">
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
@@ -485,7 +485,7 @@ export default function LandingPage() {
               Join teams moving from bloated enterprise software to something focused and light.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <Button size="lg" variant="secondary" className="h-12 rounded-xl px-8 font-semibold" asChild>
+              <Button size="lg" variant="secondary" className="h-12 rounded-lg px-8 font-semibold" asChild>
                 <Link href="/signup">
                   Start free trial <ArrowRight className="ml-1.5 size-4" />
                 </Link>
@@ -493,7 +493,7 @@ export default function LandingPage() {
               <Button
                 size="lg"
                 variant="ghost"
-                className="h-12 rounded-xl px-7 font-semibold text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
+                className="h-12 rounded-lg px-7 font-semibold text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
                 asChild
               >
                 <Link href="/workspaces">Find my workspace</Link>

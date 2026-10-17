@@ -41,7 +41,7 @@ async function createInvite() {
 test('password sign-in lands on the shell, and sign-out returns to sign-in', async ({ page }) => {
   await signIn(page);
   await expect(page.getByRole('heading', { name: /Hello, Alice/ })).toBeVisible();
-  await expect(page.getByText('Administration')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Administration' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();

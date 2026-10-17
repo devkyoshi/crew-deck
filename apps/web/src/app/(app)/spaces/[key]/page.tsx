@@ -66,7 +66,7 @@ export default function SpaceOverviewPage() {
             ) : (
               <>
                 <AvatarStack names={people.map((p) => p.name ?? p.email ?? '?')} max={8} />
-                <ul className="divide-y rounded-xl border">
+                <ul className="divide-y rounded-lg border">
                   {space.members.map((m) => (
                     <li
                       key={`${m.type}:${m.id}`}
@@ -76,12 +76,12 @@ export default function SpaceOverviewPage() {
                         {m.type === 'user' ? (
                           <Avatar className="size-6">
                             {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
-                            <AvatarFallback className="text-[10px]">
+                            <AvatarFallback className="text-xs">
                               {initials(m.name, m.email ?? '?')}
                             </AvatarFallback>
                           </Avatar>
                         ) : (
-                          <span className="bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300 flex size-6 items-center justify-center rounded-full">
+                          <span className="bg-violet-soft text-violet-soft-foreground flex size-6 items-center justify-center rounded-full">
                             <Users className="size-3.5" aria-hidden />
                           </span>
                         )}

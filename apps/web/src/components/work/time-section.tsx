@@ -117,7 +117,7 @@ export function TimeSection({
             {time.remaining !== null && ` · ${formatDuration(time.remaining)} remaining`}
             {time.original !== null && ` · ${formatDuration(time.original)} planned`}
             {planned !== null && time.spent > planned && (
-              <span className="ml-1 font-medium text-amber-700 dark:text-amber-300">
+              <span className="ml-1 font-medium text-warning-soft-foreground ">
                 {' '}
                 · over the plan
               </span>

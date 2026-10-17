@@ -21,7 +21,7 @@ function CodeBlock({ code, language }: { code: string; language: string | null }
   return (
     <div className="group/code bg-muted relative my-1 rounded-md border">
       {language && (
-        <span className="text-muted-foreground absolute top-1 left-2 text-[10px] uppercase">
+        <span className="text-muted-foreground absolute top-1 left-2 text-xs uppercase">
           {language}
         </span>
       )}
@@ -34,11 +34,11 @@ function CodeBlock({ code, language }: { code: string; language: string | null }
             setTimeout(() => setCopied(false), 1500);
           });
         }}
-        className="text-muted-foreground hover:text-foreground bg-background/80 absolute top-1 right-1 rounded p-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
+        className="text-muted-foreground hover:text-foreground bg-background/80 absolute top-1 right-1 rounded-sm p-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
       >
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </button>
-      <pre className={cn('overflow-x-auto p-3 text-[13px] leading-5', language && 'pt-5')}>
+      <pre className={cn('overflow-x-auto p-3 text-label leading-5', language && 'pt-5')}>
         <code>{code}</code>
       </pre>
     </div>
@@ -55,7 +55,7 @@ function renderText(n: Node, key: number): ReactNode {
     else if (m.type === 'strike') out = <s>{out}</s>;
     else if (m.type === 'underline') out = <u>{out}</u>;
     else if (m.type === 'code')
-      out = <code className="bg-muted rounded px-1 py-0.5 text-[0.9em]">{out}</code>;
+      out = <code className="bg-muted rounded-sm px-1 py-0.5 text-[0.9em]">{out}</code>;
     else if (m.type === 'link' && typeof m.attrs?.href === 'string') {
       out = (
         <a
@@ -87,7 +87,7 @@ function renderNode(n: Node, key: number): ReactNode {
       );
     case 'mention':
       return (
-        <span key={key} className="mention bg-primary/10 text-primary rounded px-1 font-medium">
+        <span key={key} className="mention bg-primary/10 text-primary rounded-sm px-1 font-medium">
           @{String(n.attrs?.label ?? 'someone')}
         </span>
       );
@@ -140,7 +140,7 @@ export function RichContent({ doc, className }: { doc: unknown; className?: stri
   return (
     <div
       className={cn(
-        'space-y-1 text-[14px] leading-[1.45] break-words [overflow-wrap:anywhere]',
+        'space-y-1 text-sm leading-[1.45] break-words [overflow-wrap:anywhere]',
         className,
       )}
     >

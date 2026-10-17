@@ -111,7 +111,7 @@ export default function NewWorkspacePage() {
         </div>
       )}
       <form onSubmit={create} noValidate className="space-y-8">
-        <section className="bg-card space-y-4 rounded-2xl border p-5">
+        <section className="bg-card space-y-4 rounded-lg border p-5">
           <h2 className="font-semibold">Name and address</h2>
           <Field label="Workspace name" htmlFor="ws-company" error={errors.company} shakeKey={shakeKey}>
             <Input
@@ -136,7 +136,7 @@ export default function NewWorkspacePage() {
                   </>
                 ) : slug && slugValid(slug) && check.data?.available ? (
                   <>
-                    <CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />
+                    <CheckCircle2 className="size-3.5 text-success-soft-foreground" aria-hidden />
                     {slug}.{domain} is available
                   </>
                 ) : (

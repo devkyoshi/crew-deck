@@ -348,6 +348,16 @@ usage implies) and the columns new spaces start with. Usage options that are not
 - A test lists every route as it is registered and fails if one has no authentication pre-handler, apart
   from a short list of routes that are public by design.
 
+## ADR-092: One token system, a six-step type scale, and a rail + panel shell
+
+The web app's look is defined in one place, `apps/web/src/app/globals.css`, and components use tokens only.
+
+- **Type:** Inter variable (with the optical-size axis) and Geist Mono for ids. Six steps: `text-xs` 12/16 (captions, never smaller), `text-label` 13/18, `text-sm` 14/22 (body), `text-heading` 15/22, `text-title` 18/26, `text-display` 24/30. No arbitrary `text-[Npx]`.
+- **Colour:** cool slate neutrals plus one accent (`--primary`, still overridable per workspace). Status and tag colours are semantic tones (`success`, `warning`, `danger`, `info`, `violet`, `orange`), each with `soft` and `soft-foreground` variants authored for light and dark together. Raw palette classes such as `bg-emerald-100` are not used.
+- **Shape and depth:** radius 6 / 8 / 12 / 20 (chips / controls / cards / main panel); shadows `xs`, `sm`, `pop`.
+- **Motion:** two curves, three durations (120 / 200 / 320 ms). Shared helpers in `components/shared/motion.tsx`; shared-layout indicators for the rail and tab underlines; everything collapses under reduced motion. The route transition is a 120 ms fade, not a slide.
+- **Shell:** a 64 px module rail (Home, Messages, Spaces, CRM, Administration; account controls at the bottom) plus a contextual panel showing the active module's nav (`MODULES` / `moduleForPath` in `components/shell/nav.ts`). The shadcn sidebar primitives and their `data-sidebar` hooks are kept so tests and keyboard shortcuts (`Ctrl B`, `Ctrl K`) are unchanged.
+
 ## ADR-091: The load test is a script with agreed targets, and the gateway scales out
 
 - `test/load/realtime-load.ts` starts real gateway processes against a throwaway database and drives them with real WebSocket clients; it reports delivery and acknowledgement times and counts of lost, duplicated and cross-workspace messages, and exits non-zero when a target is missed (zero lost, duplicated or leaked; p95 750 ms, p99 2000 ms, acknowledgement p95 500 ms, all proposals to confirm). A small run is part of CI. Capacity is stated per process (about 18,000 deliveries a second) and the answer past it is more instances: the gateway holds no state of its own and the Redis adapter joins them, which the two-process run confirmed. `GET /realtime/metrics` (loopback only, never through the proxy) gives what an operator needs to decide.

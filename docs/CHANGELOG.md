@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-16 - UI rework: design system, shell and calendar
+
+- **Design system:** new colour, type, radius, shadow and motion tokens (light and dark), Inter variable plus Geist Mono, and a six-step type scale. Every off-scale text size and hard-coded palette colour in the app moved onto the tokens. ADR-092.
+- **Shell:** a module rail plus a contextual panel with the workspace switcher and search, a floating main panel, and a slimmer top bar. Account, notifications and theme moved to the rail on desktop.
+- **Components:** restyled buttons, inputs, selects, tabs (with an underline variant), badges, cards, dialogs and menus; new `Pill`, `PropertyRow`, `StatCard`, `AvatarGroup`, `Kbd` and motion helpers; shimmer skeletons.
+- **Calendar:** rebuilt as a scheduler with Week and Month views, filter tabs with counts, summary cards (next release, due today, overdue) and a sliding period change. Items and releases only carry a date, so the week view shows them per day rather than on an hour grid.
+
 ## 2026-10-16 - Messaging, phase M6: hardening
 
 - **Load test** (`pnpm --filter @crew-deck/api load:realtime`, and a small run in CI): thousands of sockets across several workspaces, checking that every message arrives exactly once, never in another workspace, and fast. 6,000 people across 8 workspaces on two gateways: 24,000 deliveries a second, p99 276 ms, nothing lost. Details and targets in `docs/messaging/LOAD-TEST.md`.

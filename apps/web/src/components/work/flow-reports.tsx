@@ -52,9 +52,9 @@ const short = (d: string) =>
 
 // Series colours: a sequential blue-green ramp with different lightness, plus a label or pattern in every legend.
 const COLOR = {
-  todo: 'fill-slate-400 stroke-slate-500 dark:fill-slate-500',
-  in_progress: 'fill-sky-500 stroke-sky-600 dark:fill-sky-400',
-  done: 'fill-emerald-500 stroke-emerald-600 dark:fill-emerald-400',
+  todo: 'fill-muted-foreground stroke-muted-foreground ',
+  in_progress: 'fill-info stroke-info ',
+  done: 'fill-success stroke-success ',
 };
 
 /** Flow reports for the space: velocity (Scrum), cumulative flow, created against resolved, cycle time. */
@@ -162,7 +162,7 @@ function Section({
 }) {
   const id = `fr-${title.replace(/\W+/g, '-').toLowerCase()}`;
   return (
-    <section aria-labelledby={id} className="bg-card space-y-3 rounded-xl border p-4">
+    <section aria-labelledby={id} className="bg-card space-y-3 rounded-lg border p-4">
       <div>
         <h2 id={id} className="font-semibold">
           {title}
@@ -202,7 +202,7 @@ function Axes({ max, labels, every }: { max: number; labels: string[]; every: nu
             x={pad.l - 6}
             y={y(t) + 4}
             textAnchor="end"
-            className="fill-muted-foreground text-[10px]"
+            className="fill-muted-foreground text-xs"
           >
             {t}
           </text>
@@ -215,7 +215,7 @@ function Axes({ max, labels, every }: { max: number; labels: string[]; every: nu
             x={x(i)}
             y={H - 8}
             textAnchor="middle"
-            className="fill-muted-foreground text-[10px]"
+            className="fill-muted-foreground text-xs"
           >
             {l}
           </text>
@@ -312,7 +312,7 @@ function VelocityChart({ rows }: { rows: NonNullable<FlowData['velocity']> }) {
                 y={y(r.committed)}
                 width={bar}
                 height={H - pad.b - y(r.committed)}
-                className="fill-slate-300 stroke-slate-500 dark:fill-slate-600"
+                className="fill-muted-foreground stroke-muted-foreground "
                 strokeWidth={1}
               />
               <rect
@@ -327,7 +327,7 @@ function VelocityChart({ rows }: { rows: NonNullable<FlowData['velocity']> }) {
                 x={cx}
                 y={H - 8}
                 textAnchor="middle"
-                className="fill-muted-foreground text-[10px]"
+                className="fill-muted-foreground text-xs"
               >
                 {r.name.length > 14 ? `${r.name.slice(0, 13)}…` : r.name}
               </text>
@@ -341,7 +341,7 @@ function VelocityChart({ rows }: { rows: NonNullable<FlowData['velocity']> }) {
             label: 'Planned',
             swatch: (
               <span
-                className="inline-block size-3 border border-slate-500 bg-slate-300 dark:bg-slate-600"
+                className="inline-block size-3 border border-border bg-muted "
                 aria-hidden
               />
             ),
@@ -350,7 +350,7 @@ function VelocityChart({ rows }: { rows: NonNullable<FlowData['velocity']> }) {
             label: 'Finished',
             swatch: (
               <span
-                className="inline-block size-3 border border-emerald-600 bg-emerald-500"
+                className="inline-block size-3 border border-success bg-success"
                 aria-hidden
               />
             ),
@@ -433,7 +433,7 @@ function FlowChart({ rows }: { rows: FlowData['flow'] }) {
             label: 'To do',
             swatch: (
               <span
-                className="inline-block size-3 border border-slate-500 bg-slate-400"
+                className="inline-block size-3 border border-border bg-muted-foreground/40"
                 aria-hidden
               />
             ),
@@ -441,14 +441,14 @@ function FlowChart({ rows }: { rows: FlowData['flow'] }) {
           {
             label: 'In progress',
             swatch: (
-              <span className="inline-block size-3 border border-sky-600 bg-sky-500" aria-hidden />
+              <span className="inline-block size-3 border border-info bg-info" aria-hidden />
             ),
           },
           {
             label: 'Done',
             swatch: (
               <span
-                className="inline-block size-3 border border-emerald-600 bg-emerald-500"
+                className="inline-block size-3 border border-success bg-success"
                 aria-hidden
               />
             ),
@@ -493,7 +493,7 @@ function ThroughputChart({ rows }: { rows: FlowData['throughput'] }) {
                 y={y(r.created)}
                 width={bar}
                 height={H - pad.b - y(r.created)}
-                className="fill-amber-400 stroke-amber-600 dark:fill-amber-500"
+                className="fill-warning stroke-warning "
                 strokeWidth={0.5}
               />
               <rect
@@ -514,7 +514,7 @@ function ThroughputChart({ rows }: { rows: FlowData['throughput'] }) {
             label: `Created (${totalCreated})`,
             swatch: (
               <span
-                className="inline-block size-3 border border-amber-600 bg-amber-400"
+                className="inline-block size-3 border border-warning bg-warning"
                 aria-hidden
               />
             ),
@@ -523,7 +523,7 @@ function ThroughputChart({ rows }: { rows: FlowData['throughput'] }) {
             label: `Resolved (${totalResolved})`,
             swatch: (
               <span
-                className="inline-block size-3 border border-emerald-600 bg-emerald-500"
+                className="inline-block size-3 border border-success bg-success"
                 aria-hidden
               />
             ),
@@ -583,7 +583,7 @@ function CycleChart({ cycle }: { cycle: FlowData['cycle'] }) {
             x2={W - pad.r}
             y1={y(s.p85)}
             y2={y(s.p85)}
-            className="stroke-amber-500"
+            className="stroke-warning"
             strokeWidth={1}
             strokeDasharray="4 3"
           />
@@ -595,7 +595,7 @@ function CycleChart({ cycle }: { cycle: FlowData['cycle'] }) {
             cx={x(i)}
             cy={y(p.days)}
             r={3.5}
-            className="fill-sky-500 stroke-background"
+            className="fill-info stroke-background"
             strokeWidth={1}
           >
             <title>{`${p.key} ${p.title}: ${p.days} days`}</title>
@@ -606,7 +606,7 @@ function CycleChart({ cycle }: { cycle: FlowData['cycle'] }) {
         items={[
           {
             label: 'A finished card',
-            swatch: <span className="inline-block size-2.5 rounded-full bg-sky-500" aria-hidden />,
+            swatch: <span className="inline-block size-2.5 rounded-full bg-info" aria-hidden />,
           },
           {
             label: 'Rolling average of 5',
@@ -616,7 +616,7 @@ function CycleChart({ cycle }: { cycle: FlowData['cycle'] }) {
             label: '85% line',
             swatch: (
               <span
-                className="inline-block w-5 border-t border-dashed border-amber-500"
+                className="inline-block w-5 border-t border-dashed border-warning"
                 aria-hidden
               />
             ),

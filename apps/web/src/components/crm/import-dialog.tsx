@@ -256,12 +256,12 @@ export function ImportDialog({ type }: { type: ImportType }) {
             <p className="flex items-center gap-2 text-sm" role="status">
               {result.errorCount === 0 ? (
                 <>
-                  <CheckCircle2 className="size-4 text-emerald-600" aria-hidden /> All{' '}
+                  <CheckCircle2 className="size-4 text-success-soft-foreground" aria-hidden /> All{' '}
                   {result.total} rows are valid.
                 </>
               ) : (
                 <>
-                  <TriangleAlert className="size-4 text-amber-600" aria-hidden />{' '}
+                  <TriangleAlert className="size-4 text-warning-soft-foreground" aria-hidden />{' '}
                   {result.errorCount} problem{result.errorCount === 1 ? '' : 's'} found in{' '}
                   {result.total - result.validRows} of {result.total} rows. Fix the file and upload
                   it again.
@@ -269,7 +269,7 @@ export function ImportDialog({ type }: { type: ImportType }) {
               )}
             </p>
             {result.errors.length > 0 && (
-              <div className="max-h-52 overflow-auto rounded-xl border">
+              <div className="max-h-52 overflow-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -291,7 +291,7 @@ export function ImportDialog({ type }: { type: ImportType }) {
               </div>
             )}
             {result.errorCount === 0 && result.preview.length > 0 && (
-              <div className="max-h-52 overflow-auto rounded-xl border">
+              <div className="max-h-52 overflow-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -329,7 +329,7 @@ export function ImportDialog({ type }: { type: ImportType }) {
 
         {step === 3 && result && (
           <div className="space-y-3 text-center" role="status">
-            <CheckCircle2 className="mx-auto size-10 text-emerald-600" aria-hidden />
+            <CheckCircle2 className="mx-auto size-10 text-success-soft-foreground" aria-hidden />
             <p className="font-medium">
               Imported {result.created} {type}
             </p>

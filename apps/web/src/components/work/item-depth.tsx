@@ -402,13 +402,13 @@ export const AttachmentsSection = forwardRef<AttachmentsHandle, { item: WorkItem
                 <button
                   type="button"
                   onClick={() => setPreview({ url: a.url, name: a.name })}
-                  className="bg-muted size-12 shrink-0 overflow-hidden rounded"
+                  className="bg-muted size-12 shrink-0 overflow-hidden rounded-sm"
                   aria-label={`Preview ${a.name}`}
                 >
                   <img src={a.url} alt="" className="size-full object-cover" />
                 </button>
               ) : (
-                <span className="bg-muted text-muted-foreground flex size-12 shrink-0 items-center justify-center rounded">
+                <span className="bg-muted text-muted-foreground flex size-12 shrink-0 items-center justify-center rounded-sm">
                   <FileText className="size-5" aria-hidden />
                 </span>
               )}
@@ -439,7 +439,7 @@ export const AttachmentsSection = forwardRef<AttachmentsHandle, { item: WorkItem
           ))}
           {uploads.map((u) => (
             <li key={u.id} className="flex items-center gap-3 rounded-lg border border-dashed p-2">
-              <span className="bg-muted text-muted-foreground flex size-12 shrink-0 items-center justify-center rounded">
+              <span className="bg-muted text-muted-foreground flex size-12 shrink-0 items-center justify-center rounded-sm">
                 <ImageIcon className="size-5" aria-hidden />
               </span>
               <div className="min-w-0 flex-1 space-y-1">
@@ -456,7 +456,7 @@ export const AttachmentsSection = forwardRef<AttachmentsHandle, { item: WorkItem
             <DialogTitle className="truncate">{preview?.name}</DialogTitle>
           </DialogHeader>
           {preview && (
-            <img src={preview.url} alt={preview.name} className="max-h-[75vh] w-full rounded object-contain" />
+            <img src={preview.url} alt={preview.name} className="max-h-[75vh] w-full rounded-sm object-contain" />
           )}
         </DialogContent>
       </Dialog>

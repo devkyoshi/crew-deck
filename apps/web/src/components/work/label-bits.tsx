@@ -26,7 +26,7 @@ export function LabelChip({
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-[11px] leading-none font-medium',
+        'inline-flex max-w-full items-center rounded-sm px-1.5 py-0.5 text-xs leading-none font-medium',
         LABEL_CHIP[label.color] ?? LABEL_CHIP.slate,
         className,
       )}
@@ -47,7 +47,7 @@ export function LabelChips({ labels, max = 2 }: { labels: Pick<Label, 'id' | 'na
         <LabelChip key={l.id} label={l} className="max-w-[7rem]" />
       ))}
       {rest > 0 && (
-        <span className="text-muted-foreground text-[11px] font-medium" title={labels.slice(max).map((l) => l.name).join(', ')}>
+        <span className="text-muted-foreground text-xs font-medium" title={labels.slice(max).map((l) => l.name).join(', ')}>
           +{rest}
           <span className="sr-only"> more labels</span>
         </span>

@@ -95,9 +95,9 @@ export function MessageSkeletons() {
         <div key={i} className="flex gap-3">
           <div className="bg-muted size-8 shrink-0 animate-pulse rounded-full" />
           <div className="flex-1 space-y-2">
-            <div className="bg-muted h-3 w-32 animate-pulse rounded" />
-            <div className="bg-muted h-3 animate-pulse rounded" style={{ width: `${w}%` }} />
-            {i % 2 === 0 && <div className="bg-muted h-3 w-1/3 animate-pulse rounded" />}
+            <div className="bg-muted h-3 w-32 animate-pulse rounded-sm" />
+            <div className="bg-muted h-3 animate-pulse rounded-sm" style={{ width: `${w}%` }} />
+            {i % 2 === 0 && <div className="bg-muted h-3 w-1/3 animate-pulse rounded-sm" />}
           </div>
         </div>
       ))}

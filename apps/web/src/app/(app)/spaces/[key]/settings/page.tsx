@@ -198,7 +198,7 @@ export default function SpaceSettingsPage() {
                       disabled={archived}
                       onClick={() => setValue('icon', name, { shouldDirty: true })}
                       className={cn(
-                        'hover:bg-accent flex size-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-50',
+                        'hover:bg-accent flex size-10 items-center justify-center rounded-lg border transition-colors disabled:opacity-50',
                         on &&
                           'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                       )}
@@ -255,7 +255,7 @@ export default function SpaceSettingsPage() {
                 disabled={archived}
                 onClick={() => setVisibility(o.id)}
                 className={cn(
-                  'hover:bg-accent/60 space-y-1.5 rounded-2xl border p-4 text-left transition-colors disabled:opacity-50',
+                  'hover:bg-accent/60 space-y-1.5 rounded-lg border p-4 text-left transition-colors disabled:opacity-50',
                   visibility === o.id && 'border-primary bg-accent ring-primary/30 ring-2',
                 )}
               >

@@ -51,7 +51,7 @@ export function SprintReports() {
         </Select>
       </div>
 
-      <section aria-labelledby="burndown-title" className="bg-card space-y-3 rounded-xl border p-4">
+      <section aria-labelledby="burndown-title" className="bg-card space-y-3 rounded-lg border p-4">
         <h2 id="burndown-title" className="font-semibold">
           Burndown
         </h2>
@@ -112,14 +112,14 @@ function BurndownChart({ data }: { data: Burndown }) {
         {ticks.map((t) => (
           <g key={t}>
             <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} className="stroke-border" strokeWidth={1} />
-            <text x={pad.l - 6} y={y(t) + 4} textAnchor="end" className="fill-muted-foreground text-[10px]">
+            <text x={pad.l - 6} y={y(t) + 4} textAnchor="end" className="fill-muted-foreground text-xs">
               {t}
             </text>
           </g>
         ))}
         {days.map((d, i) =>
           i % every === 0 || i === days.length - 1 ? (
-            <text key={d} x={x(i)} y={H - 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+            <text key={d} x={x(i)} y={H - 8} textAnchor="middle" className="fill-muted-foreground text-xs">
               {short(d)}
             </text>
           ) : null,
@@ -133,7 +133,7 @@ function BurndownChart({ data }: { data: Burndown }) {
           const at = days.indexOf(c.date);
           return at < 0 ? null : (
             <g key={i}>
-              <line x1={x(at)} x2={x(at)} y1={pad.t} y2={H - pad.b} className="stroke-amber-500" strokeWidth={1} strokeDasharray="2 3" />
+              <line x1={x(at)} x2={x(at)} y1={pad.t} y2={H - pad.b} className="stroke-warning" strokeWidth={1} strokeDasharray="2 3" />
             </g>
           );
         })}
@@ -146,7 +146,7 @@ function BurndownChart({ data }: { data: Burndown }) {
           <span className="border-muted-foreground inline-block w-5 border-t border-dashed" aria-hidden /> Ideal
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-3 border-l border-dashed border-amber-500" aria-hidden /> Scope change
+          <span className="inline-block h-3 border-l border-dashed border-warning" aria-hidden /> Scope change
         </span>
       </div>
       <details>

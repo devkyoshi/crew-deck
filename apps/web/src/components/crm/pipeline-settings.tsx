@@ -66,7 +66,7 @@ function StageRow({
       patch.mutate({ name: name.trim(), probability: p });
   };
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-xl border p-2">
+    <li className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
       <div className="flex">
         <Button
           variant="ghost"
@@ -111,8 +111,8 @@ function StageRow({
       <span
         className={cn(
           'rounded-full px-2 py-0.5 text-xs',
-          stage.isWon && 'bg-emerald-100 text-emerald-800',
-          stage.isLost && 'bg-rose-100 text-rose-800',
+          stage.isWon && 'bg-success-soft text-success-soft-foreground',
+          stage.isLost && 'bg-danger-soft text-danger-soft-foreground',
           !stage.isWon && !stage.isLost && 'bg-secondary',
         )}
       >
@@ -158,7 +158,7 @@ function PipelineCard({ pipeline, onChanged }: { pipeline: Pipeline; onChanged: 
   return (
     <section
       aria-labelledby={`pl-${pipeline.id}`}
-      className="bg-card space-y-3 rounded-2xl border p-4"
+      className="bg-card space-y-3 rounded-lg border p-4"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 id={`pl-${pipeline.id}`} className="font-semibold">
@@ -240,14 +240,14 @@ export function PipelineSettings() {
   });
 
   if (!hydrated || access.isPending)
-    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-2xl" />;
+    return <Skeleton role="status" aria-label="Loading" className="h-64 w-full rounded-lg" />;
   if (access.isError) return <ErrorView error={access.error} reset={() => access.refetch()} />;
 
   if (!enabled)
     return (
       <div className="max-w-3xl space-y-4">
         <PageHeader title="Pipelines" description="Shape your sales pipelines and their stages." />
-        <section className="bg-card rounded-2xl border p-5 text-sm">
+        <section className="bg-card rounded-lg border p-5 text-sm">
           <p className="font-medium">The CRM is switched off for this workspace.</p>
           <p className="text-muted-foreground mt-1">
             Tick “Track leads and deals” in{' '}
@@ -269,7 +269,7 @@ export function PipelineSettings() {
             <Skeleton
               role="status"
               aria-label="Loading pipelines"
-              className="h-48 w-full rounded-2xl"
+              className="h-48 w-full rounded-lg"
             />
           )}
           {pipelines.isError && (

@@ -201,7 +201,7 @@ export function CreateSpaceWizard() {
                       aria-label={name}
                       onClick={() => setValue('icon', name)}
                       className={cn(
-                        'hover:bg-accent flex size-10 items-center justify-center rounded-xl border transition-colors',
+                        'hover:bg-accent flex size-10 items-center justify-center rounded-lg border transition-colors',
                         on &&
                           'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
                       )}
@@ -279,7 +279,7 @@ export function CreateSpaceWizard() {
 
         {step === 3 && (
           <>
-            <div className="bg-muted/50 flex items-center justify-between rounded-xl p-3 text-sm">
+            <div className="bg-muted/50 flex items-center justify-between rounded-lg p-3 text-sm">
               <PersonLabel
                 person={{
                   id: me.user.id,
@@ -306,7 +306,7 @@ export function CreateSpaceWizard() {
             {(others.length > 0 || groupsSel.length > 0) && (
               <div className="space-y-2">
                 <Label>Roles</Label>
-                <ul className="divide-y rounded-xl border">
+                <ul className="divide-y rounded-lg border">
                   {others.map((p) => (
                     <li
                       key={p.id}

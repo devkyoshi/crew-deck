@@ -31,7 +31,7 @@ export function SpaceIcon({
   return (
     <span
       className={cn(
-        'flex size-10 shrink-0 items-center justify-center rounded-xl',
+        'flex size-10 shrink-0 items-center justify-center rounded-lg',
         TONES[toneFor(spaceKey)].pill,
         className,
       )}
@@ -112,7 +112,7 @@ export function StarButton({
         toggle.mutate();
       }}
     >
-      <Star className={cn(starred && 'fill-amber-400 text-amber-500')} />
+      <Star className={cn(starred && 'fill-warning text-warning-soft-foreground')} />
     </Button>
   );
 }

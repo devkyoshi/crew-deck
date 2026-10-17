@@ -88,7 +88,7 @@ function EpicRowView({ epic, spaceKey }: { epic: EpicRow; spaceKey: string }) {
   const { total, done, points, donePoints } = epic.progress;
   const pct = total ? Math.round((done / total) * 100) : 0;
   return (
-    <li className="bg-card rounded-xl border">
+    <li className="bg-card rounded-lg border">
       <div className="flex flex-wrap items-center gap-3 p-3">
         <Button
           variant="ghost"

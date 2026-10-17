@@ -4,7 +4,8 @@ import { use, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Archive, LayoutGrid } from 'lucide-react';
+import { Archive, LayoutGrid } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import type { SpaceFeature } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
@@ -123,18 +124,12 @@ export default function SpaceLayout({
   return (
     <SpaceProvider value={space}>
       <div className={cn('space-y-6', chatHere && chat.open && 'xl:mr-[400px]')}>
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link href="/spaces">
-            <ArrowLeft /> Spaces
-          </Link>
-        </Button>
-
         <header className="space-y-4">
           <div className="flex flex-wrap items-center gap-4">
-            <SpaceIcon icon={space.icon} spaceKey={space.key} className="size-12 rounded-2xl" />
+            <SpaceIcon icon={space.icon} spaceKey={space.key} className="size-12 rounded-lg" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-semibold tracking-tight">{space.name}</h1>
+                <h1 className="text-display truncate">{space.name}</h1>
                 <KeyChip spaceKey={space.key} />
                 <VisibilityPill visibility={space.visibility} />
                 {space.status === 'archived' && <ArchivedPill />}
@@ -159,7 +154,7 @@ export default function SpaceLayout({
           </div>
 
           {space.status === 'archived' && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning-soft p-3 text-sm text-warning-soft-foreground ">
               <span className="flex items-center gap-2">
                 <Archive className="size-4" aria-hidden /> This space is archived and read-only.
               </span>
@@ -177,7 +172,7 @@ export default function SpaceLayout({
           )}
 
           <nav aria-label="Space sections" className="border-b">
-            <ul className="-mb-px flex gap-1">
+            <ul className="-mb-px flex gap-6 overflow-x-auto">
               {tabs.map((t) => {
                 const active = t.href === base ? pathname === base : pathname.startsWith(t.href);
                 return (
@@ -186,11 +181,18 @@ export default function SpaceLayout({
                       href={t.href}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
-                        'text-muted-foreground hover:text-foreground inline-block border-b-2 border-transparent px-3 py-2 text-sm font-medium',
-                        active && 'border-primary text-foreground',
+                        'text-muted-foreground hover:text-foreground relative inline-block py-2.5 text-label font-medium whitespace-nowrap transition-colors duration-150',
+                        active && 'text-foreground',
                       )}
                     >
                       {t.label}
+                      {active && (
+                        <motion.span
+                          layoutId="space-tab-underline"
+                          className="bg-foreground absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                          transition={{ type: 'spring', stiffness: 500, damping: 42 }}
+                        />
+                      )}
                     </Link>
                   </li>
                 );
