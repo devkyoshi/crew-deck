@@ -33,18 +33,18 @@ function SpaceLink({ spaceKey, name, icon }: { spaceKey: string; name: string; i
         </Link>
       </SidebarMenuSubButton>
       {active && (
-        <ul className="border-sidebar-border mt-0.5 mb-1 ml-4 space-y-0.5 border-l pl-2 text-xs">
+        <ul className="border-sidebar-border mt-0.5 mb-1 ml-5 space-y-0.5 border-l pl-2 text-xs">
           {[
-            { to: href, label: 'Overview' },
             { to: `${href}/board`, label: 'Board' },
+            { to: `${href}/list`, label: 'List' },
           ].map((l) => {
-            const on = l.to === href ? pathname === href : pathname.startsWith(l.to) || pathname.startsWith(`${href}/items`) && l.label === 'Board';
+            const on = pathname.startsWith(l.to) || (pathname.startsWith(`${href}/items`) && l.label === 'Board');
             return (
               <li key={l.to}>
                 <Link
                   href={l.to}
                   aria-current={on ? 'page' : undefined}
-                  className={`hover:bg-sidebar-accent block rounded-sm px-2 py-1 ${on ? 'text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80'}`}
+                  className={`hover:bg-sidebar-accent block rounded-md px-2.5 py-1 ${on ? 'text-sidebar-accent-foreground font-medium' : 'text-sidebar-foreground/80'}`}
                 >
                   {l.label}
                 </Link>
@@ -117,7 +117,7 @@ export function SpacesNav() {
       <div className="group-data-[collapsible=icon]:hidden">
         {starredItems.length > 0 && (
           <>
-            <SidebarGroupLabel className="mt-1.5 h-6 gap-1.5">
+            <SidebarGroupLabel className="mt-2 h-6 gap-1.5 px-2.5">
               <Star className="size-3" aria-hidden /> Starred
             </SidebarGroupLabel>
             <SidebarMenuSub className="mx-2 mt-0">
@@ -129,7 +129,7 @@ export function SpacesNav() {
         )}
         {recentItems.length > 0 && (
           <>
-            <SidebarGroupLabel className="mt-1.5 h-6 gap-1.5">
+            <SidebarGroupLabel className="mt-2 h-6 gap-1.5 px-2.5">
               <Clock className="size-3" aria-hidden /> Recent
             </SidebarGroupLabel>
             <SidebarMenuSub className="mx-2 mt-0">

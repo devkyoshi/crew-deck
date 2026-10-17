@@ -26,8 +26,8 @@ export function NotificationBell({ side = 'right' }: { side?: 'right' | 'bottom'
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-muted-foreground relative size-11 rounded-xl" aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}>
-          <Bell className="size-[22px]" strokeWidth={1.5} />
+        <Button variant="ghost" size="icon" className="text-muted-foreground relative size-9 rounded-lg" aria-label={count ? `Notifications, ${count} unread` : 'Notifications'}>
+          <Bell className="size-5" strokeWidth={1.5} />
           {count > 0 && (
             <span className="bg-danger text-white absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-xs leading-4 font-semibold tabular-nums">
               {count > 99 ? '99+' : count}

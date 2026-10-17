@@ -11,7 +11,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { CheckinControl } from '@/components/checkin/checkin-control';
@@ -38,35 +37,36 @@ function useCrumbs() {
 export function Topbar() {
   const crumbs = useCrumbs();
   return (
-    <header className="bg-background/90 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-sm md:rounded-t-xl">
-      <SidebarTrigger aria-label="Toggle sidebar" />
-      <Separator orientation="vertical" className="mr-1 h-5" />
-      <Breadcrumb className="min-w-0 flex-1">
-        <BreadcrumbList className="flex-nowrap">
-          {crumbs.map((c, i) => (
-            <Fragment key={c.href}>
-              {i > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem className="min-w-0">
-                {i === crumbs.length - 1 ? (
-                  <BreadcrumbPage className="truncate">{c.label}</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink asChild>
-                    <Link href={c.href}>{c.label}</Link>
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </Fragment>
-          ))}
-        </BreadcrumbList>
-      </Breadcrumb>
-      <CheckinControl />
-      <SpaceSwitcher />
-      <CommandPalette />
-      {/* On desktop these live in the rail; the rail is hidden below md. */}
-      <div className="flex items-center gap-1 md:hidden">
+    <header className="bg-background z-10 shrink-0 border-b px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-12 w-full max-w-7xl items-center gap-1.5">
+        <SidebarTrigger aria-label="Toggle sidebar" />
+        <Breadcrumb className="min-w-0 flex-1">
+          <BreadcrumbList className="flex-nowrap text-sm">
+            {crumbs.map((c, i) => (
+              <Fragment key={c.href}>
+                {i > 0 && <BreadcrumbSeparator />}
+                <BreadcrumbItem className="min-w-0">
+                  {i === crumbs.length - 1 ? (
+                    <BreadcrumbPage className="truncate">{c.label}</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink asChild>
+                      <Link href={c.href}>{c.label}</Link>
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            ))}
+          </BreadcrumbList>
+        </Breadcrumb>
+        <CheckinControl />
+        <SpaceSwitcher />
+        <CommandPalette />
         <NotificationBell side="bottom" />
-        <ThemeToggle />
-        <UserMenu side="bottom" />
+        {/* Theme and account live in the rail on desktop; the rail is hidden below md. */}
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <UserMenu side="bottom" />
+        </div>
       </div>
     </header>
   );

@@ -262,7 +262,7 @@ export function TeamWidget() {
   return (
     <Card className="gap-4 p-4 shadow-none">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Who is where today</h2>
+        <h2 className="text-heading">Who is where today</h2>
         <Button variant="ghost" size="sm" asChild>
           <Link href="/team">
             Team board <ArrowRight />
@@ -274,10 +274,13 @@ export function TeamWidget() {
           const people = items.filter((i) => (i.location ?? 'none') === col.id);
           const t = TONES[col.tone];
           return (
-            <div key={col.id} className={cn('space-y-2 rounded-lg p-3', t.bg)}>
-              <div className={cn('flex items-center gap-1.5 text-sm font-medium', t.text)}>
-                <col.icon className="size-4" aria-hidden /> {col.label}
-                <span className="ml-auto text-xs">{people.length}</span>
+            <div key={col.id} className="space-y-3 rounded-xl border p-3.5">
+              <div className="flex items-center gap-2.5 text-sm font-medium">
+                <span className={cn('flex size-8 items-center justify-center rounded-lg', t.bg, t.text)}>
+                  <col.icon className="size-4" strokeWidth={1.5} aria-hidden />
+                </span>
+                {col.label}
+                <span className="text-muted-foreground tnum ml-auto text-sm">{people.length}</span>
               </div>
               {people.length > 0 ? (
                 <AvatarStack names={people.map((p) => p.name ?? p.email)} max={5} />

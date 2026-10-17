@@ -5,7 +5,7 @@
 
 /*
  * Design tokens.
- *  - Cool slate neutrals (hue 255), one violet-indigo accent (--primary, overridable per tenant).
+ *  - Cool slate neutrals (hue 255), one near-black slate accent (--primary, overridable per tenant).
  *  - Semantic tones (success / warning / danger / info / violet / orange) each come as solid, soft and soft-foreground.
  *  - The page canvas is grey; content sits on one large white panel.
  */
@@ -192,25 +192,36 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
+  --radius-frame: 1.5rem;
 
-  /* Type scale. Nothing smaller than 12px. */
+  /* Type scale. Nothing smaller than 12px, nothing larger than 20px in the app. */
   --text-xs: 0.75rem;
   --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
   --text-label: 0.8125rem;
   --text-label--line-height: 1.125rem;
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.375rem;
-  --text-heading: 0.9375rem;
-  --text-heading--line-height: 1.375rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.25rem;
+  --text-heading: 0.875rem;
+  --text-heading--line-height: 1.25rem;
   --text-heading--font-weight: 600;
-  --text-title: 1.125rem;
-  --text-title--line-height: 1.625rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-title: 1rem;
+  --text-title--line-height: 1.5rem;
   --text-title--font-weight: 600;
-  --text-title--letter-spacing: -0.012em;
-  --text-display: 1.5rem;
-  --text-display--line-height: 1.875rem;
+  --text-title--letter-spacing: -0.01em;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.25rem;
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.5rem;
+  --text-3xl--line-height: 2rem;
+  --text-display: 1.25rem;
+  --text-display--line-height: 1.75rem;
   --text-display--font-weight: 600;
-  --text-display--letter-spacing: -0.02em;
+  --text-display--letter-spacing: -0.015em;
 
   --shadow-soft: var(--elevation);
   --shadow-xs: var(--elev-xs);

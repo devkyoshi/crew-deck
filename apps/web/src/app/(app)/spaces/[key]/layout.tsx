@@ -4,12 +4,35 @@ import { use, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, LayoutGrid } from 'lucide-react';
+import {
+  Archive,
+  BarChart3,
+  CalendarDays,
+  CircleDashed,
+  Columns3,
+  FileText,
+  Layers,
+  LayoutGrid,
+  List,
+  ListTodo,
+  Milestone,
+  Pencil,
+  Rocket,
+  Settings,
+  Tag,
+  Ticket,
+  Users,
+  UserRoundCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import type { SpaceFeature } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Pill } from '@/components/shared/pill';
+import { PropertyList, PropertyRow } from '@/components/shared/property-row';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SpaceProvider } from '@/components/spaces/space-context';
 import { DockedChat, DockedChatButton, useDockedChat } from '@/components/spaces/docked-chat';
@@ -24,6 +47,21 @@ import { api, ApiError, type SpaceDetail } from '@/lib/api';
 import { forgetRecentSpace, pushRecentSpace } from '@/lib/recent-spaces';
 import { cn } from '@/lib/utils';
 import { useLiveSpace } from '@/lib/live';
+
+const TAB_ICONS: Record<string, LucideIcon> = {
+  Tickets: Ticket,
+  Backlog: ListTodo,
+  Board: Columns3,
+  List: List,
+  Epics: Layers,
+  Roadmap: Milestone,
+  Calendar: CalendarDays,
+  Releases: Rocket,
+  Documents: FileText,
+  Reports: BarChart3,
+  Members: Users,
+  Settings: Settings,
+};
 
 export default function SpaceLayout({
   children,
@@ -102,11 +140,11 @@ export default function SpaceLayout({
   }
 
   const base = `/spaces/${space.key}`;
+  const people = space.members.filter((m) => m.type === 'user');
   // Chat sits beside the board and the backlog, where people look at work while they talk about it.
   const chatHere = pathname.startsWith(`${base}/board`) || pathname.startsWith(`${base}/backlog`);
   const has = (f: SpaceFeature) => space.features.includes(f);
   const tabs = [
-    { href: base, label: 'Overview' },
     ...(has('tickets') ? [{ href: `${base}/tickets`, label: 'Tickets' }] : []),
     ...(has('sprints') ? [{ href: `${base}/backlog`, label: 'Backlog' }] : []),
     { href: `${base}/board`, label: 'Board' },
@@ -124,15 +162,22 @@ export default function SpaceLayout({
   return (
     <SpaceProvider value={space}>
       <div className={cn('space-y-6', chatHere && chat.open && 'xl:mr-[400px]')}>
-        <header className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <SpaceIcon icon={space.icon} spaceKey={space.key} className="size-12 rounded-lg" />
+        <header className="space-y-5">
+          <div className="flex flex-wrap items-start gap-4">
+            <SpaceIcon icon={space.icon} spaceKey={space.key} className="size-12 rounded-xl" />
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="text-display truncate">{space.name}</h1>
+                {space.permissions.edit && (
+                  <Link
+                    href={`${base}/settings`}
+                    aria-label="Edit space settings"
+                    className="text-muted-foreground hover:text-foreground rounded-md p-1 transition-colors"
+                  >
+                    <Pencil className="size-[18px]" strokeWidth={1.5} aria-hidden />
+                  </Link>
+                )}
                 <KeyChip spaceKey={space.key} />
-                <VisibilityPill visibility={space.visibility} />
-                {space.status === 'archived' && <ArchivedPill />}
               </div>
               {space.description && (
                 <p className="text-muted-foreground mt-1 text-sm">{space.description}</p>
@@ -171,20 +216,64 @@ export default function SpaceLayout({
             </div>
           )}
 
+          <PropertyList>
+            <PropertyRow icon={CircleDashed} label="Status">
+              {space.status === 'archived' ? (
+                <ArchivedPill />
+              ) : (
+                <Pill tone="warning" dot>
+                  Active
+                </Pill>
+              )}
+            </PropertyRow>
+            <PropertyRow icon={UserRoundCheck} label="Members">
+              {people.slice(0, 4).map((m) => (
+                <span
+                  key={m.id}
+                  className="bg-muted inline-flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm"
+                >
+                  <Avatar className="size-6">
+                    {m.avatarUrl && <AvatarImage src={m.avatarUrl} alt="" />}
+                    <AvatarFallback className="bg-background text-xs font-semibold">
+                      {(m.name ?? m.email ?? '?').slice(0, 1).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {m.name ?? m.email}
+                </span>
+              ))}
+              {people.length > 4 && (
+                <span className="text-muted-foreground text-sm">+{people.length - 4} more</span>
+              )}
+              {people.length === 0 && <span className="text-muted-foreground">No people yet</span>}
+            </PropertyRow>
+            <PropertyRow icon={CalendarDays} label="Created">
+              {new Date(space.createdAt).toLocaleDateString(undefined, {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </PropertyRow>
+            <PropertyRow icon={Tag} label="Access">
+              <VisibilityPill visibility={space.visibility} />
+            </PropertyRow>
+          </PropertyList>
+
           <nav aria-label="Space sections" className="border-b">
-            <ul className="-mb-px flex gap-6 overflow-x-auto">
+            <ul className="-mb-px flex gap-7 overflow-x-auto">
               {tabs.map((t) => {
-                const active = t.href === base ? pathname === base : pathname.startsWith(t.href);
+                const active = pathname.startsWith(t.href);
+                const Icon = TAB_ICONS[t.label] ?? LayoutGrid;
                 return (
                   <li key={t.href}>
                     <Link
                       href={t.href}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
-                        'text-muted-foreground hover:text-foreground relative inline-block py-2.5 text-label font-medium whitespace-nowrap transition-colors duration-150',
+                        'text-muted-foreground hover:text-foreground relative flex items-center gap-2 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-150',
                         active && 'text-foreground',
                       )}
                     >
+                      <Icon className="size-4" strokeWidth={1.5} aria-hidden />
                       {t.label}
                       {active && (
                         <motion.span

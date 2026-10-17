@@ -1,98 +1,244 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, LayoutGrid, Users, UsersRound } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  ListTodo,
+  MessagesSquare,
+  Users,
+  UsersRound,
+} from 'lucide-react';
+import { Illustration } from '@/components/illustrations';
+import { WorkspaceScene } from '@/components/illustrations/workspace-scene';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { EmptyState } from '@/components/shared/empty-state';
-import { IconTile, type Tone } from '@/components/shared/pastel';
+import { StatCard } from '@/components/shared/stat-card';
+import { FadeIn, Stagger, StaggerItem } from '@/components/shared/motion';
 import { TeamWidget } from '@/components/checkin/team-board';
 import { useToday } from '@/components/checkin/use-today';
 import { useMe } from '@/components/shell/me-context';
+import { SpaceIcon } from '@/components/spaces/space-bits';
+import { DueDate, StatusChip, TypeIcon } from '@/components/work/work-bits';
+import { useUnreadSummary } from '@/lib/messaging-api';
+import { useRecentSpaces } from '@/lib/recent-spaces';
+import { useMyItems } from '@/lib/work-find-api';
 
-const SHORTCUTS: { title: string; sub: string; href: string; icon: typeof Users; tone: Tone }[] = [
-  { title: 'People', sub: 'Your teammates', href: '/people', icon: Users, tone: 'blue' },
-  {
-    title: 'Groups',
-    sub: 'Teams and departments',
-    href: '/groups',
-    icon: UsersRound,
-    tone: 'violet',
-  },
-  {
-    title: 'Spaces',
-    sub: 'Projects and workspaces',
-    href: '/spaces',
-    icon: LayoutGrid,
-    tone: 'green',
-  },
-];
+const ymd = (d: Date) => d.toLocaleDateString('en-CA');
+
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-card rounded-xl border">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        <h2 className="text-heading">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function HomePage() {
   const { user, org } = useMe();
   const first = user.name?.split(' ')[0] ?? 'there';
   const checkinOn = useToday().data?.enabled === true;
+  const mine = useMyItems('assigned', 'open');
+  const unread = useUnreadSummary();
+  const recent = useRecentSpaces();
   // The date depends on the viewer's timezone, which the server does not know. Rendering it on the
   // server would disagree with the browser near midnight (a hydration error), so it appears after mount.
   const [today, setToday] = useState(' ');
+  const [todayKey, setTodayKey] = useState('');
   useEffect(() => {
+    const now = new Date();
     setToday(
-      new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long' }).format(
-        new Date(),
-      ),
+      new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long' }).format(now),
     );
+    setTodayKey(ymd(now));
   }, []);
+
+  const items = useMemo(
+    () =>
+      [...(mine.data?.items ?? [])].sort((a, b) =>
+        (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'),
+      ),
+    [mine.data],
+  );
+  const weekEnd = todayKey
+    ? ymd(new Date(new Date(`${todayKey}T00:00:00`).getTime() + 7 * 86_400_000))
+    : '';
+  const overdue = todayKey ? items.filter((i) => i.dueDate && i.dueDate < todayKey).length : 0;
+  const dueSoon = todayKey
+    ? items.filter((i) => i.dueDate && i.dueDate >= todayKey && i.dueDate <= weekEnd).length
+    : 0;
+  const messages = unread.dms + unread.channels;
+
+  const summary = !mine.data
+    ? `Here is what is happening in ${org.name}.`
+    : items.length === 0
+      ? `You are all caught up in ${org.name}.`
+      : `You have ${items.length} open ${items.length === 1 ? 'item' : 'items'}${dueSoon ? `, ${dueSoon} due this week` : ''}${overdue ? ` and ${overdue} overdue` : ''}.`;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-0.5">
-        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{today}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{`Hello, ${first}`}</h1>
-        <p className="text-muted-foreground text-sm">Here is what is happening in {org.name}.</p>
-      </header>
+      <FadeIn>
+        <section className="bg-card overflow-hidden rounded-xl border">
+          <div className="grid items-center gap-4 p-6 sm:p-8 md:grid-cols-[1fr_minmax(0,340px)]">
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  {today}
+                </p>
+                <h1 className="text-display">{`Hello, ${first}`}</h1>
+                <p className="text-muted-foreground max-w-md text-sm">{summary}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" asChild>
+                  <Link href="/my-work">
+                    <ListTodo /> My work
+                  </Link>
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/people">
+                    <Users /> People
+                  </Link>
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/groups">
+                    <UsersRound /> Groups
+                  </Link>
+                </Button>
+              </div>
+            </div>
+            <WorkspaceScene className="hidden md:block" />
+          </div>
+        </section>
+      </FadeIn>
 
-      {checkinOn && <TeamWidget />}
+      <Stagger className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StaggerItem>
+          <StatCard
+            icon={ListTodo}
+            tone="blue"
+            label="Open items"
+            value={mine.data ? items.length : '–'}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            icon={CalendarClock}
+            tone="amber"
+            label="Due this week"
+            value={mine.data ? dueSoon : '–'}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            icon={AlertTriangle}
+            tone="pink"
+            label="Overdue"
+            value={mine.data ? overdue : '–'}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard icon={MessagesSquare} tone="violet" label="Unread chats" value={messages} />
+        </StaggerItem>
+      </Stagger>
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Jump in</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {SHORTCUTS.map((s, i) => (
-            <Link
-              key={s.href}
-              href={s.href}
-              className="group animate-fade-up focus-visible:outline-none"
-              style={{ animationDelay: `${i * 50}ms` }}
-            >
-              <Card className="hover:border-primary/40 group-focus-visible:ring-ring/50 flex-row items-center gap-3 px-4 py-3.5 shadow-none transition-colors group-focus-visible:ring-[3px]">
-                <IconTile tone={s.tone} icon={s.icon} />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{s.title}</div>
-                  <div className="text-muted-foreground truncate text-xs">{s.sub}</div>
-                </div>
-                <ArrowRight
-                  className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden
-                />
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Your work</h2>
-        <EmptyState
-          illustration="empty"
-          title="Nothing here yet"
-          description="Spaces, tasks and updates will show up here as your team starts using the workspace."
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Panel
+          title="My work"
           action={
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/spaces">Browse spaces</Link>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/my-work">
+                View all <ArrowRight />
+              </Link>
             </Button>
           }
-        />
-      </section>
+        >
+          {items.length === 0 ? (
+            <div className="flex flex-col items-center gap-1 px-6 pt-2 pb-8 text-center">
+              <Illustration name="empty" />
+              <p className="text-sm font-medium">Nothing here yet</p>
+              <p className="text-muted-foreground max-w-xs text-sm">
+                Work assigned to you will show up here as your team starts using the workspace.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href="/spaces">Browse spaces</Link>
+              </Button>
+            </div>
+          ) : (
+            <ul className="divide-y border-t">
+              {items.slice(0, 6).map((i) => (
+                <li key={i.id}>
+                  <Link
+                    href={`/spaces/${i.spaceKey}/board?item=${i.key}`}
+                    className="hover:bg-accent/60 flex items-center gap-3 px-5 py-2.5 transition-colors"
+                  >
+                    <TypeIcon type={i.type} />
+                    <span className="text-muted-foreground w-16 shrink-0 font-mono text-xs">
+                      {i.key}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{i.title}</span>
+                    <StatusChip
+                      name={i.status.name}
+                      category={i.status.category}
+                      className="hidden sm:inline-flex"
+                    />
+                    {i.dueDate && <DueDate date={i.dueDate} done={i.status.category === 'done'} />}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel
+          title="Recent spaces"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/spaces">
+                All <ArrowRight />
+              </Link>
+            </Button>
+          }
+        >
+          {recent.length === 0 ? (
+            <div className="flex flex-col items-center gap-1 px-6 pt-2 pb-8 text-center">
+              <Illustration name="spaces" />
+              <p className="text-muted-foreground max-w-[14rem] text-sm">
+                Open a space and it will be here the next time.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-0.5 border-t p-2">
+              {recent.slice(0, 5).map((s) => (
+                <li key={s.key}>
+                  <Link
+                    href={`/spaces/${s.key}/board`}
+                    className="hover:bg-accent/60 flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <SpaceIcon icon={s.icon} spaceKey={s.key} className="size-8 rounded-lg" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.name}</span>
+                    <span className="text-muted-foreground font-mono text-xs">{s.key}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {checkinOn && <TeamWidget />}
     </div>
   );
 }

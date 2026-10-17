@@ -48,6 +48,14 @@ export const useItem = (ref: string) =>
     retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 1,
   });
 
+/** Warms the cache while a pointer rests on a card, so the drawer opens with its data already there. */
+export const prefetchItem = (qc: QueryClient, ref: string) =>
+  qc.prefetchQuery({
+    queryKey: itemKey(ref),
+    queryFn: () => api<WorkItem>(`/items/${encodeURIComponent(ref)}`),
+    staleTime: 15_000,
+  });
+
 export const useSubtasks = (ref: string, enabled = true) =>
   useQuery({
     queryKey: ['subtasks', ref.toUpperCase()],

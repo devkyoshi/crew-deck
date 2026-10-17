@@ -232,8 +232,8 @@ export function FilterBar({
 
   return (
     <div className="space-y-2" role="search" aria-label="Filter the board">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-56">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 [&>*]:shrink-0">
+        <div className="relative w-56">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" aria-hidden />
           <Input
             ref={searchRef}

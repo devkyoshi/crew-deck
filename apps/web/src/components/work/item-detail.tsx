@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowRightLeft,
   Check,
@@ -54,7 +55,13 @@ import {
 } from '@/lib/work-api';
 import { TimeSection } from './time-section';
 import { ComponentPicker, VersionPicker } from './version-bits';
-import { BlockedMoveDialog, BlockedNotice, ChecklistSection, movesBlockedForward, ResolutionField } from './item-extras';
+import {
+  BlockedMoveDialog,
+  BlockedNotice,
+  ChecklistSection,
+  movesBlockedForward,
+  ResolutionField,
+} from './item-extras';
 import { SlaDetail } from './sla-badge';
 import { TYPE_META, type ItemType, type Person, type WorkItem } from '@/lib/work';
 import { cn } from '@/lib/utils';
@@ -153,11 +160,29 @@ function AutoText({
       }}
       className={cn(
         'placeholder:text-muted-foreground block w-full resize-none rounded-md border border-transparent bg-transparent px-2 py-1 -mx-2 outline-none',
-        !readOnly && 'hover:border-input focus:border-ring focus:bg-background focus:ring-ring/30 focus:ring-2',
+        !readOnly &&
+          'hover:border-input focus:border-ring focus:bg-background focus:ring-ring/30 focus:ring-2',
         className,
       )}
     />
   );
+}
+
+/** True from two frames after `active` turns on: the browser has painted before heavy parts mount. */
+function useAfterPaint(active: boolean) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setReady(true));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [active]);
+  return ready;
 }
 
 export function ItemDetail({
@@ -203,14 +228,21 @@ export function ItemDetail({
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)))
+        return;
       if (!root.current || (el && el !== document.body && !root.current.contains(el))) return;
       const key = e.key.toLowerCase();
       if (key === 'm') {
         e.preventDefault();
         conversation.current?.focusComment();
       } else if (key === 'a' || key === 'l' || key === 't' || key === 'd' || key === 'v') {
-        const id = { a: '#f-assignee', l: '#f-labels', t: '#f-status', d: '#f-due', v: '#f-fixversion' }[key];
+        const id = {
+          a: '#f-assignee',
+          l: '#f-labels',
+          t: '#f-status',
+          d: '#f-due',
+          v: '#f-fixversion',
+        }[key];
         const target = root.current.querySelector<HTMLElement>(id);
         if (target && !target.hasAttribute('disabled')) {
           e.preventDefault();
@@ -229,6 +261,10 @@ export function ItemDetail({
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
+
+  // The editor and the sections below the description mount a moment after the first paint, so the drawer
+  // slides in with its title and fields instead of waiting on all of them.
+  const ready = useAfterPaint(!!item);
 
   if (query.isPending) return <ItemPanelSkeleton />;
   if (query.isError || !item) {
@@ -284,13 +320,23 @@ export function ItemDetail({
     }
   }
 
-  const saveState = update.isPending ? 'saving' : update.isError ? 'error' : update.isSuccess ? 'saved' : 'idle';
+  const saveState = update.isPending
+    ? 'saving'
+    : update.isError
+      ? 'error'
+      : update.isSuccess
+        ? 'saved'
+        : 'idle';
   const childLabel = item.type === 'epic' ? 'Stories in this epic' : 'Subtasks';
   const showChildren = item.type !== 'subtask';
   const done = item.status.category === 'done';
 
   return (
-    <div ref={root} data-item-detail className={cn('space-y-6', variant === 'panel' ? 'p-6' : 'py-2')}>
+    <div
+      ref={root}
+      data-item-detail
+      className={cn('space-y-6', variant === 'panel' ? 'p-6' : 'py-2')}
+    >
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
@@ -306,19 +352,26 @@ export function ItemDetail({
           <DropdownMenuContent align="start" className="w-44">
             {(Object.keys(TYPE_META) as ItemType[])
               // A ticket keeps its type, and nothing else becomes one.
-              .filter((t) => (item.type === 'ticket' ? t === 'ticket' : t !== 'ticket' && (vocab.allowedTypes.includes(t) || t === item.type)))
+              .filter((t) =>
+                item.type === 'ticket'
+                  ? t === 'ticket'
+                  : t !== 'ticket' && (vocab.allowedTypes.includes(t) || t === item.type),
+              )
               .map((t) => (
-              <DropdownMenuItem
-                key={t}
-                onSelect={() => t !== item.type && save({ type: t }, { type: t })}
-              >
-                <TypeIcon type={t} /> {vocab.typeLabel(t)}
-                {t === item.type && <Check className="ml-auto size-4" aria-hidden />}
-              </DropdownMenuItem>
-            ))}
+                <DropdownMenuItem
+                  key={t}
+                  onSelect={() => t !== item.type && save({ type: t }, { type: t })}
+                >
+                  <TypeIcon type={t} /> {vocab.typeLabel(t)}
+                  {t === item.type && <Check className="ml-auto size-4" aria-hidden />}
+                </DropdownMenuItem>
+              ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <nav aria-label="Breadcrumb" className="text-muted-foreground flex min-w-0 items-center gap-1 text-sm">
+        <nav
+          aria-label="Breadcrumb"
+          className="text-muted-foreground flex min-w-0 items-center gap-1 text-sm"
+        >
           <Link href={base} className="hover:text-foreground font-medium">
             {item.spaceKey}
           </Link>
@@ -360,10 +413,22 @@ export function ItemDetail({
             {saveState === 'error' && 'Not saved'}
           </span>
           <WatchButton itemId={item.id} />
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => copy('link')} aria-label="Copy link">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => copy('link')}
+            aria-label="Copy link"
+          >
             {copied === 'link' ? <Check /> : <Link2 />}
           </Button>
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => copy('key')} aria-label="Copy key">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => copy('key')}
+            aria-label="Copy key"
+          >
             {copied === 'key' ? <Check /> : <Copy />}
           </Button>
           {variant === 'panel' && (
@@ -411,7 +476,13 @@ export function ItemDetail({
             </DropdownMenu>
           )}
           {variant === 'panel' && onClose && (
-            <Button variant="ghost" size="icon" className="size-8" onClick={onClose} aria-label="Close">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={onClose}
+              aria-label="Close"
+            >
               <X />
             </Button>
           )}
@@ -436,232 +507,253 @@ export function ItemDetail({
 
           <section aria-label="Description" className="space-y-2">
             <h2 className="text-sm font-semibold">Description</h2>
-            <DescriptionEditor
-              key={item.id}
-              item={item}
-              canEdit={canEdit}
-              onSave={(doc) => save({ descriptionDoc: doc })}
-            />
+            {ready ? (
+              <DescriptionEditor
+                key={item.id}
+                item={item}
+                canEdit={canEdit}
+                onSave={(doc) => save({ descriptionDoc: doc })}
+              />
+            ) : (
+              <Skeleton className="h-24 w-full" />
+            )}
           </section>
 
-          <ChecklistSection item={item} canEdit={canEdit} onChange={(next) => save({ checklist: next })} />
+          {!ready && <Skeleton className="h-40 w-full" aria-hidden />}
+          {ready && (
+            <>
+              <ChecklistSection
+                item={item}
+                canEdit={canEdit}
+                onChange={(next) => save({ checklist: next })}
+              />
 
-          <TimeSection item={item} canEdit={canEdit} onSave={(patch) => save(patch)} />
+              <TimeSection item={item} canEdit={canEdit} onSave={(patch) => save(patch)} />
 
-          {showChildren && (
-            <ChildrenSection
-              parent={item}
-              label={childLabel}
-              canEdit={canEdit}
-              onOpenItem={onOpenItem}
-              doneStatusId={firstOf('done')?.id}
-              todoStatusId={firstOf('todo')?.id}
-            />
+              {showChildren && (
+                <ChildrenSection
+                  parent={item}
+                  label={childLabel}
+                  canEdit={canEdit}
+                  onOpenItem={onOpenItem}
+                  doneStatusId={firstOf('done')?.id}
+                  todoStatusId={firstOf('todo')?.id}
+                />
+              )}
+
+              <LinksSection ref={links} item={item} onOpenItem={openKey} />
+              <AttachmentsSection ref={attachments} item={item} />
+              <Conversation ref={conversation} item={item} onOpenItem={openKey} />
+            </>
           )}
-
-          <LinksSection ref={links} item={item} onOpenItem={openKey} />
-          <AttachmentsSection ref={attachments} item={item} />
-          <Conversation ref={conversation} item={item} onOpenItem={openKey} />
         </div>
 
         {/* Fields column */}
         <aside aria-label="Details" className="space-y-4">
-          <Field label="Status" htmlFor="f-status">
-            {list.length ? (
-              <StatusSelect
-                id="f-status"
-                statuses={list}
-                value={item.statusId}
+          {!ready && <Skeleton className="h-96 w-full" aria-hidden />}
+          {ready && (
+            <>
+              <Field label="Status" htmlFor="f-status">
+                {list.length ? (
+                  <StatusSelect
+                    id="f-status"
+                    statuses={list}
+                    value={item.statusId}
+                    disabled={!canEdit}
+                    onChange={(id) => {
+                      const s = list.find((x) => x.id === id)!;
+                      if (item.subtasks.total - item.subtasks.done > 0 && s.category === 'done') {
+                        toast.message(
+                          `${item.subtasks.total - item.subtasks.done} subtasks are still open. They were not changed.`,
+                        );
+                      }
+                      const run = () =>
+                        save(
+                          { statusId: id },
+                          {
+                            statusId: id,
+                            status: { id, name: s.name, category: s.category, color: s.color },
+                          },
+                        );
+                      if (movesBlockedForward(item, s.category)) setBlockedMove({ run });
+                      else run();
+                    }}
+                  />
+                ) : (
+                  <StatusChip
+                    name={item.status.name}
+                    category={item.status.category}
+                    color={item.status.color}
+                  />
+                )}
+              </Field>
+
+              <ResolutionField
+                item={item}
                 disabled={!canEdit}
-                onChange={(id) => {
-                  const s = list.find((x) => x.id === id)!;
-                  if (item.subtasks.total - item.subtasks.done > 0 && s.category === 'done') {
-                    toast.message(
-                      `${item.subtasks.total - item.subtasks.done} subtasks are still open. They were not changed.`,
-                    );
+                onChange={(resolution) => save({ resolution }, { resolution })}
+              />
+
+              <Field label="Assignee" htmlFor="f-assignee">
+                <AssigneePicker
+                  id="f-assignee"
+                  space={item.spaceKey}
+                  value={item.assignee}
+                  disabled={!canEdit}
+                  onChange={(p: Person | null) =>
+                    save({ assigneeId: p?.id ?? null }, { assignee: p })
                   }
-                  const run = () =>
-                    save(
-                      { statusId: id },
-                      {
-                        statusId: id,
-                        status: { id, name: s.name, category: s.category, color: s.color },
-                      },
-                    );
-                  if (movesBlockedForward(item, s.category)) setBlockedMove({ run });
-                  else run();
-                }}
-              />
-            ) : (
-              <StatusChip name={item.status.name} category={item.status.category} color={item.status.color} />
-            )}
-          </Field>
+                />
+              </Field>
 
-          <ResolutionField item={item} disabled={!canEdit} onChange={(resolution) => save({ resolution }, { resolution })} />
+              <Field label="Priority" htmlFor="f-priority">
+                <PrioritySelect
+                  id="f-priority"
+                  value={item.priority}
+                  disabled={!canEdit}
+                  onChange={(priority) => save({ priority }, { priority })}
+                />
+              </Field>
 
-          <Field label="Assignee" htmlFor="f-assignee">
-            <AssigneePicker
-              id="f-assignee"
-              space={item.spaceKey}
-              value={item.assignee}
-              disabled={!canEdit}
-              onChange={(p: Person | null) =>
-                save({ assigneeId: p?.id ?? null }, { assignee: p })
-              }
-            />
-          </Field>
+              {item.sla && (
+                <div className="space-y-1.5">
+                  <p className="text-muted-foreground text-xs font-medium">Deadlines</p>
+                  <SlaDetail sla={item.sla} />
+                </div>
+              )}
 
-          <Field label="Priority" htmlFor="f-priority">
-            <PrioritySelect
-              id="f-priority"
-              value={item.priority}
-              disabled={!canEdit}
-              onChange={(priority) => save({ priority }, { priority })}
-            />
-          </Field>
+              <Field label="Estimate (story points)" htmlFor="f-estimate">
+                <EstimateField
+                  value={item.estimate}
+                  disabled={!canEdit}
+                  onChange={(estimate) => save({ estimate }, { estimate })}
+                />
+              </Field>
 
-          {item.sla && (
-            <div className="space-y-1.5">
-              <p className="text-muted-foreground text-xs font-medium">Deadlines</p>
-              <SlaDetail sla={item.sla} />
-            </div>
-          )}
+              <Field label="Start date" htmlFor="f-start">
+                <Input
+                  id="f-start"
+                  type="date"
+                  className="h-8"
+                  disabled={!canEdit}
+                  value={item.startDate ?? ''}
+                  max={item.dueDate ?? undefined}
+                  onChange={(e) => {
+                    const startDate = e.target.value || null;
+                    if (startDate !== (item.startDate ?? null)) save({ startDate }, { startDate });
+                  }}
+                />
+              </Field>
 
-          <Field label="Estimate (story points)" htmlFor="f-estimate">
-            <EstimateField
-              value={item.estimate}
-              disabled={!canEdit}
-              onChange={(estimate) => save({ estimate }, { estimate })}
-            />
-          </Field>
+              <Field label="Due date" htmlFor="f-due">
+                <Input
+                  id="f-due"
+                  type="date"
+                  className="h-8"
+                  disabled={!canEdit}
+                  value={item.dueDate ?? ''}
+                  onChange={(e) => {
+                    const dueDate = e.target.value || null;
+                    if (dueDate !== item.dueDate) save({ dueDate }, { dueDate });
+                  }}
+                />
+              </Field>
 
-          <Field label="Start date" htmlFor="f-start">
-            <Input
-              id="f-start"
-              type="date"
-              className="h-8"
-              disabled={!canEdit}
-              value={item.startDate ?? ''}
-              max={item.dueDate ?? undefined}
-              onChange={(e) => {
-                const startDate = e.target.value || null;
-                if (startDate !== (item.startDate ?? null)) save({ startDate }, { startDate });
-              }}
-            />
-          </Field>
+              <Field label="Labels" htmlFor="f-labels">
+                <LabelPicker
+                  id="f-labels"
+                  space={item.spaceKey}
+                  value={item.labels}
+                  disabled={!canEdit}
+                  onChange={(next) => save({ labelIds: next.map((l) => l.id) }, { labels: next })}
+                />
+              </Field>
 
-          <Field label="Due date" htmlFor="f-due">
-            <Input
-              id="f-due"
-              type="date"
-              className="h-8"
-              disabled={!canEdit}
-              value={item.dueDate ?? ''}
-              onChange={(e) => {
-                const dueDate = e.target.value || null;
-                if (dueDate !== item.dueDate) save({ dueDate }, { dueDate });
-              }}
-            />
-          </Field>
+              <Field label="Fix version" htmlFor="f-fixversion">
+                <VersionPicker
+                  id="f-fixversion"
+                  space={item.spaceKey}
+                  label="Fix version"
+                  value={item.fixVersions ?? []}
+                  disabled={!canEdit}
+                  onChange={(ids) => save({ fixVersionIds: ids })}
+                />
+              </Field>
 
-          <Field label="Labels" htmlFor="f-labels">
-            <LabelPicker
-              id="f-labels"
-              space={item.spaceKey}
-              value={item.labels}
-              disabled={!canEdit}
-              onChange={(next) =>
-                save({ labelIds: next.map((l) => l.id) }, { labels: next })
-              }
-            />
-          </Field>
+              {item.type === 'bug' && (
+                <Field label="Affects version" htmlFor="f-affects">
+                  <VersionPicker
+                    id="f-affects"
+                    space={item.spaceKey}
+                    label="Affects version"
+                    value={item.affectsVersions ?? []}
+                    disabled={!canEdit}
+                    onChange={(ids) => save({ affectsVersionIds: ids })}
+                  />
+                </Field>
+              )}
 
-          <Field label="Fix version" htmlFor="f-fixversion">
-            <VersionPicker
-              id="f-fixversion"
-              space={item.spaceKey}
-              label="Fix version"
-              value={item.fixVersions ?? []}
-              disabled={!canEdit}
-              onChange={(ids) => save({ fixVersionIds: ids })}
-            />
-          </Field>
+              <Field label="Components" htmlFor="f-components">
+                <ComponentPicker
+                  id="f-components"
+                  space={item.spaceKey}
+                  value={item.components ?? []}
+                  disabled={!canEdit}
+                  onChange={(ids) => save({ componentIds: ids })}
+                />
+              </Field>
 
-          {item.type === 'bug' && (
-            <Field label="Affects version" htmlFor="f-affects">
-              <VersionPicker
-                id="f-affects"
-                space={item.spaceKey}
-                label="Affects version"
-                value={item.affectsVersions ?? []}
-                disabled={!canEdit}
-                onChange={(ids) => save({ affectsVersionIds: ids })}
-              />
-            </Field>
-          )}
+              {item.type !== 'epic' && (
+                <Field label={item.type === 'subtask' ? 'Parent' : 'Epic'} htmlFor="f-parent">
+                  <ItemPicker
+                    id="f-parent"
+                    space={item.spaceKey}
+                    types={item.type === 'subtask' ? ['story', 'task', 'bug'] : ['epic']}
+                    value={item.parent}
+                    disabled={!canEdit}
+                    excludeId={item.id}
+                    placeholder={item.type === 'subtask' ? 'Choose a parent' : 'No epic'}
+                    onChange={(p) =>
+                      p === null && item.type === 'subtask'
+                        ? toast.error('A subtask needs a parent')
+                        : save({ parentId: p?.id ?? null }, { parentId: p?.id ?? null, parent: p })
+                    }
+                  />
+                </Field>
+              )}
 
-          <Field label="Components" htmlFor="f-components">
-            <ComponentPicker
-              id="f-components"
-              space={item.spaceKey}
-              value={item.components ?? []}
-              disabled={!canEdit}
-              onChange={(ids) => save({ componentIds: ids })}
-            />
-          </Field>
-
-          {item.type !== 'epic' && (
-            <Field label={item.type === 'subtask' ? 'Parent' : 'Epic'} htmlFor="f-parent">
-              <ItemPicker
-                id="f-parent"
-                space={item.spaceKey}
-                types={item.type === 'subtask' ? ['story', 'task', 'bug'] : ['epic']}
-                value={item.parent}
-                disabled={!canEdit}
-                excludeId={item.id}
-                placeholder={item.type === 'subtask' ? 'Choose a parent' : 'No epic'}
-                onChange={(p) =>
-                  p === null && item.type === 'subtask'
-                    ? toast.error('A subtask needs a parent')
-                    : save(
-                        { parentId: p?.id ?? null },
-                        { parentId: p?.id ?? null, parent: p },
-                      )
-                }
-              />
-            </Field>
-          )}
-
-          <div className="border-t pt-4">
-            <Field label="Reporter">
-              <div className="flex items-center gap-2 text-sm">
-                <UserAvatar person={item.reporter} size={20} />
-                <span className="truncate">{item.reporter.name ?? item.reporter.email}</span>
+              <div className="border-t pt-4">
+                <Field label="Reporter">
+                  <div className="flex items-center gap-2 text-sm">
+                    <UserAvatar person={item.reporter} size={20} />
+                    <span className="truncate">{item.reporter.name ?? item.reporter.email}</span>
+                  </div>
+                </Field>
               </div>
-            </Field>
-          </div>
-          <dl className="text-muted-foreground space-y-1 text-xs">
-            <div className="flex justify-between gap-2">
-              <dt>Created</dt>
-              <dd className="text-right">{dateTime(item.createdAt)}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt>Updated</dt>
-              <dd className="text-right">{dateTime(item.updatedAt)}</dd>
-            </div>
-            {item.resolvedAt && (
-              <div className="flex justify-between gap-2">
-                <dt>Resolved</dt>
-                <dd className="text-right">{dateTime(item.resolvedAt)}</dd>
-              </div>
-            )}
-          </dl>
-          {!canEdit && (
-            <p className="text-muted-foreground bg-muted rounded-md p-2 text-xs">
-              You can view this {vocab.noun} but not change it.
-            </p>
+              <dl className="text-muted-foreground space-y-1 text-xs">
+                <div className="flex justify-between gap-2">
+                  <dt>Created</dt>
+                  <dd className="text-right">{dateTime(item.createdAt)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt>Updated</dt>
+                  <dd className="text-right">{dateTime(item.updatedAt)}</dd>
+                </div>
+                {item.resolvedAt && (
+                  <div className="flex justify-between gap-2">
+                    <dt>Resolved</dt>
+                    <dd className="text-right">{dateTime(item.resolvedAt)}</dd>
+                  </div>
+                )}
+              </dl>
+              {!canEdit && (
+                <p className="text-muted-foreground bg-muted rounded-md p-2 text-xs">
+                  You can view this {vocab.noun} but not change it.
+                </p>
+              )}
+              {done && <span className="sr-only">This item is done.</span>}
+            </>
           )}
-          {done && <span className="sr-only">This item is done.</span>}
         </aside>
       </div>
 
@@ -767,7 +859,8 @@ function EstimateField({
               aria-pressed={value === p}
               className={cn(
                 'hover:bg-accent h-6 min-w-6 rounded-full border px-1.5 text-xs font-semibold tabular-nums',
-                value === p && 'bg-primary text-primary-foreground hover:bg-primary border-transparent',
+                value === p &&
+                  'bg-primary text-primary-foreground hover:bg-primary border-transparent',
               )}
             >
               {p}
@@ -801,7 +894,10 @@ function ChildrenSection({
   const [title, setTitle] = useState('');
   const items = children.data?.items ?? [];
   const done = items.filter((i) => i.status.category === 'done').length;
-  const pct = useMemo(() => (items.length ? Math.round((done / items.length) * 100) : 0), [done, items.length]);
+  const pct = useMemo(
+    () => (items.length ? Math.round((done / items.length) * 100) : 0),
+    [done, items.length],
+  );
   const childType: ItemType = parent.type === 'epic' ? 'story' : 'subtask';
 
   async function add() {
@@ -823,7 +919,11 @@ function ChildrenSection({
         <h2 className="text-sm font-semibold">{label}</h2>
         {items.length > 0 && (
           <>
-            <Progress value={pct} className="h-1.5 max-w-40 flex-1" aria-label={`${done} of ${items.length} done`} />
+            <Progress
+              value={pct}
+              className="h-1.5 max-w-40 flex-1"
+              aria-label={`${done} of ${items.length} done`}
+            />
             <span className="text-muted-foreground text-xs tabular-nums">
               {done} of {items.length}
             </span>
@@ -837,10 +937,14 @@ function ChildrenSection({
       </div>
 
       {children.isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
-      {children.isError && <LoadError what={label.toLowerCase()} onRetry={() => children.refetch()} />}
+      {children.isError && (
+        <LoadError what={label.toLowerCase()} onRetry={() => children.refetch()} />
+      )}
       {children.isSuccess && items.length === 0 && !adding && (
         <p className="text-muted-foreground text-sm">
-          {parent.type === 'epic' ? 'No stories yet.' : 'No subtasks yet. Break the work into steps.'}
+          {parent.type === 'epic'
+            ? 'No stories yet.'
+            : 'No subtasks yet. Break the work into steps.'}
         </p>
       )}
       <ul className="divide-y rounded-lg border">
@@ -864,11 +968,18 @@ function ChildrenSection({
               <button
                 type="button"
                 onClick={() => onOpenItem?.(c.key)}
-                className={cn('min-w-0 flex-1 truncate text-left text-sm hover:underline', isDone && 'text-muted-foreground line-through')}
+                className={cn(
+                  'min-w-0 flex-1 truncate text-left text-sm hover:underline',
+                  isDone && 'text-muted-foreground line-through',
+                )}
               >
                 {c.title}
               </button>
-              <StatusChip name={c.status.name} category={c.status.category} className="hidden sm:inline-flex" />
+              <StatusChip
+                name={c.status.name}
+                category={c.status.category}
+                className="hidden sm:inline-flex"
+              />
               <UserAvatar person={c.assignee} size={20} />
             </li>
           );

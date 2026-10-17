@@ -10,6 +10,12 @@ import { CATEGORY_META, STATUS_DOT, type StatusCategory, type StatusColor } from
 import { cn } from '@/lib/utils';
 import { useVocabulary } from './use-vocabulary';
 
+const COUNT_TONE: Record<StatusCategory, string> = {
+  todo: 'bg-foreground text-background',
+  in_progress: 'bg-warning text-foreground',
+  done: 'bg-success text-white',
+};
+
 /** A column: a rounded-sm lane with a thin category-coloured bar, a sticky header and its own scroll area. */
 export function BoardColumn({
   category,
@@ -34,21 +40,17 @@ export function BoardColumn({
   return (
     <section
       className={cn(
-        'bg-muted/50 relative flex shrink-0 flex-col overflow-hidden rounded-lg border border-transparent transition-colors',
-        collapsed ? 'w-12' : density === 'compact' ? 'w-[264px]' : 'w-[288px]',
-        highlight && 'border-primary/50 bg-primary/5',
+        'relative flex shrink-0 flex-col overflow-hidden rounded-xl border border-transparent transition-colors',
+        collapsed ? 'w-12' : density === 'compact' ? 'w-[260px]' : 'w-[296px]',
+        highlight && 'bg-accent border-foreground/20',
         className,
       )}
     >
-      <span
-        aria-hidden
-        className={cn('absolute inset-x-0 top-0 h-[3px]', CATEGORY_META[category].accent)}
-      />
-      <div className="bg-inherit sticky top-0 z-10 px-3 pt-4 pb-2">{header}</div>
+      <div className="px-1 pt-1 pb-3">{header}</div>
       {!collapsed && (
         <>
-          <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">{children}</div>
-          {footer && <div className="px-2 pb-2">{footer}</div>}
+          <div className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto px-0.5 pb-3">{children}</div>
+          {footer && <div className="pb-2">{footer}</div>}
         </>
       )}
     </section>
@@ -79,7 +81,6 @@ export function ColumnHeader({
   menu?: ReactNode;
 }) {
   const vocab = useVocabulary();
-  const Icon = CATEGORY_META[category].icon;
   if (collapsed) {
     return (
       <button
@@ -97,12 +98,13 @@ export function ColumnHeader({
     );
   }
   return (
-    <div className="flex items-center gap-2">
-      <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden />
+    <div className="flex items-center gap-2.5">
       <h2 className="min-w-0 truncate text-sm font-semibold">{name}</h2>
-      <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[color])} aria-hidden />
       <span
-        className="text-muted-foreground text-xs font-medium tabular-nums"
+        className={cn(
+          'tnum inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+          COUNT_TONE[category],
+        )}
         aria-label={vocab.count(total ?? count)}
       >
         {total ?? count}
@@ -149,17 +151,17 @@ export function ColumnCreateRow({
       <Button
         variant="ghost"
         size="sm"
-        className="text-muted-foreground w-full justify-start"
+        className="text-muted-foreground hover:text-foreground h-10 w-full justify-center rounded-xl border border-dashed text-sm"
         onClick={() => setOpen(true)}
       >
-        <Plus /> Create
+        <Plus className="size-4" strokeWidth={1.5} /> Create
       </Button>
     );
   }
   return (
     <form
       onSubmit={(e) => e.preventDefault()}
-      className="bg-card space-y-1.5 rounded-lg border p-2 shadow-soft"
+      className="bg-card space-y-1.5 rounded-xl border p-2 shadow-xs"
     >
       <label className="sr-only" htmlFor="inline-create">
         Title of the new {vocab.noun}
@@ -206,7 +208,7 @@ export function ColumnSkeleton({ density = 'comfortable' }: { density?: Density 
     <div
       aria-hidden
       className={cn(
-        'bg-muted/50 shrink-0 space-y-2 rounded-lg p-2 pt-4',
+        'shrink-0 space-y-3 rounded-xl p-1 pt-1',
         density === 'compact' ? 'w-[264px]' : 'w-[288px]',
       )}
     >

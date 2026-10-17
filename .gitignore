@@ -10,3 +10,4 @@ test-results
 blob-report
 # Local attachment storage
 apps/api/storage
+.next-prod

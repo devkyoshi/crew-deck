@@ -40,7 +40,7 @@ export function UserMenu({ side = 'right' }: { side?: 'right' | 'bottom' }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-10 rounded-full" aria-label="Account menu">
+        <Button variant="ghost" size="icon" className="size-9 rounded-full" aria-label="Account menu">
           <Avatar className="size-8">
             {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
             <AvatarFallback className="text-xs">{fallback}</AvatarFallback>

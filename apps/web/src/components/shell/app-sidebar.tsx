@@ -46,15 +46,15 @@ function TenantSwitcher() {
   const label = (
     <>
       {org.logoUrl ? (
-        <img src={org.logoUrl} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
+        <img src={org.logoUrl} alt="" className="size-9 shrink-0 rounded-lg object-cover" />
       ) : (
-        <span className="bg-foreground text-background flex size-10 shrink-0 items-center justify-center rounded-xl">
-          <Layers className="size-5" strokeWidth={1.5} aria-hidden />
+        <span className="bg-foreground text-background flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <Layers className="size-[18px]" strokeWidth={1.5} aria-hidden />
         </span>
       )}
       <span className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-        <span className="truncate text-heading font-semibold">{org.name}</span>
-        <span className="text-muted-foreground truncate text-sm">{org.slug}</span>
+        <span className="truncate text-sm font-semibold">{org.name}</span>
+        <span className="text-muted-foreground truncate text-xs">{org.slug}</span>
       </span>
     </>
   );
@@ -113,46 +113,64 @@ function NavGroupSection({ group }: { group: ReturnType<typeof visibleGroups>[nu
   const pathname = usePathname();
   const unread = useUnreadSummary();
 
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-      <SidebarGroupContent>
-        {group.id === 'spaces' ? (
+  if (group.id === 'spaces') {
+    return (
+      <SidebarGroup>
+        <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+        <SidebarGroupContent>
           <SpacesNav />
-        ) : (
-          <SidebarMenu>
-            {group.items.map((item) => {
-              const active =
-                item.href === '/' || item.href === '/crm'
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                    <Link href={item.href} aria-current={active ? 'page' : undefined}>
-                      <item.icon strokeWidth={1.75} />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {item.href === '/messages' && unread.dms > 0 && (
-                    <SidebarMenuBadge className="bg-destructive text-white rounded-full">
-                      {unread.dms > 99 ? '99+' : unread.dms}
-                      <span className="sr-only"> unread direct messages and mentions</span>
-                    </SidebarMenuBadge>
-                  )}
-                  {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
-                    <SidebarMenuBadge>
-                      <span className="bg-primary size-2 rounded-full" aria-hidden />
-                      <span className="sr-only">Unread channels</span>
-                    </SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        )}
-      </SidebarGroupContent>
-    </SidebarGroup>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
+  }
+
+  // Items sit under their section heading, in the order the sections first appear.
+  const sections = new Map<string, typeof group.items>();
+  for (const item of group.items) {
+    const key = item.section ?? group.label;
+    sections.set(key, [...(sections.get(key) ?? []), item]);
+  }
+
+  return (
+    <>
+      {[...sections].map(([label, items]) => (
+        <SidebarGroup key={label}>
+          <SidebarGroupLabel>{label}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => {
+                const active =
+                  item.href === '/' || item.href === '/crm'
+                    ? pathname === item.href
+                    : pathname.startsWith(item.href);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                      <Link href={item.href} aria-current={active ? 'page' : undefined}>
+                        <item.icon strokeWidth={1.5} />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {item.href === '/messages' && unread.dms > 0 && (
+                      <SidebarMenuBadge className="bg-destructive rounded-full text-white">
+                        {unread.dms > 99 ? '99+' : unread.dms}
+                        <span className="sr-only"> unread direct messages and mentions</span>
+                      </SidebarMenuBadge>
+                    )}
+                    {item.href === '/messages' && unread.dms === 0 && unread.channels > 0 && (
+                      <SidebarMenuBadge>
+                        <span className="bg-primary size-2 rounded-full" aria-hidden />
+                        <span className="sr-only">Unread channels</span>
+                      </SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      ))}
+    </>
   );
 }
 
@@ -162,9 +180,9 @@ function SearchField() {
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
-      className="bg-background text-muted-foreground hover:border-foreground/25 flex h-11 w-full items-center gap-2.5 rounded-xl border px-3.5 text-sm transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
+      className="bg-background text-muted-foreground hover:border-foreground/25 flex h-9 w-full items-center gap-2 rounded-lg border px-3 text-sm transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
     >
-      <Search className="size-5 shrink-0" strokeWidth={1.5} aria-hidden />
+      <Search className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
       <span className="flex-1 text-left">Search</span>
       <Kbd>Ctrl K</Kbd>
     </button>
@@ -184,10 +202,10 @@ export function AppSidebar() {
 
   const body = (
     <>
-      <SidebarHeader className="gap-4 border-b p-4">
+      <SidebarHeader className="gap-3 border-b p-3">
         <TenantSwitcher />
       </SidebarHeader>
-      <div className="px-4 pt-4">
+      <div className="px-3 pt-3">
         <SearchField />
       </div>
       <SidebarContent className="pt-2">
@@ -205,10 +223,10 @@ export function AppSidebar() {
       data-state={open ? 'expanded' : 'collapsed'}
       className={cn(
         'bg-sidebar text-sidebar-foreground border-sidebar-border shrink-0 overflow-hidden border-r transition-[width] duration-200 ease-out-quint',
-        open ? 'w-72' : 'w-0 border-r-0',
+        open ? 'w-64' : 'w-0 border-r-0',
       )}
     >
-      <div className="flex h-full w-72 flex-col">{body}</div>
+      <div className="flex h-full w-64 flex-col">{body}</div>
     </aside>
   );
 }

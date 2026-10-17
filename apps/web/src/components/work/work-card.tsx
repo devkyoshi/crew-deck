@@ -4,6 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LabelChips } from './label-bits';
 import { DueDate, EstimatePill, PriorityIcon, TypeIcon, UserAvatar } from './work-bits';
 import type { BoardSettings, WorkItem } from '@/lib/work';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchItem } from '@/lib/work-api';
 import { cn } from '@/lib/utils';
 
 export type Density = 'comfortable' | 'compact';
@@ -37,17 +39,22 @@ export function WorkItemCard({
   handle?: ReactNode;
   menu?: ReactNode;
 }) {
+  const qc = useQueryClient();
   const compact = density === 'compact';
   const show = (f: Field) => fields.includes(f);
   const done = item.status.category === 'done';
   const sub = item.subtasks;
+  const summary = item.description.replace(/\s+/g, ' ').trim();
+  const overdue = !done && !!item.dueDate && item.dueDate < new Date().toLocaleDateString('en-CA');
   return (
     <article
       aria-label={`${item.key} ${item.title}`}
+      onPointerEnter={() => void prefetchItem(qc, item.key)}
+      onFocus={() => void prefetchItem(qc, item.key)}
       className={cn(
-        'group bg-card relative rounded-lg border shadow-soft transition-[transform,box-shadow,border-color] duration-150',
-        'hover:-translate-y-px hover:shadow-md focus-within:ring-ring focus-within:ring-2 focus-within:ring-offset-1 focus-within:ring-offset-background',
-        compact ? 'p-2' : 'p-3',
+        'group bg-card relative rounded-xl border shadow-xs transition-[transform,box-shadow,border-color] duration-150',
+        'hover:shadow-sm focus-within:ring-ring focus-within:ring-2 focus-within:ring-offset-1 focus-within:ring-offset-background',
+        compact ? 'p-2.5' : 'p-3.5',
         selected && 'border-primary ring-primary/40 ring-2',
         dragging && 'border-dashed opacity-40',
         overlay && 'rotate-[2deg] cursor-grabbing shadow-xl ring-1 ring-black/5 motion-reduce:rotate-0',
@@ -56,8 +63,8 @@ export function WorkItemCard({
       <div className="flex items-start gap-2">
         <h3
           className={cn(
-            'min-w-0 flex-1 leading-snug font-medium break-words',
-            compact ? 'text-label' : 'text-sm',
+            'min-w-0 flex-1 leading-snug font-semibold break-words',
+            compact ? 'text-xs' : 'text-sm',
             done && 'text-muted-foreground',
           )}
         >
@@ -73,7 +80,7 @@ export function WorkItemCard({
         </h3>
         <div
           className={cn(
-            'relative z-10 -mt-1 -mr-1 flex shrink-0 items-center opacity-0 transition-opacity',
+            'relative z-10 -mt-1 -mr-1 flex shrink-0 items-center opacity-60 transition-opacity',
             'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
             overlay && 'opacity-100',
           )}
@@ -82,6 +89,32 @@ export function WorkItemCard({
           {menu}
         </div>
       </div>
+
+      {!compact && summary && (
+        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-snug">{summary}</p>
+      )}
+
+      {!compact && show('subtasks') && sub.total > 0 && (
+        <div className="mt-4">
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
+            <ListChecks className="size-3.5" strokeWidth={1.5} aria-hidden />
+            Progress
+            <span className="tnum ml-auto font-medium">
+              {sub.done}/{sub.total}
+              <span className="sr-only"> subtasks done</span>
+            </span>
+          </div>
+          <div className="bg-muted mt-2 h-1 overflow-hidden rounded-full" aria-hidden>
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width] duration-500 ease-out-quint',
+                sub.done === sub.total ? 'bg-success' : overdue ? 'bg-danger' : 'bg-info',
+              )}
+              style={{ width: `${Math.max(4, (sub.done / sub.total) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {!compact && show('epic') && item.parent?.type === 'epic' && (
         <div className="mt-2 flex">
@@ -98,12 +131,12 @@ export function WorkItemCard({
         </div>
       )}
 
-      <div className={cn('flex items-center gap-2', compact ? 'mt-1.5' : 'mt-2.5')}>
+      <div className={cn('flex flex-wrap items-center gap-x-2.5 gap-y-1', compact ? 'mt-1.5' : 'mt-4 border-t pt-3')}>
         <TypeIcon type={item.type} />
         <span className="text-muted-foreground font-mono text-xs font-medium whitespace-nowrap tabular-nums">{item.key}</span>
         {show('priority') && <PriorityIcon priority={item.priority} />}
         <div className="ml-auto flex items-center gap-2">
-          {show('subtasks') && sub.total > 0 && (
+          {compact && show('subtasks') && sub.total > 0 && (
             <span
               className="text-muted-foreground inline-flex items-center gap-1 text-xs tabular-nums"
               title={`${sub.done} of ${sub.total} subtasks done`}
