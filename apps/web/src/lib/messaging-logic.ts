@@ -54,6 +54,9 @@ export interface PendingLike {
 }
 
 const GROUP_MS = 5 * 60_000;
+/** A run never spans more than this long or this many messages, so long chats keep visible anchors. */
+export const GROUP_MAX_MS = 10 * 60_000;
+export const GROUP_MAX_COUNT = 8;
 
 export type Row<P extends PendingLike = PendingLike> =
   | { kind: 'start'; key: string }
@@ -89,7 +92,13 @@ export function buildRows<P extends PendingLike>(
   const rows: Row<P>[] = [];
   if (opts.showStart) rows.push({ kind: 'start', key: 'start' });
   let lastDay: string | null = null;
-  let prev: { author: string | null; at: number; groupable: boolean } | null = null;
+  let prev: {
+    author: string | null;
+    at: number;
+    groupable: boolean;
+    start: number;
+    count: number;
+  } | null = null;
   const dayRow = (at: Date) => {
     const day = dayKey(at);
     if (day === lastDay) return;
@@ -104,8 +113,16 @@ export function buildRows<P extends PendingLike>(
       prev.groupable &&
       groupable &&
       prev.author === author &&
-      at.getTime() - prev.at < GROUP_MS;
-    prev = { author, at: at.getTime(), groupable };
+      at.getTime() - prev.at < GROUP_MS &&
+      at.getTime() - prev.start < GROUP_MAX_MS &&
+      prev.count < GROUP_MAX_COUNT;
+    prev = {
+      author,
+      at: at.getTime(),
+      groupable,
+      start: grouped && prev ? prev.start : at.getTime(),
+      count: grouped && prev ? prev.count + 1 : 1,
+    };
     return grouped;
   };
   let dividerPlaced = false;
@@ -116,7 +133,9 @@ export function buildRows<P extends PendingLike>(
       rows.push({ kind: 'unread', key: 'unread' });
       prev = null;
     }
-    const grouped = place(new Date(m.createdAt), m.authorId, m.kind === 'user');
+    // A thread reply echoed into the channel starts its own run: it carries a "replied to a thread" header.
+    const echo = !!m.threadRootId && m.alsoInChannel;
+    const grouped = place(new Date(m.createdAt), m.authorId, m.kind === 'user' && !echo);
     rows.push({ kind: 'msg', key: m.id, m, grouped });
   }
   for (const p of pending) {

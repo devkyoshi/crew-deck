@@ -131,6 +131,43 @@ describe('buildRows', () => {
     expect(grouped).toEqual([false, true, false, false, true]);
   });
 
+  const groupedOf = (rows: { kind: string }[]) =>
+    rows.filter((r) => r.kind === 'msg').map((r) => (r as unknown as { grouped: boolean }).grouped);
+
+  it('starts a new run after ten minutes even when each gap is short', () => {
+    const rows = buildRows(
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) =>
+        msg({ seq: i + 1, createdAt: at(40 - i * 3) }),
+      ),
+      [],
+      opts,
+    );
+    // 3 minute steps: runs of 4 (0, 3, 6, 9 minutes), then the next starts a new run.
+    expect(groupedOf(rows).slice(0, 5)).toEqual([false, true, true, true, false]);
+  });
+
+  it('starts a new run after eight messages', () => {
+    const rows = buildRows(
+      Array.from({ length: 10 }, (_, i) => msg({ seq: i + 1, createdAt: at(10 - i * 0.1) })),
+      [],
+      opts,
+    );
+    expect(groupedOf(rows)).toEqual([false, ...Array(7).fill(true), false, true]);
+  });
+
+  it('gives a thread reply echoed into the channel its own header', () => {
+    const rows = buildRows(
+      [
+        msg({ seq: 1, createdAt: at(3) }),
+        msg({ seq: 2, createdAt: at(2), threadRootId: 'root', alsoInChannel: true }),
+        msg({ seq: 3, createdAt: at(1) }),
+      ],
+      [],
+      opts,
+    );
+    expect(groupedOf(rows)).toEqual([false, false, false]);
+  });
+
   it('never groups system messages with user messages', () => {
     const rows = buildRows(
       [

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { useChannel } from '@/lib/messaging-api';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ function useWide() {
 function DetailsPanel({ channelId }: { channelId: string }) {
   const panel = usePanel();
   const wide = useWide();
+  const reduce = useReducedMotion();
   const { channel } = useChannel(channelId);
   const thread = panel.thread && panel.thread.channelId === channelId ? panel.thread : null;
   const shown = !!thread || panel.open;
@@ -57,14 +59,24 @@ function DetailsPanel({ channelId }: { channelId: string }) {
     ) : null;
   // Wide screens get a docked panel; tablets and phones get it as a sheet over the conversation.
   if (wide) {
-    return shown ? (
-      <aside
-        aria-label={thread ? 'Thread' : 'Channel details'}
-        className="bg-background w-96 shrink-0 border-l"
-      >
-        {body(true)}
-      </aside>
-    ) : null;
+    // The aside animates its width while the content keeps its own width, so nothing reflows mid-slide.
+    return (
+      <AnimatePresence initial={false}>
+        {shown && (
+          <motion.aside
+            key="panel"
+            aria-label={thread ? 'Thread' : 'Channel details'}
+            className="bg-background shrink-0 overflow-hidden border-l"
+            initial={reduce ? false : { width: 0, opacity: 0 }}
+            animate={{ width: 384, opacity: 1 }}
+            exit={reduce ? undefined : { width: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+          >
+            <div className="h-full w-96">{body(true)}</div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    );
   }
   return (
     <Sheet open={shown} onOpenChange={(o) => !o && close()}>
@@ -117,7 +129,15 @@ export function MessagesShell({ children }: { children: ReactNode }) {
           aria-label="Conversation"
           className={cn('min-w-0 flex-1 md:block', channelId ? 'block' : 'hidden')}
         >
-          {children}
+          <motion.div
+            key={channelId ?? 'none'}
+            className="h-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            {children}
+          </motion.div>
         </section>
         {channelId && <DetailsPanel channelId={channelId} />}
       </div>

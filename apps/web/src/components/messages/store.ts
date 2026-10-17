@@ -13,6 +13,13 @@ import type { MessageDoc } from '@/lib/messaging-api';
  */
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
+/** A person's custom status line, as the presence lookups last reported it. */
+export interface CustomStatus {
+  emoji: string | null;
+  text: string | null;
+  expiresAt: string | null;
+}
+
 export interface PendingMessage {
   clientMsgId: string;
   channelId: string;
@@ -36,6 +43,8 @@ interface MessagingState {
   presence: Record<string, PresenceState>;
   /** Where people work today (status only). */
   checkin: Record<string, CheckinBadge | null>;
+  /** Custom status lines by user (null when they have none). */
+  customStatus: Record<string, CustomStatus | null>;
   pending: Record<string, PendingMessage[]>;
   /** The conversation the person is looking at, so it does not count as unread. */
   activeChannelId: string | null;
@@ -45,6 +54,7 @@ interface MessagingState {
   clearTyping: (channelId: string, userId: string) => void;
   setPresence: (userId: string, state: PresenceState) => void;
   setCheckin: (userId: string, badge: CheckinBadge | null) => void;
+  setCustomStatus: (userId: string, status: CustomStatus | null) => void;
   addPending: (m: PendingMessage) => void;
   updatePending: (clientMsgId: string, patch: Partial<PendingMessage>) => void;
   removePending: (clientMsgId: string) => void;
@@ -55,6 +65,7 @@ export const useMessaging = create<MessagingState>((set) => ({
   typing: {},
   presence: {},
   checkin: {},
+  customStatus: {},
   pending: {},
   activeChannelId: null,
   setStatus: (status) => set({ status }),
@@ -74,6 +85,8 @@ export const useMessaging = create<MessagingState>((set) => ({
     }),
   setPresence: (userId, state) => set((s) => ({ presence: { ...s.presence, [userId]: state } })),
   setCheckin: (userId, badge) => set((s) => ({ checkin: { ...s.checkin, [userId]: badge } })),
+  setCustomStatus: (userId, status) =>
+    set((s) => ({ customStatus: { ...s.customStatus, [userId]: status } })),
   addPending: (m) =>
     set((s) => ({
       pending: { ...s.pending, [m.channelId]: [...(s.pending[m.channelId] ?? []), m] },

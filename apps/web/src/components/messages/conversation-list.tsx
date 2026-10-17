@@ -44,6 +44,7 @@ import {
 import { toast } from 'sonner';
 import type { SidebarSectionDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
@@ -657,11 +658,7 @@ export function ConversationList({
         {channels.isLoading || !hydrated ? (
           <div className="space-y-2 p-2" aria-hidden>
             {[60, 44, 72, 52, 64, 40].map((w, i) => (
-              <div
-                key={i}
-                className="bg-muted h-6 animate-pulse rounded-sm"
-                style={{ width: `${w + 20}%` }}
-              />
+              <Skeleton key={i} className="h-7 rounded-md" style={{ width: `${w + 20}%` }} />
             ))}
           </div>
         ) : channels.isError ? (

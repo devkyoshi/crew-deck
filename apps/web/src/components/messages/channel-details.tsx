@@ -67,9 +67,9 @@ import {
   useSetActivityRules,
 } from '@/lib/messaging-api';
 import { AddPeopleDialog } from './dialogs';
-import { PersonAvatar } from './person-avatar';
+import { PersonAvatar, StatusEmoji } from './person-avatar';
 import { WebhooksSection } from './webhooks-section';
-import { CheckinPill, useCheckinOf, useTrackPeople } from './profile-popover';
+import { CheckinPill, ProfilePopover, useCheckinOf, useTrackPeople } from './profile-popover';
 
 type Channel = ChannelDTO & Partial<MyChannelDTO>;
 
@@ -226,19 +226,28 @@ function Members({ channel, canManage }: { channel: Channel; canManage: boolean 
             key={m.userId}
             className="hover:bg-muted/60 flex items-center gap-2.5 rounded-md px-1 py-1.5"
           >
-            <PersonAvatar person={m.person} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {personName(m.person)}
-                {m.userId === me && (
-                  <span className="text-muted-foreground font-normal"> (you)</span>
-                )}
-                <MemberCheckin userId={m.userId} />
-              </p>
-              {m.person?.deactivated && (
-                <p className="text-muted-foreground text-xs">Deactivated</p>
-              )}
-            </div>
+            <ProfilePopover person={{ id: m.userId }}>
+              <button
+                type="button"
+                aria-label={`Profile of ${personName(m.person)}`}
+                className="focus-visible:ring-ring/50 -m-0.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-md p-0.5 text-left outline-none focus-visible:ring-2"
+              >
+                <PersonAvatar person={m.person} />
+                <span className="block min-w-0 flex-1">
+                  <span className="flex items-center gap-1 truncate text-sm font-medium">
+                    {personName(m.person)}
+                    {m.userId === me && (
+                      <span className="text-muted-foreground font-normal"> (you)</span>
+                    )}
+                    <StatusEmoji userId={m.userId} className="text-sm" />
+                    <MemberCheckin userId={m.userId} />
+                  </span>
+                  {m.person?.deactivated && (
+                    <span className="text-muted-foreground block text-xs">Deactivated</span>
+                  )}
+                </span>
+              </button>
+            </ProfilePopover>
             {m.role === 'owner' && !isDm && (
               <Badge variant="secondary" className="gap-1">
                 <Crown className="size-3" /> Owner

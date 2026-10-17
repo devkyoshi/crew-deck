@@ -748,7 +748,10 @@ export function useStatusMutations() {
         expiresAt?: string | null;
       }) => api<{ ok: boolean }>('/me/status', { method: 'PUT', body }),
       // Everything that shows a status line (the profile menu, cards, lists) reads it again.
-      onSuccess: () => void qc.invalidateQueries({ queryKey: ['messaging', 'presence'] }),
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: ['messaging', 'presence'] });
+        void qc.invalidateQueries({ queryKey: ['messaging', 'profile-card'] });
+      },
     }),
   };
 }

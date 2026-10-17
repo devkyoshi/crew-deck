@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ProfilePopover } from './profile-popover';
 
 /**
  * Renders a stored message body. The API has already rebuilt the document from an allow-list, and
@@ -85,12 +86,31 @@ function renderNode(n: Node, key: number): ReactNode {
           {kids()}
         </p>
       );
-    case 'mention':
+    case 'mention': {
+      const label = `@${String(n.attrs?.label ?? 'someone')}`;
+      const id = typeof n.attrs?.id === 'string' ? n.attrs.id : null;
+      const style = 'mention bg-primary/10 text-primary rounded-sm px-1 font-medium';
+      // Only people have a card; groups, @channel and @here are just highlighted.
+      if (!id || (n.attrs?.kind && n.attrs.kind !== 'user'))
+        return (
+          <span key={key} className={style}>
+            {label}
+          </span>
+        );
       return (
-        <span key={key} className="mention bg-primary/10 text-primary rounded-sm px-1 font-medium">
-          @{String(n.attrs?.label ?? 'someone')}
-        </span>
+        <ProfilePopover key={key} person={{ id }}>
+          <button
+            type="button"
+            className={cn(
+              style,
+              'hover:bg-primary/20 focus-visible:ring-ring/50 cursor-pointer outline-none transition-colors focus-visible:ring-2',
+            )}
+          >
+            {label}
+          </button>
+        </ProfilePopover>
       );
+    }
     case 'blockquote':
       return (
         <blockquote key={key} className="border-border text-muted-foreground border-l-2 pl-3">

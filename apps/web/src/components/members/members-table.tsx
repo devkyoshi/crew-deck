@@ -22,8 +22,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { PersonAvatar } from '@/components/messages/person-avatar';
-import { useTrackPeople } from '@/components/messages/profile-popover';
+import { PersonAvatar, StatusEmoji } from '@/components/messages/person-avatar';
+import { ProfilePopover, useTrackPeople } from '@/components/messages/profile-popover';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -174,18 +174,25 @@ export function MembersTable({ admin }: { admin: boolean }) {
         cell: ({ row }) => {
           const m = row.original;
           return (
-            <Link href={`/people/${m.id}`} className="group flex items-center gap-3">
-              <PersonAvatar person={m} />
-              <span className="min-w-0">
-                <span className="block truncate font-medium group-hover:underline">
-                  {m.name ?? m.email}
-                  {m.id === me.user.id && <span className="text-muted-foreground"> (you)</span>}
+            <ProfilePopover person={{ id: m.id }}>
+              <button
+                type="button"
+                aria-label={`Profile of ${m.name ?? m.email}`}
+                className="group focus-visible:ring-ring/50 flex items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2"
+              >
+                <PersonAvatar person={m} />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1 truncate font-medium group-hover:underline">
+                    {m.name ?? m.email}
+                    {m.id === me.user.id && <span className="text-muted-foreground"> (you)</span>}
+                    <StatusEmoji userId={m.id} className="text-sm" />
+                  </span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    {m.jobTitle ? `${m.jobTitle} · ${m.email}` : m.email}
+                  </span>
                 </span>
-                <span className="text-muted-foreground block truncate text-xs">
-                  {m.jobTitle ? `${m.jobTitle} · ${m.email}` : m.email}
-                </span>
-              </span>
-            </Link>
+              </button>
+            </ProfilePopover>
           );
         },
       },

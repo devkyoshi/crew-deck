@@ -46,6 +46,30 @@ export function usePresenceOf(userId: string | null | undefined): PresenceState 
   return useMessaging((s) => (userId ? s.presence[userId] : undefined)) ?? 'offline';
 }
 
+/** Someone's custom status as an emoji, with the words on hover. Nothing when they have none. */
+export function StatusEmoji({
+  userId,
+  className,
+}: {
+  userId: string | null | undefined;
+  className?: string;
+}) {
+  const status = useMessaging((s) => (userId ? s.customStatus[userId] : undefined));
+  if (!status || (!status.emoji && !status.text)) return null;
+  if (status.expiresAt && new Date(status.expiresAt).getTime() < Date.now()) return null;
+  const label = [status.emoji, status.text].filter(Boolean).join(' ');
+  return (
+    <span
+      role="img"
+      aria-label={`Status: ${status.text ?? status.emoji}`}
+      title={label}
+      className={cn('shrink-0 leading-none', className)}
+    >
+      {status.emoji ?? '💬'}
+    </span>
+  );
+}
+
 type Person = Pick<PersonDTO, 'id' | 'name' | 'email' | 'avatarUrl'>;
 
 /** Avatar with a presence dot. `size` follows the shared Avatar sizes. */

@@ -35,10 +35,13 @@ import { Composer } from './composer';
 import { EmojiPickerButton } from './emoji-picker';
 import { AttachmentList, PreviewCards, ReactionBar, ThreadSummaryLink } from './message-parts';
 import { ItemCards } from './item-card';
-import { PersonAvatar } from './person-avatar';
+import { PersonAvatar, StatusEmoji } from './person-avatar';
 import { ProfilePopover } from './profile-popover';
 import { RichContent } from './rich-content';
 import type { PendingMessage } from './store';
+
+/** Width of the avatar column; system lines indent by the same amount so everything lines up. */
+export const AVATAR_COL = 'w-9';
 
 export const timeOf = (iso: string | number) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -99,7 +102,7 @@ function HoverToolbar({
 }) {
   return (
     <div
-      className="bg-background absolute -top-3.5 right-4 z-10 flex items-center rounded-md border p-0.5 opacity-0 shadow-sm transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 has-[[data-state=open]]:opacity-100 pointer-coarse:opacity-100"
+      className="bg-background absolute -top-3.5 right-4 z-10 flex translate-y-1 scale-95 items-center rounded-md border p-0.5 opacity-0 shadow-sm transition duration-150 ease-out group-hover/row:translate-y-0 group-hover/row:scale-100 group-hover/row:opacity-100 group-focus-within/row:translate-y-0 group-focus-within/row:scale-100 group-focus-within/row:opacity-100 has-[[data-state=open]]:translate-y-0 has-[[data-state=open]]:scale-100 has-[[data-state=open]]:opacity-100 pointer-coarse:translate-y-0 pointer-coarse:scale-100 pointer-coarse:opacity-100"
       role="toolbar"
       aria-label="Message actions"
     >
@@ -191,14 +194,18 @@ function HoverToolbar({
 export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
   const m = p.message;
   const own = m.authorId === p.selfId && m.kind === 'user';
-  const name = m.author ? personName(m.author) : m.kind === 'bot' ? (m.bot?.name ?? 'Bot') : 'Former member';
+  const name = m.author
+    ? personName(m.author)
+    : m.kind === 'bot'
+      ? (m.bot?.name ?? 'Bot')
+      : 'Former member';
 
   // Joins, leaves and topic changes: one quiet line.
   if (m.kind === 'system') {
     return (
       <div
         id={`msg-${m.seq}`}
-        className="text-muted-foreground flex items-center gap-2 px-4 py-1 pl-16 text-label"
+        className="text-muted-foreground flex items-center gap-2 px-4 py-1.5 pl-[4.75rem] text-label sm:px-5 sm:pl-[5.25rem]"
       >
         <CornerDownRight className="size-3.5 shrink-0" aria-hidden />
         <span>
@@ -227,18 +234,19 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
       id={`msg-${m.seq}`}
       aria-label={`${name} at ${timeOf(m.createdAt)}`}
       className={cn(
-        'group/row relative flex gap-3 px-4 transition-colors hover:bg-muted/50 focus-within:bg-muted/50',
-        p.grouped ? 'py-px' : 'pt-2 pb-px',
-        mentionsMe && 'border-l-2 border-warning bg-warning/70 pl-3.5 ',
+        'group/row relative flex gap-3 px-4 transition-colors duration-150 hover:bg-muted/50 focus-within:bg-muted/50 sm:px-5',
+        p.grouped ? 'py-0.5' : 'pt-3 pb-0.5',
+        mentionsMe &&
+          'border-l-2 border-warning bg-warning-soft pl-3.5 hover:bg-warning-soft sm:pl-4.5',
         p.highlighted && 'bg-primary/10 hover:bg-primary/10',
       )}
     >
-      <div className="flex w-9 shrink-0 justify-center pt-0.5">
+      <div className={cn('flex shrink-0 justify-center pt-0.5', AVATAR_COL)}>
         {p.grouped ? (
           <time
             dateTime={m.createdAt}
             title={fullTime(m.createdAt)}
-            className="text-muted-foreground pt-0.5 text-xs leading-5 opacity-0 group-hover/row:opacity-100"
+            className="text-muted-foreground pt-0.5 text-xs leading-5 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
           >
             {timeOf(m.createdAt)}
           </time>
@@ -247,7 +255,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
             <button
               type="button"
               aria-label={`Profile of ${name}`}
-              className="focus-visible:ring-ring/50 rounded-full outline-none focus-visible:ring-[3px]"
+              className="focus-visible:ring-ring/50 rounded-full outline-none transition-transform duration-150 hover:scale-105 focus-visible:ring-2 active:scale-95"
             >
               <PersonAvatar person={m.author} presence={false} />
             </button>
@@ -269,7 +277,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
                 <button
                   type="button"
                   className={cn(
-                    'focus-visible:ring-ring/50 rounded-sm text-sm font-semibold outline-none hover:underline focus-visible:ring-[3px]',
+                    'focus-visible:ring-ring/50 rounded-sm text-sm font-semibold outline-none hover:underline focus-visible:ring-2',
                     m.author.deactivated && 'text-muted-foreground',
                   )}
                 >
@@ -279,6 +287,7 @@ export const MessageRow = memo(function MessageRow(p: MessageRowProps) {
             ) : (
               <span className="text-sm font-semibold">{name}</span>
             )}
+            {m.kind === 'user' && <StatusEmoji userId={m.author?.id} className="text-sm" />}
             {m.author?.deactivated && (
               <span className="text-muted-foreground text-xs">(deactivated)</span>
             )}
@@ -368,9 +377,9 @@ export function PendingRow({
   return (
     <article
       aria-label={failed ? 'Message not sent' : 'Sending message'}
-      className={cn('flex gap-3 px-4', grouped ? 'py-px' : 'pt-2 pb-px')}
+      className={cn('flex gap-3 px-4 sm:px-5', grouped ? 'py-0.5' : 'pt-3 pb-0.5')}
     >
-      <div className="flex w-9 shrink-0 justify-center pt-0.5">
+      <div className={cn('flex shrink-0 justify-center pt-0.5', AVATAR_COL)}>
         {!grouped && <PersonAvatar person={self} presence={false} />}
       </div>
       <div className="min-w-0 flex-1 pb-0.5">
@@ -380,7 +389,7 @@ export function PendingRow({
             <time className="text-muted-foreground text-xs">{timeOf(pending.createdAt)}</time>
           </header>
         )}
-        <div className={cn(!failed && 'opacity-60')}>
+        <div className={cn('transition-opacity duration-300', !failed && 'opacity-60')}>
           {pending.text && <RichContent doc={pending.body} />}
           {pending.files?.length ? (
             <ul className="mt-1 flex flex-wrap gap-1.5 text-label">

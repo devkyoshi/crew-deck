@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { CloudOff, Loader2 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useMessaging } from './store';
 import { personName, type PersonDTO } from '@/lib/messaging-api';
 
@@ -35,26 +37,45 @@ export function TypingIndicator({
         : names.length === 2
           ? `${names[0]} and ${names[1]} are typing`
           : `${names[0]}, ${names[1]} and ${names[2]} are typing`;
+  const reduce = useReducedMotion();
   return (
     <div
-      className="text-muted-foreground flex h-5 items-center gap-1.5 px-4 text-xs"
+      className="text-muted-foreground flex h-6 items-center px-4 text-xs sm:px-5"
       aria-live="polite"
       role="status"
     >
-      {text && (
-        <>
-          <span className="flex gap-0.5" aria-hidden>
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                className="bg-muted-foreground/70 size-1 animate-bounce rounded-full"
-                style={{ animationDelay: `${i * 120}ms` }}
-              />
-            ))}
-          </span>
-          <span>{text}…</span>
-        </>
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {text && (
+          <motion.div
+            key={names.length}
+            className="flex items-center gap-1.5"
+            initial={reduce ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: 4 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <span
+              className="bg-muted flex items-center gap-0.5 rounded-full px-1.5 py-1"
+              aria-hidden
+            >
+              {[0, 1, 2].map((i) => (
+                <motion.span
+                  key={i}
+                  className="bg-muted-foreground/70 size-1 rounded-full"
+                  animate={reduce ? undefined : { y: [0, -3, 0], opacity: [0.5, 1, 0.5] }}
+                  transition={{
+                    duration: 0.9,
+                    repeat: Infinity,
+                    delay: i * 0.15,
+                    ease: 'easeInOut',
+                  }}
+                />
+              ))}
+            </span>
+            <span>{text}…</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -90,14 +111,14 @@ export function ConnectionBanner() {
 /** Skeletons shaped like messages, so the layout does not jump when history arrives. */
 export function MessageSkeletons() {
   return (
-    <div className="space-y-5 px-4 py-4" aria-hidden>
+    <div className="space-y-6 px-4 py-4 sm:px-5" aria-hidden>
       {[72, 40, 88, 56, 64].map((w, i) => (
-        <div key={i} className="flex gap-3">
-          <div className="bg-muted size-8 shrink-0 animate-pulse rounded-full" />
+        <div key={i} className="flex gap-3" style={{ opacity: 1 - i * 0.12 }}>
+          <Skeleton className="size-9 shrink-0 rounded-full" />
           <div className="flex-1 space-y-2">
-            <div className="bg-muted h-3 w-32 animate-pulse rounded-sm" />
-            <div className="bg-muted h-3 animate-pulse rounded-sm" style={{ width: `${w}%` }} />
-            {i % 2 === 0 && <div className="bg-muted h-3 w-1/3 animate-pulse rounded-sm" />}
+            <Skeleton className="h-3 rounded-sm" style={{ width: `${6 + ((i * 5) % 9)}rem` }} />
+            <Skeleton className="h-3 rounded-sm" style={{ width: `${w}%` }} />
+            {i % 2 === 0 && <Skeleton className="h-3 w-1/3 rounded-sm" />}
           </div>
         </div>
       ))}

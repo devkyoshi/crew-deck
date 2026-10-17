@@ -52,6 +52,7 @@ import { MessageRow } from './message-row';
 import { ImageLightbox } from './message-parts';
 import { usePanel } from './panel';
 import { PersonAvatar } from './person-avatar';
+import { ProfilePopover } from './profile-popover';
 import { useRealtime } from './realtime';
 import { ConnectionBanner, MessageSkeletons, TypingIndicator } from './status-bits';
 import { useMessaging, usePendingFor } from './store';
@@ -327,7 +328,7 @@ export function Conversation({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col" {...dropHandlers}>
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 sm:px-5">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -339,17 +340,25 @@ export function Conversation({
         </Button>
         {perms.isDm ? (
           channel.type === 'group_dm' ? (
-            <Users className="text-muted-foreground size-5 shrink-0" aria-hidden />
+            <Users className="text-muted-foreground size-4 shrink-0" aria-hidden />
           ) : (
-            <PersonAvatar person={channel.people?.[0] ?? null} size="sm" />
+            <ProfilePopover person={channel.people?.[0] ?? null}>
+              <button
+                type="button"
+                aria-label={`Profile of ${name}`}
+                className="focus-visible:ring-ring/50 rounded-full outline-none focus-visible:ring-2"
+              >
+                <PersonAvatar person={channel.people?.[0] ?? null} size="sm" />
+              </button>
+            </ProfilePopover>
           )
         ) : channel.type === 'private' ? (
           <Lock className="text-muted-foreground size-4 shrink-0" aria-hidden />
         ) : (
-          <Hash className="text-muted-foreground size-5 shrink-0" aria-hidden />
+          <Hash className="text-muted-foreground size-4 shrink-0" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-heading leading-tight font-semibold">{name}</h1>
+          <h1 className="truncate text-title leading-tight font-semibold">{name}</h1>
           {channel.topic && !perms.isDm && (
             <p className="text-muted-foreground truncate text-xs">{channel.topic}</p>
           )}
@@ -416,7 +425,7 @@ export function Conversation({
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as Tab)}
-        className="shrink-0 border-b px-3 sm:px-4"
+        className="shrink-0 border-b px-4 sm:px-5"
       >
         <TabsList aria-label="Conversation views" className="h-9 bg-transparent p-0">
           <TabsTrigger
@@ -443,7 +452,7 @@ export function Conversation({
       <ConnectionBanner />
 
       {!isMember && !perms.isDm && (
-        <div className="bg-muted/60 flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm">
+        <div className="bg-muted/60 flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm sm:px-5">
           <span className="flex-1">
             You are previewing #{channel.name}. Join to post and get notified.
           </span>
@@ -517,7 +526,7 @@ export function Conversation({
 
       {view && tab === 'messages' && <LiveAnnouncer messages={view.messages} selfId={meUser.id} />}
       {ephemeral.length > 0 && (
-        <ul className="space-y-2 px-4 pb-2" aria-label="Only visible to you">
+        <ul className="space-y-2 px-4 pb-2 sm:px-5" aria-label="Only visible to you">
           {ephemeral.map((e) => (
             <li key={e.id} className="bg-muted/40 rounded-lg border border-dashed p-3">
               <p className="text-muted-foreground mb-1 flex items-center gap-2 text-xs">
@@ -546,7 +555,7 @@ export function Conversation({
       )}
       <TypingIndicator channelId={channelId} selfId={meUser.id} people={people} />
 
-      <div className="px-3 pb-3 sm:px-4 sm:pb-4">
+      <div className="px-4 pb-4 sm:px-5 sm:pb-5">
         {composerNotice ? (
           <p className="text-muted-foreground bg-muted/50 rounded-lg border border-dashed px-3 py-3 text-center text-sm">
             {composerNotice}

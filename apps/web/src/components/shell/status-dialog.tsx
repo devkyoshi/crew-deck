@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,8 @@ import {
 import { ApiError } from '@/lib/api';
 import { useStatusMutations } from '@/lib/messaging-api';
 import { EmojiPickerButton } from '@/components/messages/emoji-picker';
+import { useMessaging } from '@/components/messages/store';
+import { useMe } from './me-context';
 
 const EXPIRY: { value: string; label: string; minutes: number | null }[] = [
   { value: 'never', label: 'Do not clear', minutes: null },
@@ -45,6 +47,16 @@ export function StatusDialog({
   const [emoji, setEmoji] = useState('💬');
   const [text, setText] = useState('');
   const [expiry, setExpiry] = useState('never');
+  const { user } = useMe();
+
+  // Start from what is set now, so changing a status is an edit and not a blank form.
+  useEffect(() => {
+    if (!open) return;
+    const current = useMessaging.getState().customStatus[user.id];
+    setEmoji(current?.emoji ?? '💬');
+    setText(current?.text ?? '');
+    setExpiry('never');
+  }, [open, user.id]);
 
   const save = (clear: boolean) => {
     const choice = EXPIRY.find((e) => e.value === expiry)!;

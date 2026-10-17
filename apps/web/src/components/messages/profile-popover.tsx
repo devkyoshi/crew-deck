@@ -4,12 +4,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, Clock, MessageSquare, Users } from 'lucide-react';
+import { Briefcase, Clock, Mail, MessageSquare, Pencil, Users } from 'lucide-react';
 import { CHECKIN_BADGE_LABELS, type CheckinBadge, type PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMe } from '@/components/shell/me-context';
+import { StatusDialog } from '@/components/shell/status-dialog';
 import { api } from '@/lib/api';
 import { personName, useOpenDm, usePresence } from '@/lib/messaging-api';
 import type { ProfileCardDTO } from '@crew-deck/shared';
@@ -52,6 +53,8 @@ export function useTrackPeople(ids: string[]) {
     for (const p of q.data ?? []) {
       if (!st.presence[p.id]) st.setPresence(p.id, p.state);
       st.setCheckin(p.id, p.checkin ?? null);
+      const status = p.status && (p.status.emoji || p.status.text) ? p.status : null;
+      st.setCustomStatus(p.id, status);
     }
   }, [q.data]);
 }
@@ -71,7 +74,15 @@ function localTime(timezone: string | null) {
   }
 }
 
-function Card({ id, onNavigate }: { id: string; onNavigate: () => void }) {
+function Card({
+  id,
+  onNavigate,
+  onEditStatus,
+}: {
+  id: string;
+  onNavigate: () => void;
+  onEditStatus: () => void;
+}) {
   const router = useRouter();
   const me = useMe().user;
   const openDm = useOpenDm();
@@ -81,6 +92,8 @@ function Card({ id, onNavigate }: { id: string; onNavigate: () => void }) {
     staleTime: 30_000,
     retry: false,
   });
+  // The card does not carry when a status ends; the presence lookup does.
+  const expiresAt = usePresence([id]).data?.find((x) => x.id === id)?.status?.expiresAt ?? null;
   if (q.isLoading)
     return (
       <div className="space-y-3 p-1" role="status" aria-label="Loading profile">
@@ -110,12 +123,38 @@ function Card({ id, onNavigate }: { id: string; onNavigate: () => void }) {
           </p>
         </div>
       </div>
-      {p.status && (
-        <p className="bg-muted/50 rounded-md px-2 py-1.5 text-sm">
-          <span aria-hidden>{p.status.emoji}</span> {p.status.text}
-        </p>
+      {p.status && (p.status.text || p.status.emoji) && (
+        <div className="bg-muted/50 flex items-start gap-2.5 rounded-md px-2.5 py-2">
+          <span className="text-xl leading-none" aria-hidden>
+            {p.status.emoji ?? '💬'}
+          </span>
+          <p className="min-w-0 text-sm">
+            <span className="sr-only">Status: </span>
+            {p.status.text}
+            {expiresAt && (
+              <span className="text-muted-foreground block text-xs">
+                Until{' '}
+                {new Date(expiresAt).toLocaleString([], {
+                  ...(new Date(expiresAt).toDateString() !== new Date().toDateString() && {
+                    weekday: 'short',
+                  }),
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+          </p>
+        </div>
       )}
-      <ul className="text-muted-foreground space-y-1 text-label">
+      <ul className="text-muted-foreground space-y-1.5 text-label">
+        {p.email && (
+          <li className="flex items-center gap-2">
+            <Mail className="size-3.5 shrink-0" aria-hidden />
+            <a href={`mailto:${p.email}`} className="hover:text-foreground truncate hover:underline">
+              {p.email}
+            </a>
+          </li>
+        )}
         {time && (
           <li className="flex items-center gap-2">
             <Clock className="size-3.5" aria-hidden /> {time}
@@ -132,7 +171,11 @@ function Card({ id, onNavigate }: { id: string; onNavigate: () => void }) {
         </li>
       </ul>
       <div className="flex gap-2">
-        {p.id !== me.id && (
+        {p.id === me.id ? (
+          <Button size="sm" className="flex-1" onClick={onEditStatus}>
+            <Pencil /> Edit status
+          </Button>
+        ) : (
           <Button
             size="sm"
             className="flex-1"
@@ -168,13 +211,27 @@ export function ProfilePopover({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const me = useMe().user;
   if (!person) return <>{children}</>;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
-        {open && <Card id={person.id} onNavigate={() => setOpen(false)} />}
-      </PopoverContent>
-    </Popover>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>{children}</PopoverTrigger>
+        <PopoverContent align="start" className="w-80">
+          {open && (
+            <Card
+              id={person.id}
+              onNavigate={() => setOpen(false)}
+              onEditStatus={() => {
+                setOpen(false);
+                setStatusOpen(true);
+              }}
+            />
+          )}
+        </PopoverContent>
+      </Popover>
+      {person.id === me.id && <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} />}
+    </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ChevronLeft,
   ChevronRight,
@@ -40,37 +41,62 @@ export function ReactionBar({
   canReact: boolean;
   onToggle: (emoji: string) => void;
 }) {
+  const reduce = useReducedMotion();
   if (message.reactions.length === 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1" role="group" aria-label="Reactions">
-      {message.reactions.map((r) => {
-        const mine = r.userIds.includes(selfId);
-        return (
-          <Tooltip key={r.emoji}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-pressed={mine}
-                aria-label={`${r.emoji} ${r.count}. ${names(r.userIds, people, selfId)} reacted`}
-                disabled={!canReact}
-                onClick={() => onToggle(r.emoji)}
-                className={cn(
-                  'focus-visible:ring-ring/50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-label transition-colors outline-none focus-visible:ring-[3px] disabled:cursor-default',
-                  mine
-                    ? 'border-primary/50 bg-primary/10 text-primary'
-                    : 'bg-muted/50 hover:bg-muted',
-                )}
-              >
-                <span className="text-heading leading-none">{r.emoji}</span>
-                <span className="tabular-nums">{r.count}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {names(r.userIds, people, selfId)} reacted with {r.emoji}
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5" role="group" aria-label="Reactions">
+      <AnimatePresence initial={false}>
+        {message.reactions.map((r) => {
+          const mine = r.userIds.includes(selfId);
+          return (
+            <motion.span
+              key={r.emoji}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={reduce ? undefined : { opacity: 0, scale: 0.6 }}
+              transition={{ type: 'spring', stiffness: 520, damping: 30 }}
+              className="inline-flex"
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-pressed={mine}
+                    aria-label={`${r.emoji} ${r.count}. ${names(r.userIds, people, selfId)} reacted`}
+                    disabled={!canReact}
+                    onClick={() => onToggle(r.emoji)}
+                    className={cn(
+                      'focus-visible:ring-ring/50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-label transition-[colors,transform] duration-150 outline-none focus-visible:ring-2 enabled:active:scale-90 disabled:cursor-default',
+                      mine
+                        ? 'border-primary/50 bg-primary/10 text-primary'
+                        : 'bg-muted/50 hover:bg-muted',
+                    )}
+                  >
+                    <span className="text-heading leading-none">{r.emoji}</span>
+                    <span className="relative inline-flex overflow-hidden tabular-nums">
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                          key={r.count}
+                          initial={reduce ? false : { y: 10, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={reduce ? undefined : { y: -10, opacity: 0 }}
+                          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          {r.count}
+                        </motion.span>
+                      </AnimatePresence>
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {names(r.userIds, people, selfId)} reacted with {r.emoji}
+                </TooltipContent>
+              </Tooltip>
+            </motion.span>
+          );
+        })}
+      </AnimatePresence>
       {canReact && <EmojiPickerButton onPick={onToggle} className="size-6 rounded-full border" />}
     </div>
   );

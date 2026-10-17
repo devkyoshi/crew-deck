@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { PresenceDot, usePresenceOf } from '@/components/messages/person-avatar';
+import { PresenceDot, StatusEmoji, usePresenceOf } from '@/components/messages/person-avatar';
 import { useTrackPeople } from '@/components/messages/profile-popover';
 import { useMessaging } from '@/components/messages/store';
 import { RoleBadge } from '@/components/shared/badges';
@@ -77,7 +77,11 @@ function StatusSection({ onSetStatus }: { onSetStatus: () => void }) {
     <>
       <DropdownMenuItem onSelect={onSetStatus} className="items-start">
         <span className="mt-0.5 shrink-0" aria-hidden>
-          {custom?.emoji ? <span className="text-base leading-none">{custom.emoji}</span> : <Smile />}
+          {custom?.emoji ? (
+            <span className="text-base leading-none">{custom.emoji}</span>
+          ) : (
+            <Smile />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate">{custom?.text ?? 'Set a status'}</span>
@@ -108,7 +112,9 @@ function StatusSection({ onSetStatus }: { onSetStatus: () => void }) {
         >
           <PresenceDot state={c.state} className="ring-0" />
           <span className="flex-1">{c.label}</span>
-          {(c.mode === 'auto' ? state === 'online' : state === 'away') && <Check className="size-4" />}
+          {(c.mode === 'auto' ? state === 'online' : state === 'away') && (
+            <Check className="size-4" />
+          )}
         </DropdownMenuItem>
       ))}
       <DropdownMenuSub>
@@ -172,11 +178,18 @@ export function UserMenu({ side = 'right' }: { side?: 'right' | 'bottom' }) {
               <AvatarFallback className="text-xs">{fallback}</AvatarFallback>
             </Avatar>
             <PresenceDot state={state} className="absolute right-0 bottom-0" />
+            <StatusEmoji
+              userId={user.id}
+              className="bg-background absolute -top-1 -right-1 rounded-full border px-0.5 py-px text-xs"
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side={side} className="w-64">
           <DropdownMenuLabel className="space-y-1 font-normal">
-            <div className="truncate font-medium">{user.name ?? user.email}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate font-medium">{user.name ?? user.email}</span>
+              <StatusEmoji userId={user.id} className="text-sm" />
+            </div>
             <div className="text-muted-foreground truncate text-xs">{user.email}</div>
             <RoleBadge role={orgRole} />
           </DropdownMenuLabel>

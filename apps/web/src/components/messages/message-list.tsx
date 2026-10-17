@@ -11,12 +11,14 @@ import {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { MessageDTO, PersonDTO } from '@crew-deck/shared';
 import { Button } from '@/components/ui/button';
 import type { ChannelView } from '@/lib/messaging-api';
 import { buildRows, type Row } from '@/lib/messaging-logic';
 import { cn } from '@/lib/utils';
 import { PendingRow } from './message-row';
+import { useTrackPeople } from './profile-popover';
 import type { PendingMessage } from './store';
 
 const estimate = (r: Row | undefined) =>
@@ -29,8 +31,8 @@ const estimate = (r: Row | undefined) =>
         : r.kind === 'start'
           ? 160
           : r.kind === 'msg' && r.grouped
-            ? 26
-            : 52;
+            ? 30
+            : 60;
 
 export interface MessageListProps {
   selfId: string;
@@ -76,6 +78,16 @@ export function MessageList(props: MessageListProps) {
       }),
     [view.messages, view.hasOlder, pending, selfId, props.initialLastReadSeq],
   );
+  // Presence and status for the people in view, so names can carry their status emoji.
+  const authorIds = useMemo(
+    () =>
+      [...new Set(view.messages.slice(-80).flatMap((m) => (m.authorId ? [m.authorId] : [])))].slice(
+        0,
+        40,
+      ),
+    [view.messages],
+  );
+  useTrackPeople(authorIds);
   const dividerIndex = rows.findIndex((r) => r.kind === 'unread');
 
   const virt = useVirtualizer({
@@ -212,7 +224,7 @@ export function MessageList(props: MessageListProps) {
         aria-label="Messages"
         aria-live="off"
         tabIndex={0}
-        className="focus-visible:ring-ring/40 h-full overflow-y-auto overscroll-contain py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset"
+        className="focus-visible:ring-ring/40 h-full overflow-y-auto overscroll-contain py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset"
       >
         {loadingOlder && (
           <div
@@ -232,77 +244,103 @@ export function MessageList(props: MessageListProps) {
                 key={v.key}
                 data-index={v.index}
                 ref={virt.measureElement}
-                className={cn(
-                  'absolute top-0 left-0 w-full',
-                  fresh && 'animate-in fade-in slide-in-from-bottom-1 duration-200',
-                )}
+                className="absolute top-0 left-0 w-full"
                 style={{ transform: `translateY(${v.start}px)` }}
               >
-                {r.kind === 'start' ? (
-                  <div className="px-4 pt-4 pb-3">{props.intro}</div>
-                ) : r.kind === 'date' ? (
-                  <div
-                    className="flex items-center gap-3 px-4 py-3"
-                    role="separator"
-                    aria-label={r.label}
-                  >
-                    <span className="bg-border h-px flex-1" />
-                    <span className="bg-background text-muted-foreground rounded-full border px-3 py-0.5 text-xs font-medium">
-                      {r.label}
-                    </span>
-                    <span className="bg-border h-px flex-1" />
-                  </div>
-                ) : r.kind === 'unread' ? (
-                  <div
-                    className="text-destructive flex items-center gap-3 px-4 py-1"
-                    role="separator"
-                    aria-label="New messages"
-                  >
-                    <span className="bg-destructive/40 h-px flex-1" />
-                    <span className="text-xs font-semibold tracking-wide uppercase">
-                      New messages
-                    </span>
-                    <span className="bg-destructive/40 h-px flex-1" />
-                  </div>
-                ) : r.kind === 'msg' ? (
-                  props.renderMessage(r.m, r.grouped, highlight === r.m.seq)
-                ) : (
-                  <PendingRow
-                    pending={r.p}
-                    self={self}
-                    grouped={r.grouped}
-                    onRetry={() => props.onRetry(r.p.clientMsgId)}
-                    onDiscard={() => props.onDiscard(r.p.clientMsgId)}
-                  />
-                )}
+                {/* The entrance lives on an inner element: the wrapper's transform positions the row. */}
+                <div
+                  className={cn(
+                    fresh && 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out',
+                  )}
+                >
+                  {r.kind === 'start' ? (
+                    <div className="px-4 pt-4 pb-3 sm:px-5">{props.intro}</div>
+                  ) : r.kind === 'date' ? (
+                    <div
+                      className="flex items-center gap-3 px-4 py-4 sm:px-5"
+                      role="separator"
+                      aria-label={r.label}
+                    >
+                      <span className="bg-border h-px flex-1" />
+                      <span className="bg-background text-muted-foreground rounded-full border px-3 py-0.5 text-xs font-medium shadow-xs">
+                        {r.label}
+                      </span>
+                      <span className="bg-border h-px flex-1" />
+                    </div>
+                  ) : r.kind === 'unread' ? (
+                    <div
+                      className="text-destructive flex items-center gap-3 px-4 py-2 sm:px-5"
+                      role="separator"
+                      aria-label="New messages"
+                    >
+                      <span className="bg-destructive/30 h-px flex-1" />
+                      <span className="bg-destructive/10 rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide uppercase">
+                        New messages
+                      </span>
+                      <span className="bg-destructive/30 h-px flex-1" />
+                    </div>
+                  ) : r.kind === 'msg' ? (
+                    props.renderMessage(r.m, r.grouped, highlight === r.m.seq)
+                  ) : (
+                    <PendingRow
+                      pending={r.p}
+                      self={self}
+                      grouped={r.grouped}
+                      onRetry={() => props.onRetry(r.p.clientMsgId)}
+                      onDiscard={() => props.onDiscard(r.p.clientMsgId)}
+                    />
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
       </div>
-      {dividerAbove && dividerIndex >= 0 && (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full shadow-md"
-          onClick={jumpToUnread}
-        >
-          <ArrowUp /> Jump to unread
-        </Button>
-      )}
-      {!atBottom && (
-        <Button
-          size="sm"
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-md"
-          onClick={() => {
-            if (view.hasNewer) props.onJumpLatest();
-            else scrollToEnd();
-          }}
-        >
-          <ArrowDown />{' '}
-          {newBelow > 0 ? `${newBelow} new message${newBelow === 1 ? '' : 's'}` : 'Jump to latest'}
-        </Button>
-      )}
+      <AnimatePresence>
+        {dividerAbove && dividerIndex >= 0 && (
+          <motion.div
+            key="unread"
+            className="pointer-events-none absolute inset-x-0 top-3 flex justify-center"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            <Button
+              size="sm"
+              variant="secondary"
+              className="pointer-events-auto rounded-full shadow-md"
+              onClick={jumpToUnread}
+            >
+              <ArrowUp /> Jump to unread
+            </Button>
+          </motion.div>
+        )}
+        {!atBottom && (
+          <motion.div
+            key="latest"
+            className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            <Button
+              size="sm"
+              className="pointer-events-auto rounded-full shadow-md"
+              onClick={() => {
+                if (view.hasNewer) props.onJumpLatest();
+                else scrollToEnd();
+              }}
+            >
+              <ArrowDown />{' '}
+              {newBelow > 0
+                ? `${newBelow} new message${newBelow === 1 ? '' : 's'}`
+                : 'Jump to latest'}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
