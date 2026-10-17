@@ -3,9 +3,24 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Filter,
+  ListTodo,
+  Plus,
+  RotateCcw,
+  Rocket,
+  Trash2,
+  TrendingUp,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { Illustration } from '@/components/illustrations';
 import { LoadError } from '@/components/shared/load-error';
+import { PageHeader } from '@/components/shared/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -74,6 +89,14 @@ const TYPES: { type: GadgetType; label: string; needsSpace: boolean; hint: strin
   },
 ];
 
+const TILE_ICON: Record<GadgetType, LucideIcon> = {
+  assigned: ListTodo,
+  filter: Filter,
+  sprint: Zap,
+  versions: Rocket,
+  flow: TrendingUp,
+};
+
 const key = 'dashboard';
 const useDashboard = () =>
   useQuery({
@@ -114,7 +137,17 @@ export function DashboardView() {
   const [adding, setAdding] = useState(false);
 
   if (dash.isError) return <LoadError what="your dashboard" onRetry={() => void dash.refetch()} />;
-  if (!dash.data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (!dash.data) {
+    return (
+      <div className="space-y-6" role="status" aria-busy="true" aria-label="Loading your dashboard">
+        <Skeleton className="h-14 w-72" />
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
   const gadgets = dash.data.gadgets;
 
   const persist = (next: Gadget[]) =>
@@ -127,68 +160,93 @@ export function DashboardView() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => setAdding(true)} disabled={gadgets.length >= 12}>
-          <Plus /> Add a tile
-        </Button>
-        {dash.data.custom && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => reset.mutate(undefined, { onError: (e) => toastError(e) })}
-          >
-            <RotateCcw /> Back to the default
-          </Button>
-        )}
-        <span className="text-muted-foreground text-xs">{gadgets.length} of 12 tiles</span>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="Your own tiles: choose what you want to see at a glance."
+        action={
+          <>
+            {dash.data.custom && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => reset.mutate(undefined, { onError: (e) => toastError(e) })}
+              >
+                <RotateCcw /> Back to the default
+              </Button>
+            )}
+            <span className="text-muted-foreground tnum text-xs">{gadgets.length} of 12</span>
+            <Button size="sm" onClick={() => setAdding(true)} disabled={gadgets.length >= 12}>
+              <Plus /> Add a tile
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {gadgets.map((g, i) => (
-          <section
-            key={g.id}
-            aria-label={TYPES.find((t) => t.type === g.type)?.label}
-            className="bg-card space-y-3 rounded-lg border p-4"
-          >
-            <div className="flex items-center gap-1">
-              <h2 className="font-semibold">{TYPES.find((t) => t.type === g.type)?.label}</h2>
-              <div className="ml-auto flex items-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  aria-label="Move up"
-                  disabled={i === 0}
-                  onClick={() => move(i, -1)}
-                >
-                  <ArrowUp />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  aria-label="Move down"
-                  disabled={i === gadgets.length - 1}
-                  onClick={() => move(i, 1)}
-                >
-                  <ArrowDown />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  aria-label="Remove this tile"
-                  onClick={() => persist(gadgets.filter((x) => x.id !== g.id))}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            </div>
-            <GadgetBody gadget={g} />
-          </section>
-        ))}
-      </div>
+      {gadgets.length === 0 ? (
+        <div className="bg-card flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-14 text-center">
+          <Illustration name="chart" className="h-28" />
+          <p className="text-heading">Your dashboard is empty</p>
+          <p className="text-muted-foreground max-w-sm text-sm">
+            Add tiles for your work, a saved filter, a running sprint or release progress.
+          </p>
+          <Button size="sm" className="mt-2" onClick={() => setAdding(true)}>
+            <Plus /> Add your first tile
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {gadgets.map((g, i) => {
+            const meta = TYPES.find((t) => t.type === g.type);
+            const Icon = TILE_ICON[g.type];
+            return (
+              <section
+                key={g.id}
+                aria-label={meta?.label}
+                className="group/tile bg-card rounded-xl border"
+              >
+                <div className="flex items-center gap-3 px-5 pt-4 pb-3">
+                  <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
+                    <Icon className="size-4" strokeWidth={1.5} aria-hidden />
+                  </span>
+                  <h2 className="text-heading min-w-0 flex-1 truncate">{meta?.label}</h2>
+                  <div className="flex items-center opacity-60 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Move up"
+                      disabled={i === 0}
+                      onClick={() => move(i, -1)}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Move down"
+                      disabled={i === gadgets.length - 1}
+                      onClick={() => move(i, 1)}
+                    >
+                      <ArrowDown />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove this tile"
+                      onClick={() => persist(gadgets.filter((x) => x.id !== g.id))}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </div>
+                <div className="border-t px-5 py-4">
+                  <GadgetBody gadget={g} />
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
       <ItemSheet />
 
       {adding && (

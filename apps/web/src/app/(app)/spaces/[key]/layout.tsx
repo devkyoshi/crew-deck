@@ -18,7 +18,7 @@ import {
   Milestone,
   Pencil,
   Rocket,
-  Settings,
+  Star,
   Tag,
   Ticket,
   Users,
@@ -60,7 +60,6 @@ const TAB_ICONS: Record<string, LucideIcon> = {
   Documents: FileText,
   Reports: BarChart3,
   Members: Users,
-  Settings: Settings,
 };
 
 export default function SpaceLayout({
@@ -156,7 +155,6 @@ export default function SpaceLayout({
     { href: `${base}/documents`, label: 'Documents' },
     { href: `${base}/reports`, label: 'Reports' },
     { href: `${base}/members`, label: 'Members' },
-    ...(space.permissions.edit ? [{ href: `${base}/settings`, label: 'Settings' }] : []),
   ];
 
   return (
@@ -239,6 +237,13 @@ export default function SpaceLayout({
                     </AvatarFallback>
                   </Avatar>
                   {m.name ?? m.email}
+                  {m.role === 'admin' && (
+                    <Star
+                      className="size-3.5 fill-warning text-warning"
+                      aria-label="Space admin"
+                      role="img"
+                    />
+                  )}
                 </span>
               ))}
               {people.length > 4 && (

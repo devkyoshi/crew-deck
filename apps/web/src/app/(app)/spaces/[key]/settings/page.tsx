@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Globe, Lock, ShieldAlert, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Archive,
+  Globe,
+  Lock,
+  ShieldAlert,
+  SlidersHorizontal,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
@@ -140,188 +149,214 @@ export default function SpaceSettingsPage() {
     }
   }
 
+  const sections = [
+    { id: 'general', label: 'General', icon: SlidersHorizontal },
+    { id: 'access', label: 'Access', icon: Lock },
+    ...(space.features.includes('tickets')
+      ? [{ id: 'sla', label: 'Response targets', icon: Timer }]
+      : []),
+    { id: 'danger', label: 'Danger zone', icon: AlertTriangle },
+  ];
+
   return (
-    <div className="max-w-2xl space-y-6">
-      {space.features.includes('tickets') && (
-        <Card>
+    <div className="grid items-start gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
+      <nav aria-label="Settings sections" className="lg:sticky lg:top-4">
+        <ul className="flex gap-1 overflow-x-auto lg:flex-col">
+          {sections.map((x) => (
+            <li key={x.id}>
+              <a
+                href={`#${x.id}`}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors"
+              >
+                <x.icon className="size-4" strokeWidth={1.5} aria-hidden />
+                {x.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="max-w-2xl space-y-6">
+        {space.features.includes('tickets') && (
+          <Card id="sla" className="scroll-mt-4">
+            <CardHeader>
+              <CardTitle>Response targets</CardTitle>
+              <CardDescription>
+                How quickly this desk answers and resolves tickets, by priority.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ServiceSlaSettings spaceKey={space.key} />
+            </CardContent>
+          </Card>
+        )}
+        <form onSubmit={saveGeneral} noValidate>
+          <Card id="general" className="scroll-mt-4">
+            <CardHeader>
+              <CardTitle>General</CardTitle>
+              <CardDescription>How this space appears across the workspace.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="s-name">Name</Label>
+                <Input
+                  id="s-name"
+                  disabled={archived}
+                  aria-invalid={!!errors.name}
+                  {...register('name')}
+                />
+                {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-key">Key</Label>
+                <Input
+                  id="s-key"
+                  value={space.key}
+                  readOnly
+                  disabled
+                  className="max-w-40 font-mono"
+                />
+                <p className="text-muted-foreground text-xs">The key cannot be changed.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Icon</Label>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Icon">
+                  {Object.keys(SPACE_ICONS).map((name) => {
+                    const Icon = spaceIcon(name);
+                    const on = icon === name;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={name}
+                        disabled={archived}
+                        onClick={() => setValue('icon', name, { shouldDirty: true })}
+                        className={cn(
+                          'hover:bg-accent flex size-9 items-center justify-center rounded-lg border transition-colors disabled:opacity-50',
+                          on &&
+                            'border-foreground bg-foreground text-background hover:bg-foreground',
+                        )}
+                      >
+                        <Icon className="size-[18px]" strokeWidth={1.5} aria-hidden />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-desc">Description</Label>
+                <Textarea id="s-desc" rows={3} disabled={archived} {...register('description')} />
+                {errors.description && (
+                  <p className="text-destructive text-xs">{errors.description.message}</p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="justify-end">
+              <Button type="submit" disabled={archived || isSubmitting || !isDirty}>
+                {isSubmitting ? 'Saving…' : 'Save changes'}
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+
+        <Card id="access" className="scroll-mt-4">
           <CardHeader>
-            <CardTitle>Response targets</CardTitle>
-            <CardDescription>
-              How quickly this desk answers and resolves tickets, by priority.
-            </CardDescription>
+            <CardTitle>Access</CardTitle>
+            <CardDescription>Who can find and open this space.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ServiceSlaSettings spaceKey={space.key} />
-          </CardContent>
-        </Card>
-      )}
-      <form onSubmit={saveGeneral} noValidate>
-        <Card>
-          <CardHeader>
-            <CardTitle>General</CardTitle>
-            <CardDescription>How this space appears across the workspace.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="s-name">Name</Label>
-              <Input
-                id="s-name"
-                disabled={archived}
-                aria-invalid={!!errors.name}
-                {...register('name')}
-              />
-              {errors.name && <p className="text-destructive text-xs">{errors.name.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-key">Key</Label>
-              <Input
-                id="s-key"
-                value={space.key}
-                readOnly
-                disabled
-                className="max-w-40 font-mono"
-              />
-              <p className="text-muted-foreground text-xs">The key cannot be changed.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Icon</Label>
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Icon">
-                {Object.keys(SPACE_ICONS).map((name) => {
-                  const Icon = spaceIcon(name);
-                  const on = icon === name;
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      aria-pressed={on}
-                      aria-label={name}
-                      disabled={archived}
-                      onClick={() => setValue('icon', name, { shouldDirty: true })}
-                      className={cn(
-                        'hover:bg-accent flex size-10 items-center justify-center rounded-lg border transition-colors disabled:opacity-50',
-                        on &&
-                          'border-primary bg-accent text-accent-foreground ring-primary/30 ring-2',
-                      )}
-                    >
-                      <Icon className="size-5" aria-hidden />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-desc">Description</Label>
-              <Textarea id="s-desc" rows={3} disabled={archived} {...register('description')} />
-              {errors.description && (
-                <p className="text-destructive text-xs">{errors.description.message}</p>
-              )}
+            <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Visibility">
+              {(
+                [
+                  {
+                    id: 'open',
+                    icon: Globe,
+                    title: 'Open',
+                    text: 'Everyone in the workspace can view it.',
+                  },
+                  {
+                    id: 'private',
+                    icon: Lock,
+                    title: 'Private',
+                    text: 'Only added people, groups and admins.',
+                  },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={visibility === o.id}
+                  disabled={archived}
+                  onClick={() => setVisibility(o.id)}
+                  className={cn(
+                    'hover:bg-accent/60 space-y-1.5 rounded-lg border p-4 text-left transition-colors disabled:opacity-50',
+                    visibility === o.id && 'border-foreground ring-foreground ring-1',
+                  )}
+                >
+                  <o.icon className="size-5" strokeWidth={1.5} aria-hidden />
+                  <div className="font-medium">{o.title}</div>
+                  <p className="text-muted-foreground text-xs">{o.text}</p>
+                </button>
+              ))}
             </div>
           </CardContent>
           <CardFooter className="justify-end">
-            <Button type="submit" disabled={archived || isSubmitting || !isDirty}>
-              {isSubmitting ? 'Saving…' : 'Save changes'}
+            <Button
+              disabled={archived || savingAccess || visibility === space.visibility}
+              onClick={saveAccess}
+            >
+              {savingAccess ? 'Saving…' : 'Save access'}
             </Button>
           </CardFooter>
         </Card>
-      </form>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Access</CardTitle>
-          <CardDescription>Who can find and open this space.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Visibility">
-            {(
-              [
-                {
-                  id: 'open',
-                  icon: Globe,
-                  title: 'Open',
-                  text: 'Everyone in the workspace can view it.',
-                },
-                {
-                  id: 'private',
-                  icon: Lock,
-                  title: 'Private',
-                  text: 'Only added people, groups and admins.',
-                },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                aria-pressed={visibility === o.id}
-                disabled={archived}
-                onClick={() => setVisibility(o.id)}
-                className={cn(
-                  'hover:bg-accent/60 space-y-1.5 rounded-lg border p-4 text-left transition-colors disabled:opacity-50',
-                  visibility === o.id && 'border-primary bg-accent ring-primary/30 ring-2',
-                )}
-              >
-                <o.icon className="text-primary size-5" aria-hidden />
-                <div className="font-medium">{o.title}</div>
-                <p className="text-muted-foreground text-xs">{o.text}</p>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-        <CardFooter className="justify-end">
-          <Button
-            disabled={archived || savingAccess || visibility === space.visibility}
-            onClick={saveAccess}
-          >
-            {savingAccess ? 'Saving…' : 'Save access'}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-destructive">Danger zone</CardTitle>
-          <CardDescription>These actions affect everyone in the space.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">{archived ? 'Restore space' : 'Archive space'}</div>
-              <p className="text-muted-foreground text-xs">
-                {archived
-                  ? 'Make the space active and editable again.'
-                  : 'Archived spaces are read-only and hidden from the default list. You can restore them.'}
-              </p>
-            </div>
-            {archived ? (
-              <Button variant="outline" disabled={busy} onClick={() => setStatus('restore')}>
-                Restore
-              </Button>
-            ) : (
-              <Button variant="outline" onClick={() => setConfirmArchive(true)}>
-                <Archive /> Archive
-              </Button>
-            )}
-          </div>
-          {space.permissions.delete && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+        <Card id="danger" className="border-destructive/30 scroll-mt-4">
+          <CardHeader>
+            <CardTitle className="text-destructive">Danger zone</CardTitle>
+            <CardDescription>These actions affect everyone in the space.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="font-medium">Delete space</div>
+                <div className="font-medium">{archived ? 'Restore space' : 'Archive space'}</div>
                 <p className="text-muted-foreground text-xs">
-                  Removes the space for everyone. Its key can never be used again.
+                  {archived
+                    ? 'Make the space active and editable again.'
+                    : 'Archived spaces are read-only and hidden from the default list. You can restore them.'}
                 </p>
               </div>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setTyped('');
-                  setConfirmDelete(true);
-                }}
-              >
-                <Trash2 /> Delete
-              </Button>
+              {archived ? (
+                <Button variant="outline" disabled={busy} onClick={() => setStatus('restore')}>
+                  Restore
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => setConfirmArchive(true)}>
+                  <Archive /> Archive
+                </Button>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {space.permissions.delete && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <div>
+                  <div className="font-medium">Delete space</div>
+                  <p className="text-muted-foreground text-xs">
+                    Removes the space for everyone. Its key can never be used again.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setTyped('');
+                    setConfirmDelete(true);
+                  }}
+                >
+                  <Trash2 /> Delete
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <AlertDialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <AlertDialogContent>

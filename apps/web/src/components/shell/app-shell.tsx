@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { RealtimeProvider } from '@/components/messages/realtime';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Me } from '@/lib/api';
+import { QuickChatDock } from '@/components/messages/quick-messages';
 import { AppRail } from './rail';
 import { AppSidebar } from './app-sidebar';
 import { MeProvider } from './me-context';
@@ -36,6 +37,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </main>
         </SidebarInset>
         </div>
+        <QuickChatDock />
       </SidebarProvider>
       </RealtimeProvider>
     </MeProvider>

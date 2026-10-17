@@ -17,6 +17,7 @@ import { CheckinControl } from '@/components/checkin/checkin-control';
 import { CommandPalette } from './command-palette';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SpaceSwitcher } from './space-switcher';
+import { QuickMessages } from '@/components/messages/quick-messages';
 import { findNavItem } from './nav';
 import { UserMenu } from './user-menu';
 
@@ -61,12 +62,13 @@ export function Topbar() {
         <CheckinControl />
         <SpaceSwitcher />
         <CommandPalette />
+        <QuickMessages />
         <NotificationBell side="bottom" />
-        {/* Theme and account live in the rail on desktop; the rail is hidden below md. */}
-        <div className="flex items-center gap-1 md:hidden">
+        {/* The theme toggle lives in the rail on desktop; the rail is hidden below md. */}
+        <div className="md:hidden">
           <ThemeToggle />
-          <UserMenu side="bottom" />
         </div>
+        <UserMenu side="bottom" />
       </div>
     </header>
   );

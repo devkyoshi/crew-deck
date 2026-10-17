@@ -7,17 +7,27 @@ import { api } from '@/lib/api';
 import { daysUntil } from '@/lib/format';
 import { useIsAdmin, useMe } from './me-context';
 
-/** Applies the workspace's accent colour to the app's primary colour. Nothing renders. */
+/** A lighter version of the accent for dark surfaces (mixed 45% toward white). */
+export function lightenHex(hex: string, amount = 0.45) {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `#${c.map((v) => Math.round(v + (255 - v) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Applies the workspace's accent colour. It sets --brand (light) and --brand-dark (a lighter shade),
+ * which the primary, ring and soft tokens in globals.css read when present. Nothing renders.
+ */
 export function Branding() {
   const { org } = useMe();
   useEffect(() => {
     const root = document.documentElement;
-    const names = ['--primary', '--ring', '--sidebar-primary'];
-    if (org.accentColor) {
-      for (const n of names) root.style.setProperty(n, org.accentColor);
+    if (org.accentColor && /^#[0-9a-f]{6}$/i.test(org.accentColor)) {
+      root.style.setProperty('--brand', org.accentColor);
+      root.style.setProperty('--brand-dark', lightenHex(org.accentColor));
     }
     return () => {
-      for (const n of names) root.style.removeProperty(n);
+      root.style.removeProperty('--brand');
+      root.style.removeProperty('--brand-dark');
     };
   }, [org.accentColor]);
   return null;

@@ -3,49 +3,36 @@ import { signInAsOwner } from './helpers';
 
 // Throwaway visual check (not part of the suite): SHOTS=<dir> pnpm exec playwright test e2e/_shots.spec.ts
 const dir = process.env.SHOTS ?? 'test-results/shots';
-
 test.skip(!process.env.SHOTS, 'visual check only');
+
 test('capture', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.setViewportSize({ width: 1200, height: 900 });
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 860 });
   await signInAsOwner(page);
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${dir}/home.png` });
+  const shot = async (name: string, wait = 1800) => {
+    await page.waitForTimeout(wait);
+    await page.screenshot({ path: `${dir}/${name}.png` });
+  };
 
-  await page.goto('/spaces');
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${dir}/spaces.png` });
+  await shot('home');
+  // Hover the active rail item: the icon must stay visible.
+  await page.getByRole('link', { name: 'Home', exact: true }).first().hover();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${dir}/rail-hover.png`, clip: { x: 0, y: 0, width: 420, height: 860 } });
 
-  const first = page.locator('[data-sidebar="content"] a[href^="/spaces/"]:not([href="/spaces/new"])').first();
-  if (await first.count()) {
-    const href = await first.getAttribute('href');
-    await page.goto(`${href}/board`);
-    await page.waitForTimeout(3500);
-    await page.screenshot({ path: `${dir}/board.png` });
-    await page.goto(`${href}/calendar`);
-    await page.waitForTimeout(3500);
-    await page.screenshot({ path: `${dir}/calendar.png` });
-    await page.getByRole('button', { name: 'week', exact: true }).click();
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: `${dir}/calendar-week.png` });
-  }
+  await page.getByRole('button', { name: /Quick messages/ }).click();
+  await shot('quick-messages', 800);
+  await page.getByRole('button', { name: /^(#|[a-z0-9])/i }).filter({ hasText: /ago|No messages/ }).first().click();
+  await shot('quick-chat', 3000);
 
-  await page.goto('/messages');
-  await page.waitForTimeout(3500);
-  await page.screenshot({ path: `${dir}/messages.png` });
-
-  await page.evaluate(() => localStorage.setItem('theme', 'dark'));
-  await page.goto('/');
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/home-dark.png` });
-  const f2 = page.locator('[data-sidebar="content"] a[href^="/spaces/"]:not([href="/spaces/new"])').first();
+  await page.goto('/profile');
+  await shot('profile');
+  await page.goto('/admin/settings/branding');
+  await shot('branding');
+  await page.goto('/dashboard');
+  await shot('dashboard', 3000);
   await page.goto('/spaces/ENG/board');
-  await page.waitForTimeout(3500);
-  await page.screenshot({ path: `${dir}/board-dark.png` });
-  await page.evaluate(() => localStorage.setItem('theme', 'light'));
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${dir}/home-mobile.png` });
-  void f2;
+  await shot('board', 3000);
+  await page.goto('/spaces/ENG/settings');
+  await shot('space-settings', 2500);
 });

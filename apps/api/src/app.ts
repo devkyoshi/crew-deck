@@ -16,6 +16,7 @@ import type { Db } from './db/client.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
+import { imageRoutes } from './routes/images.js';
 import { auditRoutes } from './routes/audit.js';
 import { invitationRoutes } from './routes/invitations.js';
 import { groupRoutes } from './routes/groups.js';
@@ -221,6 +222,7 @@ export function buildApp({
   app.register(sprintRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(liveRoutes, { prefix: '/api/v1', ...authDeps, live, ...liveTiming });
   app.register(attachmentRoutes, { prefix: '/api/v1', ...authDeps, storage });
+  app.register(imageRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(spaceDocRoutes, { prefix: '/api/v1', ...authDeps, storage });
   app.register(labelRoutes, { prefix: '/api/v1', ...authDeps });
   app.register(accessRequestRoutes, { prefix: '/api/v1', ...authDeps });

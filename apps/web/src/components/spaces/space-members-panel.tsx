@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Star,
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -223,6 +224,13 @@ export function SpaceMembersPanel({ space }: { space: SpaceDetail }) {
                           <span className="min-w-0">
                             <span className="block truncate font-medium">
                               {m.name ?? m.email}
+                              {m.role === 'admin' && (
+                                <Star
+                                  className="fill-warning text-warning ml-1.5 inline size-3.5 align-[-2px]"
+                                  role="img"
+                                  aria-label="Space admin"
+                                />
+                              )}
                               {m.type === 'group' && (
                                 <span className="text-muted-foreground"> (group)</span>
                               )}
